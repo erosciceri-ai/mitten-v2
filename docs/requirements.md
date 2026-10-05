@@ -65,7 +65,7 @@ MITTEN V2 comprende:
 - **REQ-SYN-005:** No se implementará inicialmente una sincronización incremental compleja; la operación es de reemplazo completo.
 - **REQ-SYN-006:** Una sincronización fallida no debe destruir silenciosamente la última biblioteca válida del ESP32.
 - **REQ-SYN-007:** El ESP32 debe conservar la biblioteca válida anterior hasta que la nueva sincronización pueda confirmarse correctamente.
-- **REQ-SYN-008:** El método técnico exacto de escritura segura se diseñará posteriormente.
+- **REQ-SYN-008:** La sincronización y persistencia del perfil deben cumplir la estrategia de staging, commit seguro, conservación del perfil anterior y recuperación definida en `docs/synchronization.md`.
 
 ### 3.4. Un solo perfil activo en el guante
 
@@ -110,12 +110,12 @@ MITTEN V2 comprende:
 - **REQ-GES-009:** Un usuario autenticado debe poder sincronizar sus gestos con MITTEN.
 - **REQ-GES-010:** Los datos de un gesto deben validarse estructuralmente antes de almacenarse o sincronizarse.
 - **REQ-GES-011:** La aplicación debe identificar claramente los gestos que no puedan sincronizarse por datos faltantes o inválidos.
-- **REQ-GES-012:** La política de edición de gestos debe definirse antes de implementar la edición.
-- **REQ-GES-013:** Si se permite editar el texto asociado a un gesto, el sistema debe mantener coherencia entre el nombre o texto, los datos capturados, el archivo de audio y el identificador de pista del DFPlayer.
+- **REQ-GES-012:** La política de edición de gestos está definida: `gesture.id` y `audioTrack` son inmutables mientras exista el gesto; `name` y `data` pueden modificarse; el MP3 asociado puede regenerarse.
+- **REQ-GES-013:** Editar un gesto no implica sincronización incremental. Después de modificar `name` o `data`, la siguiente sincronización continúa siendo un reemplazo completo del perfil.
 - **REQ-GES-014:** Cada gesto debe tener un identificador interno independiente del nombre o frase visible; no se utilizará el texto del gesto como identidad técnica principal.
 - **REQ-GES-015:** La identidad técnica del gesto está definida: `id` integer (1–2147483647), asignado por el backend, único dentro del perfil. Permite mantener relaciones entre gesto, datos de reconocimiento, audio, sincronización y pista DFPlayer.
 - **REQ-GES-016:** Cada gesto sincronizado debe tener asociada una pista del DFPlayer de forma inequívoca.
-- **REQ-GES-017:** La numeración prevista inicialmente debe poder cubrir los 50 gestos del perfil activo (por ejemplo, rango 1–50); el formato físico definitivo de nombres de archivos o carpetas de la microSD sigue siendo una decisión de diseño posterior.
+- **REQ-GES-017:** Cada gesto debe utilizar un `audioTrack` dentro del rango `1–50`. La pista es independiente de `gesture.id` y corresponde al archivo `/mp3/{audioTrack:04d}.mp3` de la microSD del DFPlayer Mini.
 - **REQ-GES-018:** El límite máximo inicial es de 50 gestos por usuario/perfil activo, aplicable tanto a la biblioteca sincronizable como a la biblioteca local del ESP32.
 - **REQ-GES-019:** La aplicación debe poder representar la capacidad, por ejemplo: `23 / 50 gestos`.
 - **REQ-GES-020:** El límite de 50 gestos es una decisión inicial del prototipo y debe poder cambiarse en versiones futuras sin rediseñar todo el sistema.
@@ -139,6 +139,8 @@ MITTEN V2 comprende:
 - **REQ-SEN-006:** Los errores de lectura o inicialización de sensores no deben ocultarse como lecturas válidas sin informar el fallo.
 - **REQ-SEN-007:** La definición de datos de un gesto debe admitir validación y versionado.
 - **REQ-SEN-008:** Las siete dimensiones existentes se consideran un punto de partida y no impiden una evolución justificada de la representación.
+- **REQ-SEN-009:** Los offsets de calibración del MPU6050 pertenecen al estado o configuración local del dispositivo y no deben almacenarse dentro de `GestureData`.
+- **REQ-SEN-010:** La calibración debe aplicarse antes de producir los valores utilizados para captura y reconocimiento.
 
 ## 7. Aprendizaje y creación de un gesto
 
@@ -156,14 +158,14 @@ MITTEN V2 comprende:
 - **REQ-APR-012:** La aplicación debe presentar estados claros durante el aprendizaje. Los estados oficiales del firmware están definidos en `docs/protocol.md` (sección 9): `INITIALIZING`, `CALIBRATING`, `IDLE`, `CAPTURING`, `SYNCING`, `ERROR`. Las fases de captura (`PREPARING`, `RECORDING`, `PROCESSING`) son eventos de progreso, no estados persistentes. Los estados de interfaz (`Desconectado`, `Conectado`, `Guardando`, `Completado`, `Error`) son conceptos de UI, no estados del firmware.
 - **REQ-APR-013:** Los nombres y códigos definitivos de los estados oficiales del firmware y las fases de captura están definidos en `docs/protocol.md` (secciones 9 y 11.4). Los estados de interfaz son responsabilidad de la UI.
 - **REQ-APR-014:** El límite máximo inicial para el nombre, texto o frase asociada a un gesto es de 60 puntos de código Unicode; la aplicación y el backend deben validar este límite.
-- **REQ-APR-015:** El límite de 60 puntos de código Unicode es una regla única y centralizada, definida en los contratos compartidos (`packages/contracts`), para evitar valores diferentes entre frontend y backend.
+- **REQ-APR-015:** El límite de 60 puntos de código Unicode debe mantenerse consistente entre frontend, backend, firmware y contratos compartidos. `packages/contracts` implementa esta regla para TypeScript y debe mantenerse alineado con los documentos canónicos.
 
 ## 8. Reconocimiento de gestos
 
 - **REQ-REC-001:** El reconocimiento de gestos debe ejecutarse localmente en el ESP32.
 - **REQ-REC-002:** El backend, el frontend y la PC no deben participar obligatoriamente en el reconocimiento durante el uso normal.
 - **REQ-REC-003:** El reconocimiento debe utilizar información de los cinco sensores flex y del MPU6050.
-- **REQ-REC-004:** El algoritmo de MITTEN V1 debe considerarse únicamente una referencia funcional.
+- **REQ-REC-004:** El algoritmo de reconocimiento de MITTEN V1 debe utilizarse como baseline inicial de MITTEN V2. Podrá reemplazarse o mejorarse posteriormente mediante comparación contra resultados reproducibles.
 - **REQ-REC-005:** Antes de reemplazar el algoritmo de V1, su comportamiento debe documentarse y poder probarse con muestras conocidas.
 - **REQ-REC-006:** Las alternativas de reconocimiento deben poder compararse con el comportamiento de referencia.
 - **REQ-REC-007:** MITTEN V2 debe permitir mejorar el reconocimiento sin requerir la reconstrucción completa de la aplicación.
@@ -229,7 +231,7 @@ MITTEN V2 comprende:
 - **REQ-EST-002:** La aplicación sólo debe mostrar MITTEN como conectado después de confirmar comunicación real con el ESP32 mediante el handshake (ver **REQ-HSH-001** a **REQ-HSH-004**).
 - **REQ-EST-003:** La aplicación debe representar el estado de inicialización del dispositivo.
 - **REQ-EST-004:** La aplicación debe representar el estado de calibración.
-- **REQ-EST-005:** La aplicación debe representar el estado de aprendizaje.
+- **REQ-EST-005:** Durante el flujo de aprendizaje, la aplicación debe representar el estado `CAPTURING` y las fases de captura `PREPARING`, `RECORDING` y `PROCESSING` definidas por el protocolo.
 - **REQ-EST-006:** La aplicación debe representar el estado de sincronización.
 - **REQ-EST-007:** La aplicación debe representar errores de comunicación o firmware.
 - **REQ-EST-008:** La aplicación debe indicar cuándo una operación terminó correctamente.
@@ -246,6 +248,7 @@ MITTEN V2 comprende:
   - Solicitud de grabación (`capture.start`).
   - Estados de grabación (`capture.progress` con fases `PREPARING`, `RECORDING`, `PROCESSING`).
   - Resultado de grabación (`capture.completed` / `capture.failed`).
+  - Reconocimiento exitoso mediante el evento informativo `recognition.detected`.
   - Inicio, progreso y finalización de sincronización (`sync.begin`, `sync.gesture`, `sync.commit`, `sync.abort`).
   - Confirmaciones y correlación por `id` y `syncId`.
   - Errores estructurados con códigos estables.
@@ -271,6 +274,7 @@ MITTEN V2 comprende:
 - **REQ-ERR-011:** Después de un error o desconexión, la aplicación debe liberar los recursos serie que pueda liberar de forma segura.
 - **REQ-ERR-012:** Después de un error recuperable, el usuario debe poder intentar reconectar el dispositivo.
 - **REQ-ERR-013:** Los errores no deben convertirse silenciosamente en estados de éxito.
+- **REQ-ERR-014:** Protocol Version 2 utiliza los siguientes timeouts: handshake `5000 ms`, response individual `5000 ms`, frame incompleto `5000 ms`, captura `15000 ms`, inactividad de sincronización `10000 ms` y `sync.commit` `10000 ms`, conforme a `docs/protocol.md`.
 
 ## 13. Sincronización de datos
 
@@ -305,7 +309,7 @@ MITTEN V2 comprende:
 - **REQ-BAC-002:** El backend debe gestionar la autenticación y autorización.
 - **REQ-BAC-003:** El backend debe persistir los gestos y su asociación con cada usuario.
 - **REQ-BAC-004:** El backend debe proporcionar las operaciones necesarias para gestionar la biblioteca de gestos.
-- **REQ-BAC-005:** El backend debe generar o coordinar la generación de los archivos de audio asociados a los gestos.
+- **REQ-BAC-005:** El backend debe generar o preparar los archivos MP3 asociados a los gestos y mantener los metadatos necesarios para relacionarlos con su `audioTrack`.
 - **REQ-BAC-006:** El backend debe proporcionar al frontend los datos necesarios para la sincronización.
 - **REQ-BAC-007:** El backend debe validar todas las entradas externas relevantes.
 - **REQ-BAC-008:** La dirección técnica confirmada para MITTEN V2 es:
@@ -331,11 +335,11 @@ MITTEN V2 comprende:
 - **REQ-AUD-003:** Cuando el ESP32 reconozca un gesto, debe ordenar al DFPlayer reproducir la pista asociada.
 - **REQ-AUD-004:** La PC no debe reproducir el audio durante el funcionamiento normal autónomo del guante.
 - **REQ-AUD-005:** El navegador puede permitir escuchar o previsualizar audios desde la interfaz, de manera independiente a la reproducción autónoma.
-- **REQ-AUD-006:** Al crear un gesto, el sistema debe generar desde la aplicación o el backend un archivo de audio correspondiente al texto, nombre o frase asociada.
+- **REQ-AUD-006:** Al crear un gesto, `apps/api` debe generar o preparar un archivo MP3 correspondiente al texto, nombre o frase asociada.
 - **REQ-AUD-007:** El archivo generado debe quedar relacionado con el gesto y estar disponible para previsualización desde la aplicación.
 - **REQ-AUD-008:** Cada gesto debe asociarse inequívocamente a un identificador de archivo o pista que el ESP32 pueda solicitar al DFPlayer.
 - **REQ-AUD-009:** El identificador necesario para la reproducción autónoma debe formar parte de los datos sincronizados al ESP32.
-- **REQ-AUD-010:** `audioTrack` es un integer lógico; rango V2: `1–50`. Siguen abiertos: política de asignación/reutilización de `audioTrack` (fijo por gesto, compartido, regeneración al editar/borrar); relación ante creación, borrado o edición; nombres físicos y organización de archivos/carpetas en la microSD.
+- **REQ-AUD-010:** `audioTrack` es un integer lógico dentro del rango `1–50`, independiente de `gesture.id`. El backend lo asigna mediante first-fit al crear el gesto; permanece inmutable mientras exista el gesto; se libera al eliminarlo y puede reutilizarse posteriormente. La pista corresponde a `/mp3/{audioTrack:04d}.mp3`.
 
 ### 16.1. Estados diferenciados de un gesto
 
@@ -366,7 +370,7 @@ MITTEN V2 comprende:
 - **REQ-MSD-004:** La documentación de uso debe explicar que un gesto puede estar sincronizado en el ESP32 y, aun así, no reproducirse correctamente si la pista correspondiente no fue colocada en la microSD.
 - **REQ-MSD-005:** No debe diseñarse en esta fase hardware nuevo para resolver esta limitación.
 - **REQ-MSD-006:** El procedimiento exacto para preparar o actualizar la microSD queda pendiente de diseño.
-- **REQ-MSD-007:** La numeración de pistas del DFPlayer prevista inicialmente cubre los 50 gestos del perfil activo (rango conceptual 1–50), pero el formato físico definitivo de nombres de archivos o carpetas sigue pendiente.
+- **REQ-MSD-007:** La numeración de pistas del DFPlayer utiliza `audioTrack` dentro del rango `1–50`. Cada pista corresponde al archivo `/mp3/{audioTrack:04d}.mp3` de la microSD.
 
 ## 18. Flujos funcionales
 
@@ -563,34 +567,43 @@ Quedan explícitamente fuera del alcance actual de MITTEN V2:
 
 ## 24. Decisiones de diseño pendientes
 
-Las siguientes decisiones deben resolverse en fases posteriores. Este documento no presupone sus respuestas:
+Las siguientes decisiones permanecen abiertas y pueden resolverse en fases posteriores sin bloquear la arquitectura actual de MITTEN V2:
 
-1. **Formato exacto de archivos y numeración del DFPlayer:** organización física en la microSD, nombres de archivos, carpetas y límites. *(Resuelto: ver `docs/protocol.md` §12.5 y `docs/architecture.md` §11 — convención `/mp3/{audioTrack:04d}.mp3`)*
-2. **Procedimiento exacto de preparación de microSD:** organización de archivos, validaciones y pasos que debe seguir el usuario.
-3. **Estrategia concreta de pruebas y simulador del ESP32:** alcance del simulador, escenarios, interfaz y herramientas de automatización (el simulador es parte oficial del proyecto; queda definir su arquitectura y alcance detallado).
-4. **Política exacta de edición de un gesto ya creado:** qué campos pueden modificarse y cuándo deben regenerarse datos, audio o asociación de pista. *(Parcialmente resuelto: `audioTrack` inmutable, nombre editable con regeneración de MP3 en misma pista, invalida "audio preparado". Ver `docs/protocol.md` §12.5.)*
-5. **Método exacto para registrar/verificar el estado "audio preparado":** mecanismo de seguimiento del estado de audio en la microSD.
-6. **Persistencia y representación de calibración/offsets:** si los offsets MPU y rangos de flex calibrados se almacenan dentro de `data` (campo `calibration`) o son estado separado del dispositivo consultable por `device.status`.
+1. **Procedimiento exacto de preparación de la microSD:** pasos que debe seguir el usuario para copiar, actualizar y verificar los MP3 generados por el backend.
 
-No vuelven a incluirse como pendientes (ya decididas):
+2. **Método exacto para registrar o verificar el estado `audio preparado`:** mecanismo mediante el cual la aplicación registra que la pista correspondiente fue colocada correctamente en la microSD.
 
-- Lenguaje del firmware (**MicroPython confirmado**).
-- Tecnologías de backend y base de datos (**Node.js, Express, TypeScript, SQLite confirmados**).
-- Propietario del puerto serie (**Web Serial desde el frontend confirmado**).
-- Bridge local (**eliminado**).
-- `monitor.py` (**eliminado**).
-- Estructura general del repositorio (**confirmada**).
-- Formato del protocolo serie (**Protocol Version 2 definido en `docs/protocol.md`**).
-- Sincronización transaccional (**`sync.begin → sync.gesture × N → sync.commit/abort` definido en `docs/protocol.md`**).
-- Handshake y correlación por `id`/`syncId` (**definidos en `docs/protocol.md`**).
-- Estados oficiales del dispositivo (**definidos en `docs/protocol.md`**).
-- Formato de datos de gesto `data` (**definido en `docs/gesture-format.md`**).
-- Reproducción de audio (**DFPlayer Mini controlado por firmware confirmado**).
-- Algoritmo de reconocimiento inicial (**baseline de V1 confirmado**; mejoras futuras no bloquean).
-- Datos de gestos V1 (**solo prueba; no se migran; se recapturan en V2**).
-- Repositorio `mittenv1/` (**histórico independiente; `v2/` es activo**).
-- **Persistencia ESP32**: `gestures.json` (perfil activo), `gestures.staging` (NDJSON incremental), commit atómico vía `gestures.json.tmp` + `rename` (LittleFS), recovery en boot (1) json válido, 2) .tmp válido, 3) vacío + error, 4) .staging → eliminar). Ver `docs/synchronization.md`.
-- **Política `audioTrack` 1–50**: first-fit en creación (backend), inmutable, reutilizable al borrar. Editar nombre regenera MP3 en misma pista e invalida "audio preparado". Convención DFPlayer: `/mp3/{audioTrack:04d}.mp3`, `playMp3Folder(audioTrack)`. Ver `docs/protocol.md` §12.5 y `docs/architecture.md` §11.
+3. **Algoritmo de reconocimiento definitivo:** el algoritmo de MITTEN V1 se utiliza como baseline inicial. Futuras alternativas podrán evaluarse mediante pruebas reproducibles sin cambiar los contratos actuales.
+
+4. **Tuning físico de captura y reconocimiento:** ajustes derivados de pruebas con el hardware real, siempre que cualquier cambio que afecte contratos sea documentado y versionado cuando corresponda.
+
+No vuelven a considerarse decisiones pendientes:
+
+- firmware en MicroPython;
+- backend con Node.js, Express, TypeScript y SQLite;
+- frontend con React, Vite y TypeScript;
+- Web Serial como único propietario del puerto serie;
+- eliminación de `monitor.py` y del bridge local;
+- estructura general del repositorio;
+- Protocol Version 2;
+- `maxMessageBytes = 8192`;
+- timeouts de Protocol Version 2;
+- handshake y correlación mediante `id` y `syncId`;
+- estados oficiales del dispositivo;
+- evento `recognition.detected`;
+- formato `GestureData`;
+- calibración MPU como estado/configuración local del dispositivo;
+- sincronización transaccional por reemplazo completo;
+- un único perfil activo;
+- política de edición de gestos;
+- `gesture.id` inmutable;
+- `audioTrack` 1–50, first-fit, independiente de `gesture.id`, inmutable mientras exista el gesto y reutilizable después de eliminarlo;
+- convención DFPlayer `/mp3/{audioTrack:04d}.mp3`;
+- generación o preparación de MP3 desde `apps/api`;
+- reproducción autónoma mediante DFPlayer Mini;
+- datos de gestos V1 no migrados a V2;
+- `mittenv1/` como repositorio histórico independiente;
+- sincronización y persistencia atómica documentadas en `docs/synchronization.md`.
 
 ## 25. Criterios de aceptación generales
 
@@ -626,7 +639,13 @@ MITTEN V2 podrá considerarse funcional cuando, como mínimo, se verifique que:
 - **CA-028:** Una sincronización fallida no destruye silenciosamente la última biblioteca válida del ESP32.
 - **CA-029:** No pueden sincronizarse más gestos que la capacidad declarada por el ESP32 durante el handshake.
 - **CA-030:** El límite inicial es de 50 gestos por usuario/perfil activo.
-- **CA-031:** Los nombres o frases de los gestos respetan el máximo de 60 caracteres.
+- **CA-031:** Los nombres o frases de los gestos respetan el máximo de 60 puntos de código Unicode.
 - **CA-032:** Cada gesto tiene una identidad técnica independiente del texto visible.
 - **CA-033:** Cada gesto sincronizado puede asociarse inequívocamente a una pista DFPlayer.
 - **CA-034:** La interfaz distingue entre los estados: guardado, sincronizado y audio preparado.
+- **CA-035:** `gesture.id` y `audioTrack` son independientes; el funcionamiento no depende de que tengan el mismo valor.
+- **CA-036:** Editar `name` o `data` de un gesto no modifica su `gesture.id` ni su `audioTrack`.
+- **CA-037:** Eliminar un gesto libera su `audioTrack`, que puede reutilizarse posteriormente mediante first-fit.
+- **CA-038:** Un mensaje de Protocol Version 2 que supere `8192` bytes es rechazado según las reglas de `MESSAGE_TOO_LARGE`.
+- **CA-039:** Durante `ERROR`, `device.status` continúa disponible y las operaciones funcionales son rechazadas con `INVALID_STATE`.
+- **CA-040:** Después de reiniciar desde `ERROR`, el ESP32 comienza nuevamente en `INITIALIZING`.

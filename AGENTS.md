@@ -12,25 +12,23 @@ El sistema utiliza:
 - Una aplicación web para configuración, gestión de gestos y comunicación con el guante.
 - Una API backend.
 - Una interfaz web React.
-- Generación y reproducción de audio local.
+- Generación de audio desde el backend y reproducción local en el dispositivo mediante DFPlayer Mini.
 
 El repositorio actual contiene una implementación anterior de MITTEN V1.
 
+**`mittenv1/`** queda como repositorio histórico de referencia. **`v2/`** es ahora el repositorio activo independiente.
+
 MITTEN V1 debe tratarse como una implementación de referencia, **no** como la arquitectura que MITTEN V2 debe preservar.
 
-El objetivo de la rama actual es rediseñar la arquitectura de software de MITTEN.
+El objetivo actual es el desarrollo incrementado en la rama `v2/`.
 
 ---
 
 # Rama de desarrollo actual
 
-Todo el trabajo de rediseño debe realizarse en:
+Todo el trabajo se realiza en la rama `v2/`.
 
-`redesign/v2`
-
-La implementación estable anterior debe permanecer intacta y disponible como referencia.
-
-No modifiques la rama legacy.
+`mittenv1/` es el repositorio histórico de referencia y **no** debe modificarse como arquitectura principal.
 
 ---
 
@@ -84,6 +82,7 @@ mitten/
 │   ├── architecture.md
 │   ├── protocol.md
 │   ├── gesture-format.md
+│   ├── synchronization.md
 │   └── README.md
 │
 ├── AGENTS.md
@@ -111,6 +110,9 @@ Responsable de:
 - Reconocimiento local de gestos cuando sea necesario.
 - Comunicación del estado del dispositivo mediante el protocolo serie.
 - Recepción de comandos válidos desde el frontend vía Web Serial.
+- Reproducción local del MP3 asociado a un gesto reconocido mediante DFPlayer Mini.
+
+El ESP32 no genera archivos de audio ni asigna `audioTrack`; sólo reproduce pistas previamente preparadas y sincronizadas.
 
 El ESP32 no debe contener lógica de gestión de aplicación que pertenezca al backend.
 
@@ -142,7 +144,11 @@ Responsable de:
 - Persistencia.
 - Validación.
 - Lógica de aplicación relacionada con sincronización.
-- Metadatos de audio cuando aplique.
+- Generación o preparación de archivos MP3 asociados a los gestos.
+- Gestión de metadatos de audio y asignación de `audioTrack`.
+
+El frontend solicita y coordina estas operaciones.
+El ESP32 no genera audio; únicamente reproduce archivos MP3 previamente preparados desde la microSD mediante DFPlayer Mini.
 
 La dirección técnica confirmada para MITTEN V2 es:
 
@@ -190,11 +196,16 @@ Características principales:
 - Envelopes: `request` (frontend→dispositivo), `response` (dispositivo→frontend), `event` (dispositivo→frontend).
 - Correlación: `id` por request, `syncId` por transacción de sincronización.
 - Handshake obligatorio: `device.handshake` valida identidad (`device === "MITTEN"`), `firmwareVersion`, `protocolVersion`, `capabilities.maxGestures`, `capabilities.maxMessageBytes`.
+- Tamaño máximo de mensaje V2: `maxMessageBytes = 8192` bytes, incluido bootstrap/handshake. V2 no implementa fragmentación. Un mensaje mayor debe producir `MESSAGE_TOO_LARGE`.
 - Estados oficiales: `INITIALIZING`, `CALIBRATING`, `IDLE`, `CAPTURING`, `SYNCING`, `ERROR`. `RECOGNIZING` no es estado persistente; el reconocimiento emite evento `recognition.detected` informativo.
+- `ERROR` permite consultar `device.status`, pero las operaciones funcionales se rechazan con `INVALID_STATE`. La recuperación se realiza reiniciando el ESP32, que vuelve a comenzar en `INITIALIZING`.
 - Captura: `capture.start` → fases `PREPARING`/`RECORDING`/`PROCESSING` → `capture.completed` (con `data`) o `capture.failed`.
 - Sincronización transaccional: `sync.begin` → `sync.gesture × N` → `sync.commit` / `sync.abort`. Staging separado, perfil anterior conservado hasta commit.
+- Timeouts V2: handshake 5000 ms, respuesta individual 5000 ms, captura 15000 ms, inactividad de sincronización 10000 ms y `sync.commit` 10000 ms. Cuando el dispositivo anuncie explícitamente un timeout aplicable, ese valor tiene prioridad para el frontend.
 - Errores: códigos estables (`INVALID_JSON`, `UNKNOWN_COMMAND`, `INVALID_STATE`, `DEVICE_BUSY`, `PROFILE_TOO_LARGE`, `GESTURE_INVALID`, `DUPLICATE_GESTURE_ID`, `SYNC_INCOMPLETE`, `SYNC_TIMEOUT`, `SENSOR_ERROR`, `STORAGE_ERROR`, `INTERNAL_ERROR`, etc.).
 - Simulador: mismo contrato observable que firmware real (`tools/esp32-simulator/`).
+- Antes de completar el handshake, cualquier comando funcional o desconocido devuelve `HANDSHAKE_REQUIRED`. Después del handshake, un comando desconocido devuelve `UNKNOWN_COMMAND`.
+- `DEVICE_BUSY` se usa cuando una operación normalmente válida no puede comenzar porque existe otra operación exclusiva activa. `INVALID_STATE` se usa cuando el estado actual no permite conceptualmente la operación.
 
 No cambies el protocolo silenciosamente. Los cambios deben documentarse en `docs/protocol.md` y versionarse (Protocol Version).
 
@@ -213,6 +224,8 @@ Estructura V2 (`data.version = 1`):
 - `summary.min/max/mean[7]`: estadísticas precalculadas por firmware.
 - `sampleCount`, `captureDurationMs`, `samplingPeriodMs`: metadatos de captura.
 - Unidades declaradas: `flex: adc12`, `mpu: degrees`.
+La calibración del MPU6050 y sus offsets pertenecen al estado/configuración local del dispositivo, no a `GestureData`.
+La calibración se realiza durante `CALIBRATING` y sus correcciones deben aplicarse antes de producir los valores normalizados usados para captura y reconocimiento.
 
 La representación histórica V1 (`min[]`, `max[]`, `prom[]`, `muestras`, `nombre`, `tipo`) es solo referencia.
 
@@ -228,6 +241,20 @@ Antes de cambiar el reconocimiento de gestos:
 4. Compara el nuevo comportamiento contra la implementación anterior.
 
 ---
+## Identidad y edición de gestos
+
+Para un gesto existente:
+
+- `gesture.id` es inmutable.
+- `audioTrack` es inmutable mientras el gesto exista.
+- `name` puede editarse.
+- `data` puede editarse o reemplazarse mediante una nueva captura.
+- El MP3 asociado puede regenerarse.
+- Eliminar un gesto libera su `audioTrack`.
+- Una pista liberada puede reutilizarse posteriormente mediante first-fit.
+
+Editar un gesto en backend no implica sincronización incremental con el ESP32.
+La siguiente sincronización continúa siendo un reemplazo completo del perfil.
 
 # Diseño del firmware
 
@@ -351,14 +378,14 @@ Cuando se corrija un bug importante, añadir una prueba de regresión siempre qu
 # Simulador ESP32
 
 El simulador del ESP32 es una **herramienta oficial del proyecto MITTEN V2**.
-
+El simulador debe respetar los mismos límites observables que el firmware real, incluyendo `maxMessageBytes`, reglas de estado, prioridades de errores y timeouts definidos por Protocol Version 2.
 Debe ubicarse conceptualmente en:
 
 `tools/esp32-simulator/`
 
 Su objetivo es permitir desarrollar y probar frontend y protocolo sin necesidad de tener conectado el guante físico.
 
-Debe ser capaz de simular:
+Es capaz de simular:
 
 - Conexión de dispositivo y handshake.
 - Estados de calibración e inicialización.
@@ -370,8 +397,6 @@ Debe ser capaz de simular:
 - Desconexiones del dispositivo.
 
 No hacer que el desarrollo del frontend dependa permanentemente del hardware físico.
-
-No implementar todavía el simulador.
 
 ---
 
@@ -518,7 +543,11 @@ Prefiere un sistema simple y correcto sobre uno impresionante pero innecesariame
 | `docs/gesture-format.md` | **Canónica** | Formato `data`: esquema, unidades, validación, `maxMessageBytes`. |
 | `docs/requirements.md` | Requisitos | Qué debe hacer el sistema, criterios de aceptación. |
 | `docs/architecture.md` | Arquitectura | Componentes, responsabilidades, flujos alto nivel. |
+| `docs/synchronization.md` | Sincronización | Flujo transaccional de sincronización de gestos. |
 | `docs/README.md` | Índice | Jerarquía de autoridad y docs legacy. |
+
+`packages/contracts` es la implementación compartida de contratos, tipos y validaciones usada por web, API y simulador, y referencia ejecutable para firmware.
+Debe mantenerse alineado con los documentos canónicos. Ante una contradicción, el documento especializado correspondiente define el comportamiento esperado dentro de su ámbito.
 
 ## Estados oficiales del firmware (Protocol Version 2)
 
@@ -536,14 +565,38 @@ Prefiere un sistema simple y correcto sobre uno impresionante pero innecesariame
 - Fases de captura (`PREPARING`, `RECORDING`, `PROCESSING`) son eventos de progreso, no estados.
 - La lista normativa está en `docs/protocol.md`, sección 9.
 
-## Decisiones ya cerradas (no modificar sin versionar protocolo)
+## Decisiones ya cerradas (no modificar sin versionar protocolo cuando corresponda)
 
 - Protocol Version 2, NDJSON UTF-8 + LF.
 - Handshake `device.handshake` con bootstrap estable.
+- Campos del wire protocol en camelCase, incluyendo `firmwareVersion` y `protocolVersion`.
 - Correlación por `id` (request) y `syncId` (sincronización).
+- `maxMessageBytes = 8192` bytes. El límite aplica también durante bootstrap. V2 no usa fragmentación.
 - Sincronización transaccional `sync.begin → sync.gesture × N → sync.commit/abort`.
-- Reemplazo completo con staging y conservación de perfil anterior.
+- La semántica de sincronización es reemplazo completo del perfil; `sync.gesture × N` es únicamente el transporte dentro de esa transacción.
+- El staging nunca sustituye al perfil activo antes de un `sync.commit` exitoso.
+- `state === SYNCING` implica que existe una transacción `activeSync`.
+- Reemplazo completo con conservación del perfil anterior ante abort, timeout o fallo.
 - `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
-- `audioTrack` 1–50; política de asignación **abierta** (OPEN DECISION).
-
-`docs/protocol.md` es la autoridad del wire protocol. `docs/gesture-format.md` es la autoridad del formato de gesto. No inventes cambios de protocolo; documéntalos y versiona.
+- La calibración MPU6050 pertenece al estado/configuración local del dispositivo y no a `GestureData`.
+- `audioTrack` 1–50: independiente de `gesture.id`, asignación first-fit, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
+- DFPlayer usa `/mp3/{audioTrack:04d}.mp3`.
+- `apps/api` genera o prepara los archivos MP3. El frontend coordina y el ESP32 únicamente reproduce.
+- `gesture.id` es inmutable.
+- `gesture.name` y `gesture.data` son editables; el MP3 puede regenerarse.
+- Editar un gesto no implica sincronización incremental.
+- `recognition.detected` es un evento oficial V2 emitido durante `IDLE`; no existe estado persistente `RECOGNIZING`.
+- En `ERROR`, sólo operaciones permitidas por protocolo como `device.status` continúan disponibles; las operaciones funcionales se rechazan con `INVALID_STATE`. La recuperación requiere reinicio del ESP32.
+- Antes del handshake, los comandos funcionales o desconocidos producen `HANDSHAKE_REQUIRED`; después del handshake los desconocidos producen `UNKNOWN_COMMAND`.
+- `DEVICE_BUSY` representa una operación exclusiva actualmente ocupada; `INVALID_STATE`, un estado conceptualmente incompatible.
+- `capture.start` reserva internamente la operación antes de responder `accepted:true`.
+- `gesture.name` admite como máximo 60 Unicode code points y sigue sujeto al límite global de 8192 bytes por mensaje.
+- Timeouts V2:
+  - handshake frontend: 5000 ms.
+  - respuesta individual: 5000 ms.
+  - captura: 15000 ms.
+  - inactividad de sincronización: 10000 ms.
+  - `sync.commit`: 10000 ms.
+- Cuando el dispositivo anuncie explícitamente un timeout aplicable, el frontend debe respetar el valor anunciado.
+- El algoritmo de reconocimiento V1 será el baseline inicial de V2; el algoritmo definitivo podrá mejorarse después.
+- `docs/synchronization.md` forma parte de la jerarquía documental y es el documento especializado para sincronización/persistencia atómica.

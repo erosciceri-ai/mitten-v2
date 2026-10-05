@@ -101,6 +101,7 @@ mitten/
 │   ├── architecture.md
 │   ├── protocol.md
 │   ├── gesture-format.md
+│   ├── synchronization.md
 │   ├── README.md
 │   └── ...
 │
@@ -125,7 +126,7 @@ El backend no debe depender de detalles internos del firmware.
 
 El firmware no debe conocer conceptos propios de la interfaz web.
 
-Los contratos compartidos deben definir la forma de los datos intercambiados sin contener lógica específica de una aplicación.
+Los documentos canónicos definen los contratos del sistema. `packages/contracts` implementa en TypeScript los tipos, esquemas y validaciones compartidos necesarios para web, API y simulador, sin contener lógica específica de una aplicación.
 
 ---
 
@@ -169,30 +170,39 @@ Durante una sincronización, la biblioteca local anterior del ESP32 se reemplaza
 
 La sincronización debe producir un estado conocido.
 
-MITTEN V2 no realiza una sincronización incremental gesto por gesto como mecanismo principal.
+MITTEN V2 utiliza reemplazo completo del perfil como semántica de sincronización.
 
-La estrategia es:
+Los gestos se transportan individualmente dentro de una única transacción:
+
+```text
+sync.begin
+→ sync.gesture × N
+→ sync.commit / sync.abort
+```
+
+El uso de `sync.gesture × N` es únicamente el mecanismo de transporte y validación progresiva. No representa sincronización incremental del perfil.
+
+La estrategia lógica es:
 
 ```text
 Backend
-    │
-    │ biblioteca completa del usuario
-    ▼
+   │
+   │ snapshot completo del perfil
+   ▼
 Frontend
-    │
-    │ reemplazo completo
-    ▼
+   │
+   │ transacción de reemplazo completo
+   ▼
 ESP32
 ```
 
 Después de una sincronización exitosa:
 
 ```text
-biblioteca_local_ESP32 == biblioteca_backend_usuario
+biblioteca_local_ESP32 == snapshot profileRevision sincronizado
 ```
 
-Esto implica que si un gesto fue eliminado del backend, también desaparece del ESP32 después de sincronizar.
-
+Esto implica que si un gesto fue eliminado del backend, también desaparece del ESP32 después del commit.
 ---
 
 ## 4.5 Protocolos versionados
@@ -286,6 +296,9 @@ El backend es responsable de:
 - asociación de gestos con usuarios;
 - validación de datos recibidos;
 - asignación y almacenamiento de identificadores;
+- asignación de `audioTrack` mediante first-fit;
+- generación o preparación de los archivos MP3 asociados a los gestos;
+- mantenimiento de la relación entre gesto, `audioTrack` y archivo de audio;
 - proporcionar al frontend el perfil que debe sincronizarse.
 
 La API no debe:
@@ -367,7 +380,7 @@ Ejemplo:
 
 ```text
 gesture_id: 17
-audio_track: 17
+audio_track: 1
 ```
 
 No debe asumirse que el nombre del archivo de audio es la identidad del gesto.
@@ -375,15 +388,19 @@ No debe asumirse que el nombre del archivo de audio es la identidad del gesto.
 La asignación de audio debe manejarse mediante identificadores estables.
 
 **Política de `audioTrack` (resuelta):**
-- Rango: 1–50.
-- Asignación: first-fit por backend en creación; inmutable tras asignación.
-- Al borrar gesto: `audioTrack` liberado y reutilizable.
-- Al editar `name`: se regenera el MP3 en la misma pista; estado "audio preparado" invalidado hasta recopiar a microSD.
+- Rango: `1–50`.
+- Asignación: first-fit por el backend al crear el gesto.
+- `audioTrack` es independiente de `gesture.id`.
+- `gesture.id` y `audioTrack` permanecen inmutables mientras exista el gesto.
+- `name` y `data` pueden modificarse sin cambiar `gesture.id` ni `audioTrack`.
+- El MP3 asociado puede regenerarse manteniendo la misma pista.
+- Al borrar el gesto, su `audioTrack` queda libre y puede reutilizarse mediante first-fit.
 
 **Convención DFPlayer (resuelta):**
 - Carpeta física: `/mp3/` en la raíz de la microSD.
 - Nomenclatura: `{audioTrack:04d}.mp3` (p.ej. `0001.mp3`, `0017.mp3`, `0050.mp3`).
 - Reproducción: `playMp3Folder(audioTrack)` — selección explícita por número de pista dentro de `/mp3`, independiente del orden de copia en FAT.
+
 
 El mecanismo para preparar/transferir los archivos físicos a la microSD del DFPlayer es un proceso separado de la sincronización de datos (ver `docs/protocol.md` §12.5 y `docs/synchronization.md`).
 
@@ -414,11 +431,16 @@ El firmware es responsable de:
 - inicialización del dispositivo;
 - lectura de sensores flex;
 - lectura del MPU6050;
+- calibrar el MPU6050 durante `CALIBRATING`;
+- mantener los offsets de calibración como estado/configuración local del dispositivo;
+- aplicar los offsets antes de producir valores utilizados para captura y reconocimiento;
 - almacenamiento de la biblioteca local;
 - captura de nuevos gestos;
 - reconocimiento;
 - control del DFPlayer;
-- reproducción de audio;
+- reproducir mediante DFPlayer Mini el `audioTrack` asociado al gesto reconocido;
+- no generar archivos MP3;
+- no asignar `audioTrack`;
 - comunicación Serial;
 - procesamiento de comandos recibidos;
 - envío de eventos y respuestas;
@@ -468,6 +490,17 @@ Web Serial API
 
 La aplicación web es responsable de abrir y cerrar la conexión.
 
+Protocol Version 2 utiliza los siguientes límites y timeouts:
+
+- `maxMessageBytes = 8192`;
+- handshake timeout = `5000 ms`;
+- response timeout = `5000 ms`;
+- incomplete frame timeout = `5000 ms`;
+- capture timeout = `15000 ms`;
+- synchronization idle timeout = `10000 ms`;
+- `sync.commit` timeout = `10000 ms`.
+
+Los detalles normativos pertenecen a `docs/protocol.md`.
 ---
 
 # 16. Handshake
@@ -490,8 +523,8 @@ La respuesta debe permitir conocer como mínimo:
 
 ```text
 device
-firmware_version
-protocol_version
+firmwareVersion
+protocolVersion
 ```
 
 Ejemplo conceptual:
@@ -504,7 +537,7 @@ Ejemplo conceptual:
 }
 ```
 
-La estructura exacta debe ser definida en los contratos del protocolo.
+La estructura exacta del handshake está definida normativamente en `docs/protocol.md`. `packages/contracts` implementa y valida ese contrato para TypeScript.
 
 ---
 
@@ -521,7 +554,7 @@ device == MITTEN
 y además validar:
 
 ```text
-protocol_version
+protocolVersion
 ```
 
 Si la versión del protocolo no es compatible, las operaciones deben bloquearse.
@@ -558,22 +591,25 @@ Ubicación:
 packages/contracts
 ```
 
-Este paquete contiene definiciones compartidas entre subsistemas.
+`packages/contracts` es la implementación compartida en TypeScript de contratos definidos por la documentación canónica.
 
 Puede incluir:
 
-- tipos de Gesture;
+- tipos de gestos;
 - estructuras de sincronización;
-- payloads de API;
+- payloads y responses;
 - códigos de error;
 - versiones de protocolo;
-- tipos de mensajes;
-- esquemas de validación.
+- envelopes y mensajes;
+- esquemas de validación;
+- validadores runtime;
+- fixtures válidos e inválidos.
 
 Ejemplo conceptual:
 
 ```text
 Gesture
+GestureData
 SyncProfile
 DeviceInfo
 ProtocolMessage
@@ -582,18 +618,24 @@ ApiError
 
 Los contratos no deben depender de componentes de UI ni de detalles internos del firmware.
 
+Ante una contradicción entre `packages/contracts` y un documento canónico, el documento especializado correspondiente define el comportamiento esperado dentro de su ámbito.
 ---
 
 # 19. Contratos y MicroPython
 
 El código TypeScript de `packages/contracts` no puede ejecutarse directamente en MicroPython.
 
-Por lo tanto, los contratos compartidos representan la especificación lógica común, pero el firmware mantiene una implementación equivalente compatible con Python/MicroPython.
+Por lo tanto, el firmware mantiene una implementación equivalente de los contratos necesarios para protocolo, gestos y sincronización.
 
-Debe evitarse duplicar reglas arbitrariamente.
+La implementación MicroPython debe mantenerse alineada con:
 
-Los formatos intercambiados deben estar documentados de forma suficientemente precisa para que ambas implementaciones produzcan y consuman los mismos datos.
+- `docs/protocol.md` para wire protocol;
+- `docs/gesture-format.md` para `GestureData`;
+- `docs/synchronization.md` para sincronización y persistencia transaccional.
 
+Cuando sea práctico, TypeScript, simulador y firmware deben validarse utilizando los mismos fixtures serializados.
+
+Debe evitarse duplicar reglas de forma arbitraria.
 ---
 
 # 20. Sincronización de gestos
@@ -650,9 +692,11 @@ Conceptualmente:
 
 Una sincronización fallida no debe dejar silenciosamente una biblioteca parcial considerada válida.
 
-La semántica transaccional completa (`sync.begin → sync.gesture × N → sync.commit/abort`), staging, timeouts (`idleTimeoutMs`), recuperación ante interrupciones (timeout, reconexión, `device.status` para verificar `profileRevision`) y conservación del perfil anterior están definidas en `docs/protocol.md`, sección 12.
+La semántica transaccional observable (`sync.begin → sync.gesture × N → sync.commit/abort`) está definida en `docs/protocol.md`.
 
-La implementación física interna de persistencia atómica en el ESP32 (archivos, doble buffer, rename, recuperación ante corrupción) sigue siendo una decisión abierta documentada en `docs/gesture-format.md` (OPEN DECISION 2) y se detallará en `docs/synchronization.md` cuando se cree.
+La estrategia especializada de staging, persistencia atómica, commit, abort, recuperación y conservación del perfil anterior está definida en `docs/synchronization.md`.
+
+Ante una contradicción dentro del ámbito de persistencia o sincronización transaccional interna del ESP32, `docs/synchronization.md` es la autoridad especializada.
 
 ---
 
@@ -733,6 +777,11 @@ audioTrack
    ▼
 DFPlayer
 ```
+Mientras el dispositivo está conectado mediante una sesión compatible, un reconocimiento exitoso puede notificarse mediante el evento `recognition.detected`.
+
+Este evento es informativo y no forma parte del camino crítico de reproducción.
+
+El ESP32 reconoce el gesto y ordena la reproducción al DFPlayer localmente sin esperar respuesta del frontend.
 
 Esto evita que el guante necesite conexión constante con:
 
@@ -803,7 +852,14 @@ Los estados oficiales de Protocol Version 2 son:
 | `IDLE` | No hay una operación exclusiva; puede aceptar captura o sincronización. |
 | `CAPTURING` | Existe una captura de gesto en curso. |
 | `SYNCING` | Existe una transacción de sincronización en staging. |
-| `ERROR` | Un fallo impide operar con seguridad hasta recuperación o reinicio. |
+| `ERROR` | Un fallo impide operar con seguridad. En Protocol Version 2 la recuperación requiere reiniciar el ESP32. |
+
+Si el dispositivo informa `state === "SYNCING"`, debe existir una transacción activa y `activeSync` debe ser distinto de `null`.
+
+Durante `ERROR`, `device.handshake` y `device.status` siguen disponibles.
+Los comandos funcionales se rechazan con `INVALID_STATE`.
+Protocol Version 2 no define `device.reset`.
+Después de reiniciar, el dispositivo comienza nuevamente en `INITIALIZING`.
 
 `DISCONNECTED` no es un estado del firmware. Es un estado local del frontend cuando no existe una sesión Web Serial válida.
 
@@ -1141,10 +1197,18 @@ docs/
 
 `gesture-format.md` define la estructura interna de un gesto `data` (autoridad canónica).
 
-`synchronization.md` documenta la persistencia atómica interna en el ESP32: formato `gestures.json`, staging NDJSON en `gestures.staging`, commit atómico vía `gestures.json.tmp` + `rename` (LittleFS), recovery en boot, y políticas de abort/timeout.
+`synchronization.md` define la semántica especializada de sincronización, staging, commit, abort, persistencia atómica, recuperación y conservación del perfil válido anterior.
 
 `calibration.md` documentará offsets MPU, rangos flex y estrategia de calibración.
 
+Jerarquía de autoridad:
+- `docs/requirements.md` define qué debe cumplir el sistema;
+- `docs/architecture.md` define cómo se divide y organiza el sistema;
+- `docs/protocol.md` es autoridad para el wire protocol;
+- `docs/gesture-format.md` es autoridad para `GestureData`;
+- `docs/synchronization.md` es autoridad para sincronización transaccional y persistencia atómica del perfil.
+
+`packages/contracts` implementa estos contratos para TypeScript y debe mantenerse alineado con ellos.
 ---
 
 # 39. Resumen de responsabilidades
@@ -1152,9 +1216,9 @@ docs/
 | Componente | Responsabilidad principal |
 |---|---|
 | `apps/web` | Interfaz, API client y conexión Web Serial |
-| `apps/api` | Usuarios, autenticación y persistencia |
+| `apps/api` | Usuarios, autenticación, biblioteca de gestos, persistencia, asignación de `audioTrack` y preparación de MP3 |
 | `firmware/esp32` | Sensores, reconocimiento, almacenamiento local y audio |
-| `packages/contracts` | Contratos compartidos |
+| `packages/contracts` | Implementación compartida de tipos, esquemas, validadores y fixtures alineados con los documentos canónicos |
 | `tools/esp32-simulator` | Simular comportamiento lógico del ESP32 |
 | `docs` | Especificación y decisiones técnicas |
 
@@ -1167,6 +1231,6 @@ Frontend = coordinador
 
 ESP32 = dispositivo autónomo de ejecución
 
-Contracts = lenguaje compartido
+Contracts = implementación compartida de los contratos canónicos
 
 Simulator = reemplazo del hardware durante desarrollo

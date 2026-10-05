@@ -29,7 +29,7 @@ Un gesto completo está compuesto por dos partes independientes:
 {
   "id": 17,
   "name": "hola",
-  "audioTrack": 17
+  "audioTrack": 1
 }
 ```
 
@@ -37,7 +37,9 @@ Un gesto completo está compuesto por dos partes independientes:
 |---|---|---|
 | `id` | integer | 1–2147483647; único dentro del perfil/usuario. Asignado por el backend. |
 | `name` | string | 1–60 **puntos de código Unicode**; sin caracteres de control (U+0000–U+001F, U+007F). El nombre visible no es identidad técnica. |
-| `audioTrack` | integer | 1–50 en Protocol Version 2; no define el nombre de archivo físico en la microSD. |
+| `audioTrack` | integer | 1–50 en Protocol Version 2; asignado por el backend mediante first-fit; independiente de `gesture.id`; inmutable mientras exista el gesto; reutilizable después de eliminarlo. Convención DFPlayer: `/mp3/{audioTrack:04d}.mp3`. |
+
+2.
 
 Estos campos **nunca** forman parte de `data`. Viajan en el envoltorio del protocolo (`sync.gesture` para sincronización; `capture.completed` devuelve solo `requestId` y `data`; los metadatos completos `id`, `name`, `audioTrack` se asignan en el backend y viajan en `sync.gesture`). Ver `docs/protocol.md`, secciones 11.5 y 12.5.
 
@@ -86,6 +88,10 @@ Estos campos **nunca** forman parte de `data`. Viajan en el envoltorio del proto
 | `captureDurationMs` | integer | Sí | Duración real de la ventana de captura en milisegundos. `> 0`, `≤ 10000`. |
 | `samplingPeriodMs` | integer | Sí | Período nominal entre muestras consecutivas en milisegundos. `> 0`, `≤ 1000`. |
 
+`captureDurationMs` representa únicamente la duración de la ventana física de muestreo.
+
+No debe confundirse con `operationTimeoutMs` del protocolo, que limita la duración total de la operación de captura incluyendo preparación, adquisición, procesamiento y emisión del evento terminal.
+
 ### 3.2. Restricciones de consistencia
 
 Todas las siguientes DEBEN cumplirse para un `data` válido:
@@ -118,6 +124,12 @@ Todas las siguientes DEBEN cumplirse para un `data` válido:
 - El firmware aplica offsets de calibración antes de almacenar.
 - Unidad declarada: `"degrees"`.
 
+Los offsets de calibración del MPU6050 pertenecen al estado o configuración local del dispositivo.
+
+NO forman parte de `GestureData`.
+
+La calibración se realiza durante `CALIBRATING`, y los offsets deben aplicarse antes de producir los valores utilizados por captura y reconocimiento.
+
 ### 4.3. Precisión
 
 - TypeScript: `number` (IEEE-754 double).
@@ -148,7 +160,11 @@ El nombre del gesto **no** se incluye en `data`.
 | `captureDurationMs` | `1500` | Duración nominal; el valor real se reporta en `captureDurationMs`. |
 | `sampleCount` esperado | `15` | `captureDurationMs / samplingPeriodMs`; puede variar ±1 por scheduling. |
 
-Estos valores son **configurables** y declarados en `data`; no son constantes del protocolo.
+Estos son los parámetros iniciales de MITTEN V2.
+
+Pueden ajustarse posteriormente mediante pruebas con el hardware real.
+
+`captureDurationMs` y `samplingPeriodMs` se incluyen en `data` para registrar los valores efectivamente utilizados en cada captura.
 
 ### 5.3. Comportamiento ante captura anómala
 
@@ -165,7 +181,7 @@ Estos valores son **configurables** y declarados en `data`; no son constantes de
 |---|---|---|
 | **Protocolo** (`capture.completed`) | `data` es objeto; claves mínimas presentes | Frontend rechaza con `GESTURE_INVALID` local |
 | **Frontend** (antes de POST `/gestos`) | Esquema completo (Zod/Valibot); rangos; consistencia de `name` y `data` | Muestra error al usuario; no envía al backend |
-| **Backend** (POST `/gestos`) | Re-valida esquema completo de `name` y `data`; asigna `id` único y válido; `audioTrack` según política (OPEN DECISION) | HTTP 400 con `GESTURE_INVALID` |
+| **Backend** (POST `/gestos`) | Re-valida esquema completo de `name` y `data`; asigna `id` único; asigna `audioTrack` first-fit dentro de 1–50; genera o prepara el MP3 asociado | HTTP 400 con `GESTURE_INVALID` cuando corresponde |
 | **Firmware** (`sync.gesture`) | Esquema completo; capacidad; IDs duplicados | Responde `GESTURE_INVALID` o `DUPLICATE_GESTURE_ID` |
 | **Simulador** | Mismas reglas que firmware | Fixtures compartidas con `packages/contracts` |
 
@@ -177,7 +193,9 @@ El firmware **nunca** confía en que el frontend ya validó.
 
 ### 7.1. Backend (persistencia)
 
-El backend persiste cada gesto almacenando **exclusivamente** el objeto `data` (sin `id`, `name`, `audioTrack`) junto con sus metadatos (`id`, `name`, `audioTrack`, `audio_archivo`, timestamps, etc.). La persistencia debe garantizar:
+El backend persiste el objeto `data` junto con los metadatos del gesto, incluyendo al menos `id`, `name` y `audioTrack`.
+
+La representación concreta en SQLite, los nombres de columnas y cualquier metadato interno adicional son decisiones de implementación del backend y no forman parte de este contrato.
 
 - fidelidad completa y sin pérdida de `data`;
 - conservación de metadatos;
@@ -198,7 +216,16 @@ El body debe contener al menos los datos necesarios del gesto:
 }
 ```
 
-El backend asigna un `id` único y válido, y persiste el gesto. La inclusión y asignación de `audioTrack` (rango 1–50) depende de la política de asignación/reutilización que es una **OPEN DECISION** (ver sección 9, decisión 5). `gesture-format.md` no define la API HTTP completa; la inclusión/asignación de `audioTrack` dependerá de la política que todavía está abierta.
+El backend asigna:
+
+- un `id` único y válido;
+- un `audioTrack` mediante first-fit dentro del rango `1..50`.
+
+`audioTrack` es independiente de `gesture.id` y permanece inmutable mientras exista el gesto.
+
+Cuando un gesto es eliminado, su `audioTrack` queda libre y puede reutilizarse posteriormente.
+
+`gesture-format.md` no define la API HTTP completa; sólo establece las reglas de identidad y metadatos necesarias para mantener coherencia con el formato de gesto y el protocolo.
 
 ### 7.3. Sincronización (`sync.gesture`)
 
@@ -211,7 +238,7 @@ El frontend transforma al formato de transporte:
   "gesture": {
     "id": 17,
     "name": "hola",
-    "audioTrack": 17,
+    "audioTrack": 1,
     "data": {}
   }
 }
@@ -219,22 +246,34 @@ El frontend transforma al formato de transporte:
 
 El firmware valida `data` antes de staging.
 
-### 7.4. ESP32 almacenamiento local
+### 7.4. ESP32 — almacenamiento local
 
-El perfil activo se almacena en un único archivo JSON: `gestures.json`. Durante una sincronización, el staging se realiza en `gestures.staging` (formato NDJSON: cabecera + un gesto JSON por línea). El commit es atómico: validar staging completo → generar `gestures.json.tmp` → cerrar/validar → `rename` atómico a `gestures.json` (LittleFS). El abort/timeout conserva el perfil anterior intacto. En boot: 1) `gestures.json` válido → cargar; 2) `.tmp` válido → recuperar; 3) ninguno válido → perfil vacío + error diagnóstico; 4) `.staging` huérfano → eliminar (nunca promover). La estrategia completa se documenta en `docs/synchronization.md`.
+`GestureData` puede persistirse como parte del perfil local del dispositivo.
 
----
+Este documento no define:
+
+- nombres de archivos;
+- staging físico;
+- estrategia de doble buffer;
+- rename;
+- recuperación ante corrupción;
+- activación atómica.
+
+La semántica y estrategia de sincronización/persistencia del perfil están definidas en `docs/synchronization.md`.
+
+La implementación DEBE preservar `data` sin modificar su estructura ni significado.
 
 ## 8. Compatibilidad TypeScript ↔ MicroPython
 
 ### 8.1. Contratos compartidos (`packages/contracts`)
 
-Define para TypeScript:
-
+`packages/contracts` implementa este formato canónico para TypeScript.
+Debe proporcionar:
 - Esquema Zod/Valibot/JSON Schema de `data`.
 - Validador runtime (`parse`, `safeParse`).
 - Tipos TypeScript (`GestureData`, `GestureSummary`, etc.).
 - Fixtures: `validGestureData`, `invalidGestureData[]`.
+- Ante una contradicción entre `packages/contracts` y este documento dentro del ámbito de `GestureData`, `docs/gesture-format.md` define el comportamiento esperado.
 
 ### 8.2. Implementación MicroPython
 
@@ -252,22 +291,33 @@ El firmware mantiene una implementación **equivalente**:
 
 ---
 
-## 9. OPEN DECISION
+## 9. Decisiones aún abiertas
 
-Las siguientes decisiones quedan abiertas y **no se inventan** en este documento:
+Las siguientes decisiones siguen abiertas y no cambian el contrato actual de `data.version = 1`.
 
-1. **Algoritmo de reconocimiento definitivo**: V1 usa distancia normalizada al centro con rangos mínimos fijos (400 flex, 20 MPU) y **será el baseline inicial de V2**. V2 podrá adoptar DTW, k-NN, PCA, redes neuronales ligeras, etc., en fases posteriores. El formato `data` es agnóstico al algoritmo.
-2. **Calibración y offsets**: si los offsets MPU y rangos de flex calibrados se almacenan dentro de `data` (campo `calibration`) o son estado separado del dispositivo consultable por `device.status`.
-3. **Extensión a más dimensiones**: agregar giroscopio, acelerómetro raw, temperatura, etc. Requiere `data.version = 2`, nueva `dimensionOrder`, nuevo `units`.
+1. **Algoritmo de reconocimiento definitivo**  
+   El algoritmo V1 será el baseline inicial de MITTEN V2. Futuras mejoras pueden utilizar DTW, k-NN, PCA, redes neuronales ligeras u otros métodos, siempre que respeten el formato definido en este documento.
 
+2. **Extensión a más dimensiones**  
+   Agregar giroscopio, acelerómetro raw, temperatura u otras señales requeriría una nueva versión del formato, por ejemplo `data.version = 2`, junto con una nueva `dimensionOrder`, nuevas unidades y nuevas reglas de validación.
 ---
 
-### 9.1 Decisiones cerradas en este documento
+### 9.1. Decisiones cerradas
 
-**Persistencia ESP32 (antes decisión 2)**: Resuelta. Perfil activo en `gestures.json` (JSON único). Staging incremental en `gestures.staging` (NDJSON). Commit atómico vía `gestures.json.tmp` + `rename` (LittleFS). Recuperación en boot con prioridad: 1) `gestures.json` válido, 2) `.tmp` válido, 3) perfil vacío + error diagnóstico, 4) `.staging` huérfano → eliminar. `expectedGestureCount` solo existe durante SYNCING (estado transaccional), no se persiste. Ver `docs/synchronization.md`.
+**Calibración MPU6050:**  
+Los offsets pertenecen al estado/configuración local del dispositivo y NO forman parte de `GestureData`. Se aplican antes de generar los valores utilizados para captura y reconocimiento.
 
-**Política de `audioTrack` (antes decisión 5)**: Resuelta. Rango 1–50, asignación first-fit por backend en creación, inmutable tras asignación. Al borrar gesto, track liberado y reutilizable. Al editar nombre, se regenera MP3 en la misma pista e invalida estado "audio preparado". Convención DFPlayer: `/mp3/{audioTrack:04d}.mp3`, reproducción mediante `playMp3Folder(audioTrack)`. Ver `docs/protocol.md` sección 12.5 y `docs/architecture.md` sección 11.
+**Política de `audioTrack`:**  
+Rango `1..50`, asignación first-fit por el backend, independiente de `gesture.id`, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
 
+**Audio:**  
+`apps/api` genera o prepara el MP3 asociado al gesto. El frontend coordina y el ESP32 únicamente reproduce mediante DFPlayer Mini.
+
+**Sincronización:**  
+Editar `name`, `data` o regenerar un MP3 no implica sincronización incremental. La siguiente sincronización continúa siendo un reemplazo completo del perfil.
+
+**Persistencia ESP32:**  
+La estrategia de persistencia atómica y recuperación pertenece a `docs/synchronization.md` y no a este contrato de formato.
 ---
 
 ## 10. Incompatibilidades con MITTEN V1
@@ -407,10 +457,24 @@ Validación: min ≤ mean ≤ max, rangos físicos, consistencia dimensional.
 
 Metadatos (fuera de data): id, name, audioTrack
 
-Relación con protocolo: `capture.completed.data` y cada `sync.gesture.gesture.data`
-deben caber en un único frame ≤ `capabilities.maxMessageBytes` anunciado en handshake
-(ver `docs/protocol.md`, secciones 4.5 y 8.2). El valor concreto de `maxMessageBytes`
-queda como OPEN DECISION hasta mediciones reales en hardware.
+Relación con protocolo:
+`capture.completed.data` y cada `sync.gesture.gesture.data`
+deben caber dentro de un frame válido de Protocol Version 2.
 
-OPEN DECISION: algoritmo, persistencia ESP32, calibración, audioTrack, extensiones.
+maxMessageBytes = 8192 bytes
+
+El límite corresponde al frame NDJSON completo codificado en UTF-8,
+sin contar el byte LF final.
+
+Calibración MPU:
+estado/configuración local del dispositivo; no forma parte de GestureData.
+
+Metadatos fuera de data:
+id, name, audioTrack
+
+audioTrack:
+rango 1..50, first-fit, independiente de gesture.id e inmutable mientras exista el gesto.
+
+Decisiones aún abiertas:
+algoritmo de reconocimiento definitivo y posibles futuras extensiones de dimensiones.
 ```

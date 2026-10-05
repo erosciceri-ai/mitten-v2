@@ -174,29 +174,25 @@ El receptor NO DEBE asumir que una llamada a `read()` devuelve un mensaje comple
 
 ### 4.5. Tamaño máximo
 
-El handshake informa:
+Protocol Version 2 fija:
 
-```text
-capabilities.maxMessageBytes
-```
+`maxMessageBytes = 8192`
 
-`maxMessageBytes` es el máximo número de bytes UTF-8 permitido en una línea, sin contar `LF`. Aplica a los mensajes que el dispositivo acepta o emite después del handshake.
+`maxMessageBytes` es el máximo número de bytes UTF-8 permitido en una línea, sin contar `LF`.
 
-El valor definitivo no queda fijado en este documento. Debe definirse junto con `docs/gesture-format.md`, considerando:
+El límite aplica tanto durante bootstrap como después del handshake.
 
-- el tamaño máximo de `data`;
-- la memoria disponible en MicroPython;
-- el costo de mantener simultáneamente la línea serializada y el objeto JSON parseado.
-
-Antes de conocer la capability, ambos lados DEBEN aplicar un límite local finito suficiente para el bootstrap documentado. Ningún receptor puede acumular memoria sin límite.
+Protocol Version 2 no implementa fragmentación lógica de mensajes: cada objeto NDJSON completo debe caber dentro de un único frame de hasta 8192 bytes.
 
 Si un frame supera el límite:
 
-1. el receptor entra en modo de descarte;
-2. descarta bytes hasta el siguiente `LF`;
-3. restablece el framing en la línea siguiente;
-4. informa `MESSAGE_TOO_LARGE` cuando ya existe un handshake compatible;
-5. durante bootstrap, el frontend cierra la conexión y rechaza el dispositivo.
+1. El receptor entra en modo de descarte.
+2. Descarta bytes hasta el siguiente `LF`.
+3. Restablece el framing en la línea siguiente.
+4. Después del handshake informa `MESSAGE_TOO_LARGE`.
+5. Durante bootstrap, el frontend rechaza el dispositivo y cierra la conexión.
+
+Importante: esto no contradice la sección 4.4. “fragmentados” ahí significa que un mismo frame puede llegar repartido entre varias lecturas UART/Web Serial. Eso sigue siendo correcto. Lo que no existe es fragmentación del protocolo en varios mensajes.
 
 ### 4.6. Mensajes incompletos
 
@@ -210,7 +206,8 @@ Cuando vence:
 - durante bootstrap el frontend cierra la conexión;
 - al cerrarse o perderse el puerto, cualquier fragmento pendiente se descarta sin procesarlo.
 
-El valor concreto del timeout es configurable y permanece como `OPEN DECISION`, pero nunca puede ser infinito.
+El timeout de inactividad de un frame incompleto en Protocol Version 2 es de `5000 ms`.
+Si durante `5000 ms` no se recibe el `LF` que completa el frame, el receptor aplica el comportamiento de descarte definido anteriormente.
 
 ### 4.7. Logs y salida de depuración
 
@@ -457,7 +454,9 @@ El `v` superior representa la versión preferida usada para formular el bootstra
 {"v":2,"type":"response","id":"req-1","ok":true,"result":{"device":"MITTEN","firmwareVersion":"2.0.0","protocolVersion":2,"state":"IDLE","capabilities":{"maxGestures":50,"maxMessageBytes":8192}}}
 ```
 
-El valor `8192` es únicamente el valor anunciado por el dispositivo del ejemplo. Este documento no lo establece como constante global.
+En Protocol Version 2, `capabilities.maxMessageBytes` DEBE anunciar `8192`.
+
+La capability se conserva explícitamente en el handshake para que versiones futuras del protocolo puedan anunciar capacidades diferentes sin modificar la estructura básica del bootstrap.
 
 Campos mínimos de `result`:
 
@@ -514,7 +513,7 @@ La versión del firmware no se utiliza como sustituto de esta comprobación.
 Un firmware futuro puede responder, por ejemplo:
 
 ```json
-{"v":3,"type":"response","id":"req-1","ok":true,"result":{"device":"MITTEN","firmwareVersion":"3.0.0","protocolVersion":3,"state":"IDLE","capabilities":{"maxGestures":50,"maxMessageBytes":8192}}}
+{"v":3,"type":"response","id":"req-1","ok":true,"result":{"device":"MITTEN","firmwareVersion":"3.0.0","protocolVersion":3,"state":"IDLE","capabilities":{"maxGestures":50,"maxMessageBytes":16384}}}
 ```
 
 El parser de bootstrap V2 debe poder leer los campos mínimos aunque `v` sea desconocido. Después debe rechazar la compatibilidad porque `3` no aparece en `[2]`.
@@ -532,7 +531,7 @@ El parser de bootstrap V2 debe poder leer los campos mínimos aunque `v` sea des
 | `IDLE` | No hay una operación exclusiva; puede aceptar captura o sincronización. |
 | `CAPTURING` | Existe una captura de gesto en curso. |
 | `SYNCING` | Existe una transacción de sincronización en staging. |
-| `ERROR` | Un fallo impide operar con seguridad hasta recuperación o reinicio. |
+| `ERROR` | Un fallo impide operar con seguridad. En Protocol Version 2 la recuperación requiere reiniciar el ESP32. |
 
 `DISCONNECTED` no es un estado del firmware. Es un estado local del frontend cuando no existe una sesión Web Serial válida.
 
@@ -565,6 +564,15 @@ Los textos visuales, traducciones, colores e iconos no forman parte del protocol
 Un comando desconocido, payload inválido o gesto rechazado no cambia por sí solo el dispositivo a `ERROR`.
 
 Cuando `state` es `ERROR`, `device.status` debe incluir un objeto `error`.
+
+Mientras el dispositivo está en `ERROR`:
+
+- `device.handshake` sigue permitido;
+- `device.status` sigue permitido;
+- los comandos funcionales se rechazan con `INVALID_STATE`;
+- Protocol Version 2 no define un comando `device.reset`;
+- la recuperación se realiza reiniciando el ESP32;
+- después del reinicio, el dispositivo comienza nuevamente en `INITIALIZING`.
 
 ---
 
@@ -619,6 +627,15 @@ Campos:
 | `nextIndex` | integer | Próximo índice esperado. |
 
 Si nunca se sincronizó un perfil válido, `activeProfile` es `null`.
+Si `state === "SYNCING"`, `activeSync` DEBE ser distinto de `null`.
+
+La siguiente combinación es inválida:
+
+```json
+{"state":"SYNCING","activeSync":null}
+```
+
+Si el frontend recibe esa combinación después de un handshake compatible, debe tratarla como `INVALID_DEVICE_MESSAGE`.
 
 ### 10.3. Comandos permitidos por estado
 
@@ -667,21 +684,25 @@ Solicitud:
 ```
 
 Sólo se acepta en `IDLE`.
+Antes de emitir una response con `accepted: true`, el firmware DEBE reservar internamente la operación exclusiva de captura.
+
+Desde ese momento, aunque todavía no se haya emitido el evento `device.state` con `CAPTURING`, una nueva operación exclusiva como `capture.start` o `sync.begin` debe rechazarse con `DEVICE_BUSY`.
+
+Esto evita una ventana de carrera entre la aceptación de la request y la notificación del cambio de estado.
 
 Respuesta de aceptación:
 
 ```json
-{"v":2,"type":"response","id":"req-3","ok":true,"result":{"accepted":true,"operationTimeoutMs":30000}}
+{"v":2,"type":"response","id":"req-3","ok":true,"result":{"accepted":true,"operationTimeoutMs":15000}}
 ```
 
 `operationTimeoutMs`:
 
 - es un entero positivo;
 - indica el plazo máximo anunciado por el firmware para emitir un evento terminal;
-- su valor concreto es configurable;
-- el valor `30000` del ejemplo no es una constante global.
+- en Protocol Version 2 su valor es `15000`;
+- el frontend usa este valor más un margen local pequeño para transporte y scheduling.
 
-El frontend usa un timeout finito basado en este valor más un margen local pequeño para transporte y scheduling.
 
 ### 11.3. Orden de eventos
 
@@ -876,7 +897,9 @@ Respuesta:
 {"v":2,"type":"response","id":"req-10","ok":true,"result":{"accepted":true,"syncId":"sync-a1","expectedGestureCount":2,"receivedCount":0,"nextIndex":0,"idleTimeoutMs":10000}}
 ```
 
-`idleTimeoutMs` es el máximo de inactividad permitido entre mensajes válidos de esa transacción. El valor `10000` es ilustrativo y no una constante global.
+`idleTimeoutMs` es el máximo de inactividad permitido entre mensajes válidos de esa transacción.
+
+En Protocol Version 2 su valor es `10000 ms`.
 
 Después de la response exitosa, el dispositivo emite:
 
@@ -891,7 +914,7 @@ El perfil activo no cambia.
 Solicitud:
 
 ```json
-{"v":2,"type":"request","id":"req-11","command":"sync.gesture","payload":{"syncId":"sync-a1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":17,"data":{}}}}
+{"v":2,"type":"request","id":"req-11","command":"sync.gesture","payload":{"syncId":"sync-a1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":1,"data":{}}}}
 ```
 
 Payload:
@@ -913,7 +936,21 @@ Campos mínimos de `gesture`:
 
 El nombre no es la identidad técnica del gesto. Dos nombres iguales no sustituyen la validación de IDs.
 
-Protocol Version 2 exige IDs de gesto únicos. **El `audioTrack` se asigna en creación (backend, first-fit 1–50) y es inmutable tras la asignación.** Al borrar un gesto, su `audioTrack` queda libre y reutilizable. Al editar el nombre del gesto, el `audioTrack` no cambia; el backend regenera el MP3 en la misma pista e invalida el estado "audio preparado" hasta que el usuario recopie el archivo a la microSD. La relación desde cada gesto hacia su pista es 1:1 e inequívoca.
+Protocol Version 2 exige IDs de gesto únicos.
+
+`gesture.id` es inmutable durante la vida del gesto.
+
+`audioTrack` se asigna al crear el gesto mediante first-fit dentro del rango `1..50` y permanece inmutable mientras el gesto exista.
+
+`gesture.id` y `audioTrack` son identidades independientes y NO DEBEN asumirse iguales.
+
+`name` y `data` pueden modificarse sin cambiar `gesture.id` ni `audioTrack`.
+
+El MP3 asociado puede regenerarse utilizando la misma pista.
+
+Cuando un gesto es eliminado, su `audioTrack` queda libre y puede reutilizarse posteriormente mediante first-fit.
+
+La relación entre un gesto existente y su `audioTrack` es 1:1.
 
 El firmware valida el gesto completo antes de incorporarlo al staging.
 
@@ -1081,7 +1118,7 @@ Después de reconectar:
 Cuando existe una sesión compatible, el dispositivo PUEDE informar un reconocimiento mediante:
 
 ```json
-{"v":2,"type":"event","event":"recognition.detected","data":{"gestureId":17,"audioTrack":17}}
+{"v":2,"type":"event","event":"recognition.detected","data":{"gestureId":17,"audioTrack":1}}
 ```
 
 Campos:
@@ -1280,25 +1317,34 @@ La UI traduce estos códigos y los códigos del firmware a mensajes comprensible
 
 ### 15.6. Timeouts
 
-Toda espera debe ser finita:
+Toda espera debe ser finita.
 
-- apertura del puerto;
-- handshake;
-- response de request;
-- frame incompleto;
-- evento terminal de captura;
-- inactividad de sincronización;
-- commit.
+Protocol Version 2 define los siguientes valores:
 
-Los timeouts que dependen del dispositivo se anuncian cuando corresponde, como `operationTimeoutMs` e `idleTimeoutMs`. Los demás son configuración centralizada del frontend o firmware.
+| Operación | Timeout |
+|---|---:|
+| Handshake | `5000 ms` |
+| Response de una request | `5000 ms` |
+| Frame incompleto | `5000 ms` |
+| Captura | `15000 ms` |
+| Inactividad de sincronización | `10000 ms` |
+| `sync.commit` | `10000 ms` |
 
-Un timeout local no equivale a éxito ni demuestra que el dispositivo no ejecutó la operación. Para operaciones mutables se consulta `device.status` antes de reintentar.
+Los timeouts anunciados explícitamente por el dispositivo, como `operationTimeoutMs` e `idleTimeoutMs`, DEBEN coincidir con estos valores en Protocol Version 2.
 
----
+Cuando una operación incluya un timeout anunciado por el dispositivo, el frontend utiliza ese valor como referencia operativa para esa operación.
+
+Un timeout local no equivale a éxito ni demuestra que el dispositivo no ejecutó la operación.
+
+Para operaciones que puedan modificar estado, el frontend debe consultar `device.status` cuando corresponda antes de decidir si debe reintentar.
 
 ## 16. Ejemplos completos
 
-Los valores de `maxMessageBytes`, `operationTimeoutMs` e `idleTimeoutMs` de estos ejemplos pertenecen al dispositivo ilustrado; no fijan constantes globales.
+Los ejemplos de esta sección utilizan los valores normativos de Protocol Version 2:
+
+- `maxMessageBytes = 8192`;
+- `operationTimeoutMs = 15000`;
+- `idleTimeoutMs = 10000`.
 
 En los ejemplos, `"data": {}` se usa como abreviación del payload de gesto para mantener legibles los ejemplos del protocolo. La estructura completa de `data` está definida en `docs/gesture-format.md`.
 
@@ -1343,7 +1389,7 @@ Frontend → dispositivo:
 Dispositivo → frontend:
 
 ```json
-{"v":2,"type":"response","id":"req-3","ok":true,"result":{"accepted":true,"operationTimeoutMs":30000}}
+{"v":2,"type":"response","id":"req-3","ok":true,"result":{"accepted":true,"operationTimeoutMs":15000}}
 {"v":2,"type":"event","event":"device.state","data":{"state":"CAPTURING"}}
 {"v":2,"type":"event","event":"capture.progress","data":{"requestId":"req-3","phase":"PREPARING","progress":100}}
 {"v":2,"type":"event","event":"capture.progress","data":{"requestId":"req-3","phase":"RECORDING","progress":50}}
@@ -1373,7 +1419,7 @@ Dispositivo → frontend:
 Frontend → dispositivo:
 
 ```json
-{"v":2,"type":"request","id":"req-11","command":"sync.gesture","payload":{"syncId":"sync-a1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":17,"data":{}}}}
+{"v":2,"type":"request","id":"req-11","command":"sync.gesture","payload":{"syncId":"sync-a1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":1,"data":{}}}}
 ```
 
 Dispositivo → frontend:
@@ -1385,7 +1431,7 @@ Dispositivo → frontend:
 Frontend → dispositivo:
 
 ```json
-{"v":2,"type":"request","id":"req-12","command":"sync.gesture","payload":{"syncId":"sync-a1","index":1,"gesture":{"id":23,"name":"gracias","audioTrack":23,"data":{}}}}
+{"v":2,"type":"request","id":"req-12","command":"sync.gesture","payload":{"syncId":"sync-a1","index":1,"gesture":{"id":23,"name":"gracias","audioTrack":2,"data":{}}}}
 ```
 
 Dispositivo → frontend:
@@ -1429,7 +1475,7 @@ Dispositivo → frontend:
 Frontend → dispositivo:
 
 ```json
-{"v":2,"type":"request","id":"req-21","command":"sync.gesture","payload":{"syncId":"sync-b1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":17,"data":{}}}}
+{"v":2,"type":"request","id":"req-21","command":"sync.gesture","payload":{"syncId":"sync-b1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":1,"data":{}}}}
 ```
 
 Dispositivo → frontend:
@@ -1441,7 +1487,7 @@ Dispositivo → frontend:
 Frontend → dispositivo, con ID de gesto repetido:
 
 ```json
-{"v":2,"type":"request","id":"req-22","command":"sync.gesture","payload":{"syncId":"sync-b1","index":1,"gesture":{"id":17,"name":"saludo alternativo","audioTrack":18,"data":{}}}}
+{"v":2,"type":"request","id":"req-22","command":"sync.gesture","payload":{"syncId":"sync-b1","index":1,"gesture":{"id":17,"name":"saludo alternativo","audioTrack":2,"data":{}}}}
 ```
 
 Dispositivo → frontend:
@@ -1471,7 +1517,7 @@ Antes de la desconexión se alcanzó este punto:
 {"v":2,"type":"request","id":"req-30","command":"sync.begin","payload":{"syncId":"sync-c1","profileId":"profile-42","profileRevision":"rev-8","gestureCount":2}}
 {"v":2,"type":"response","id":"req-30","ok":true,"result":{"accepted":true,"syncId":"sync-c1","expectedGestureCount":2,"receivedCount":0,"nextIndex":0,"idleTimeoutMs":10000}}
 {"v":2,"type":"event","event":"device.state","data":{"state":"SYNCING"}}
-{"v":2,"type":"request","id":"req-31","command":"sync.gesture","payload":{"syncId":"sync-c1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":17,"data":{}}}}
+{"v":2,"type":"request","id":"req-31","command":"sync.gesture","payload":{"syncId":"sync-c1","index":0,"gesture":{"id":17,"name":"hola","audioTrack":1,"data":{}}}}
 {"v":2,"type":"response","id":"req-31","ok":true,"result":{"syncId":"sync-c1","receivedCount":1,"nextIndex":1}}
 ```
 
@@ -1562,6 +1608,8 @@ Es responsable de:
 - ejecutar captura;
 - emitir estados y eventos;
 - mantener el reconocimiento local autónomo;
+- reproducir localmente mediante DFPlayer Mini el `audioTrack` asociado a un gesto reconocido;
+- no generar archivos MP3 ni asignar `audioTrack`;
 - crear y validar staging;
 - activar el perfil de forma segura;
 - conservar el perfil anterior ante una sincronización fallida;
@@ -1585,6 +1633,11 @@ Es responsable de representar en TypeScript:
 - fixtures de conformidad.
 
 Los contratos no contienen componentes React ni detalles de hardware interno.
+`packages/contracts` implementa esta especificación en TypeScript y DEBE mantenerse alineado con los documentos canónicos.
+
+No redefine de forma independiente el protocolo.
+
+Ante una contradicción entre `packages/contracts` y este documento dentro del ámbito del wire protocol, `docs/protocol.md` define el comportamiento esperado.
 
 ### 17.4. `tools/esp32-simulator`
 
@@ -1721,48 +1774,85 @@ El bootstrap mínimo debe preservarse incluso al incrementar la versión funcion
 
 ---
 
-## 21. OPEN DECISION
+## 21. Decisiones aún abiertas
 
-Las siguientes decisiones siguen abiertas y no se inventan en esta especificación:
+Las siguientes decisiones internas siguen abiertas y no modifican el contrato observable de Protocol Version 2.
 
-1. **Tamaño máximo de frame:** valor concreto de `capabilities.maxMessageBytes`, dependiente del formato de gesto y de mediciones reales de memoria en MicroPython.
-2. **Persistencia atómica interna:** archivos, nombres, doble buffer, rename, puntero activo y recuperación física. Cualquier elección debe conservar la semántica transaccional de este documento.
-3. **Captura física:** ajuste/tuning posterior mediante pruebas reales; comportamiento temporal exacto; cálculo exacto del progreso; posibles cambios futuros de configuración. Los parámetros iniciales ya están definidos: `samplingPeriodMs = 100`, `captureDurationMs = 1500`, muestra esperada ≈ 15 (definidos en `docs/gesture-format.md`, sección 5.2).
-4. **Timeouts concretos:** valores de handshake, request, frame incompleto, captura, sincronización y commit. Todos deben ser finitos y centralizados; los que condicionan al cliente se anuncian en el protocolo.
+### 21.1. Persistencia atómica interna
 
-No son decisiones abiertas de este documento:
+La estructura física exacta utilizada por el ESP32 sigue siendo una decisión de implementación.
 
+Esto incluye, por ejemplo:
+
+- nombres de archivos;
+- archivos temporales;
+- doble buffer;
+- estrategia de rename;
+- puntero al perfil activo;
+- recuperación física ante corrupción.
+
+La implementación elegida DEBE cumplir la semántica definida en `docs/synchronization.md` y nunca puede hacer visible una biblioteca parcial como perfil válido.
+
+### 21.2. Tuning físico de captura
+
+Los parámetros iniciales definidos son:
+
+- `samplingPeriodMs = 100`;
+- `captureDurationMs = 1500`;
+- cantidad esperada aproximada de muestras: `15`.
+
+Estos valores están definidos en `docs/gesture-format.md`.
+
+Pueden ajustarse posteriormente mediante pruebas con el hardware real, siempre que cualquier cambio que afecte contratos existentes se documente correctamente.
+
+### 21.3. Decisiones ya cerradas
+
+No son decisiones abiertas:
+
+- `maxMessageBytes = 8192`;
+- handshake timeout = `5000 ms`;
+- request timeout = `5000 ms`;
+- incomplete frame timeout = `5000 ms`;
+- capture timeout = `15000 ms`;
+- synchronization idle timeout = `10000 ms`;
+- `sync.commit` timeout = `10000 ms`;
 - NDJSON UTF-8 delimitado por `LF`;
 - Protocol Version 2;
 - envelopes `request`, `response` y `event`;
-- correlación de requests mediante `id`;
-- identificación de transacciones mediante `syncId`;
-- estado disponible `IDLE`;
-- reconocimiento como evento informativo, no como dependencia;
-- sincronización `begin → gesture × N → commit`;
-- reemplazo completo y seguro;
-- capacidad anunciada por handshake;
+- correlación mediante `id`;
+- identificación de sincronización mediante `syncId`;
+- estados `INITIALIZING`, `CALIBRATING`, `IDLE`, `CAPTURING`, `SYNCING` y `ERROR`;
+- `recognition.detected` como evento informativo de reconocimiento;
+- ausencia de estado persistente `RECOGNIZING`;
+- sincronización `sync.begin → sync.gesture × N → sync.commit/abort`;
+- reemplazo completo del perfil;
 - un único perfil activo;
 - conservación del perfil anterior ante fallo;
-- posibilidad de sincronizar una biblioteca vacía.
-- **Formato de gesto:** estructura, versión, límites y validación semántica de `data`; definido en `docs/gesture-format.md`.
-- Parámetros iniciales de captura: `samplingPeriodMs = 100`, `captureDurationMs = 1500`, muestra esperada ≈ 15; definidos en `docs/gesture-format.md` (sección 5.2), aunque su ajuste futuro sigue siendo configurable.
-
----
+- biblioteca vacía válida;
+- `audioTrack` dentro del rango `1..50`;
+- asignación de `audioTrack` mediante first-fit;
+- independencia entre `gesture.id` y `audioTrack`;
+- recuperación desde `ERROR` mediante reinicio del ESP32;
+- formato de gesto definido por `docs/gesture-format.md`.
+- `state === SYNCING` implica que `activeSync` es distinto de `null`;
 
 ## 22. Resumen del contrato
-
 ```text
 Transporte      = USB Serial 115200, UTF-8, NDJSON + LF
 Versión         = Protocol 2
+Frame máximo    = 8192 bytes
 Bootstrap       = device.handshake estable entre versiones
+Handshake       = timeout 5000 ms
 Correlación     = id por request
+Request         = timeout general 5000 ms
 Operación sync  = syncId por transacción
 Estados         = INITIALIZING | CALIBRATING | IDLE | CAPTURING | SYNCING | ERROR
-Captura         = request aceptada + progreso + evento terminal
-Sincronización  = begin → gesture × N → commit/abort
+Captura         = request aceptada + progreso + evento terminal; timeout 15000 ms
+Sincronización  = begin → gesture × N → commit/abort; idle timeout 10000 ms
+Commit          = timeout 10000 ms
 Persistencia    = perfil anterior válido hasta commit seguro
-Reconocimiento  = local; evento serie sólo informativo
+Reconocimiento  = local; recognition.detected sólo informativo
+ERROR           = device.status permitido; recuperación mediante reinicio
+Audio           = backend prepara MP3; firmware reproduce mediante DFPlayer Mini
 Errores         = códigos estables + texto diagnóstico
 Simulador       = mismo protocolo observable que firmware real
-```

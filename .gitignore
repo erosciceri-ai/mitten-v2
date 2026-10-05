@@ -1,9 +1,46 @@
-﻿node_modules/
+﻿# Dependencies
+node_modules/
+
+# Build outputs
 dist/
-coverage/
+build/
+*.tsbuildinfo
+
+# Compiled TypeScript output inside source trees must never be tracked.
+# Note: "src/*.js" does NOT match nested paths such as "src/db/index.js";
+# the "**/" prefix is required.
+**/src/**/*.js
+**/src/**/*.d.ts
+**/src/**/*.js.map
+**/src/**/*.d.ts.map
+**/src/**/*.tsbuildinfo
+
+# Environment files (keep the secret-free template tracked)
 .env
 .env.*
 !.env.example
-*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Database
+*.db
+*.sqlite
+data/
+
+# Turbo
+.turbo/
