@@ -1,0 +1,56 @@
+# Hermes Project Configuration for MITTEN V2
+# This file configures Hermes for the MITTEN V2 project
+
+project:
+  name: "MITTEN V2"
+  description: "Electronic glove translating hand gestures to spoken audio"
+
+# Project-specific skills directory (highest precedence)
+skills:
+  local_dirs:
+    - ".hermes/skills"
+    - ".agents/skills"
+
+# Terminal configuration for OpenCode delegation
+terminal:
+  backend: "local"
+  # OpenCode worktree path relative to project root
+  opencode_worktree: "../v2-opencode"
+
+# Model configuration for this project (inherits from global but can override)
+model:
+  default: "com"
+  provider: "custom"
+  base_url: "http://127.0.0.1:20128/v1"
+
+# Memory and context
+memory:
+  enabled: true
+  project_memory_file: ".hermes/MEMORY.md"
+
+# Tools available to Hermes in this project
+tools:
+  enabled:
+    - "terminal"
+    - "process"
+    - "filesystem"
+    - "git"
+    - "web_search"
+    - "web_fetch"
+  # Allow Hermes to run shell commands for OpenCode delegation
+  terminal:
+    allow_commands:
+      - "opencode*"
+      - "git*"
+      - "npm*"
+      - "node*"
+      - "cd*"
+      - "ls*"
+      - "cat*"
+      - "grep*"
+      - "find*"
+
+# Session settings
+session:
+  auto_save: true
+  max_history: 100
