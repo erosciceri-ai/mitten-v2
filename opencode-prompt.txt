@@ -1,0 +1,58 @@
+STABILIZE apps/web Web Serial ↔ Protocol V2 boundary before firmware/esp32 work
+
+KNOWN STATE:
+- v2 (main): master branch, protected
+- v2-opencode: opencode/work branch, implementation workspace
+- Protocol.md (canonical): maxMessageBytes=8192, capture operationTimeoutMs=15000, sync idleTimeoutMs=10000
+- Simulator (tools/esp32-simulator/src/dispatcher.ts:46): CAPTURE_OPERATION_TIMEOUT_MS = 30_000 (DIVERGES - should be 15000)
+- Contracts (packages/contracts/src/protocol.ts:60): BOOTSTRAP_MAX_MESSAGE_BYTES = 4096 (DIVERGES - protocol.md says 8192 during bootstrap)
+- Web DeviceService uses 15000 correctly; RequestManager uses 15000 correctly
+- DeviceService.ts, RequestManager.ts, DeviceContext.tsx exist in v2-opencode/apps/web/src/serial/ and context/
+- Only RequestManager.test.ts and SerialTransport.test.ts exist - NO DeviceService tests, NO DeviceContext tests
+
+OBJECTIVE:
+Complete the stabilization work for apps/web Web Serial ↔ Protocol V2 boundary
+
+SCOPE:
+1. DEVICESERVICE - Add comprehensive tests & fix bugs:
+   - device.status, capture.start, requestId correlation, capture progress events
+   - capture.completed, capture.failed, capture timeout
+   - device error responses, disconnection during operation
+   - cleanup/cancellation, sync.begin, sync.gesture, sync.commit, sync.abort
+   - CRITICAL: Terminal capture events must ONLY affect active capture (verify requestId matching)
+   - Check handshake for redundant/incorrect requestId generation
+
+2. DEVICECONTEXT - Add tests for:
+   - connection, disconnection, device state, error propagation
+   - cleanup on unmount, basic DeviceService integration
+
+3. ALIGN TIMEOUT: Fix simulator CAPTURE_OPERATION_TIMEOUT_MS from 30000 → 15000 (match protocol.md)
+
+4. ALIGN BOOTSTRAP MAX: Update BOOTSTRAP_MAX_MESSAGE_BYTES from 4096 → 8192 in contracts to match protocol.md
+
+5. FIX WARNINGS: Vitest unhandled rejection with fake timers, worker/open-handle from simulator
+
+6. INTEGRATION SMOKE TEST: Run at least one frontend-service ↔ simulator protocol flow test
+
+FILES TO MODIFY (v2-opencode):
+- apps/web/src/serial/DeviceService.ts (bug fixes if any)
+- apps/web/src/serial/__tests__/DeviceService.test.ts (NEW)
+- apps/web/src/context/__tests__/DeviceContext.test.tsx (NEW)
+- tools/esp32-simulator/src/dispatcher.ts (timeout constant)
+- packages/contracts/src/protocol.ts (BOOTSTRAP_MAX_MESSAGE_BYTES 4096→8192)
+- tests for any modified contracts code
+
+ACCEPTANCE CRITERIA:
+- apps/web: test + build pass
+- If simulator modified: its test + build pass  
+- If contracts modified: its test + build pass + consumers
+- Runtime: simulator compiles/runs, imports contracts
+
+DO NOT TOUCH:
+- master branch
+- Any files outside v2-opencode workspace
+
+VALIDATION:
+Run tests and builds for each affected workspace
+
+STOP CONDITIONS: Real doc contradiction, new architectural decision needed, OpenCode delegation failure

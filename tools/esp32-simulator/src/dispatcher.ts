@@ -43,7 +43,7 @@ import { DeviceStateMachine } from './device-state';
 const FIRMWARE_VERSION = '2.0.0-simulator.1';
 const MAX_GESTURES = 50;
 const MAX_MESSAGE_BYTES = 8192;
-const CAPTURE_OPERATION_TIMEOUT_MS = 30_000;
+const CAPTURE_OPERATION_TIMEOUT_MS = 15_000;
 const SYNC_IDLE_TIMEOUT_MS = 10_000;
 
 type EnvelopeEmitter = (envelope: ProtocolEnvelope) => void;

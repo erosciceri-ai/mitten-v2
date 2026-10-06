@@ -26,7 +26,12 @@ El objetivo actual es el desarrollo incrementado en la rama `v2/`.
 
 # Rama de desarrollo actual
 
-Todo el trabajo se realiza en la rama `v2/`.
+El repositorio activo es `v2/`.
+
+La implementación delegada se realiza normalmente en el worktree
+`../v2-opencode`, rama `opencode/work`.
+
+El `master` del repositorio principal se mantiene protegido durante la implementación.
 
 `mittenv1/` es el repositorio histórico de referencia y **no** debe modificarse como arquitectura principal.
 

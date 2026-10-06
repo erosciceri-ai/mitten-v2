@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "build": "tsc",
-    "test": "jest"
+    "test": "jest --config jest.config.cjs"
   },
   "dependencies": {
     "@mitten/contracts": "file:../../packages/contracts",

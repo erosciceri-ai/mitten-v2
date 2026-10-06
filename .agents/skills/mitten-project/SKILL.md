@@ -17,14 +17,16 @@ Si algo aquí contradice a un documento canónico, **manda el documento**.
 
 ## 0. Antes de tocar nada
 
-1. Localiza la raíz del repo: el directorio que contiene `.git`, `AGENTS.md`, `docs/`, `package.json`
-   con `workspaces`. En esta máquina es `MITTENV2/v2/`. **`MITTENV2/mittenv1/` es histórico: no lo modifiques.**
-2. Lee `AGENTS.md` de la raíz (551 líneas). Es la fuente principal de reglas persistentes: qué es
-   MITTEN, qué tecnologías están cerradas, qué está prohibido.
-3. Lee **sólo** los documentos de `docs/` que la tarea necesitaba (ver §1). No los recorras todos:
-   `docs/protocol.md` son 1 768 líneas y `docs/architecture.md` 1 173; leerlos completos sin motivo
-   cuesta mucho contexto y no aporta.
-4. Verifica el estado real antes de asumir: `git status`, `git log --oneline -5`, `git branch --show-current`.
+1. Verifica primero el estado incremental:
+   `git branch --show-current`, `git status --short` y `git diff --name-only`.
+
+2. `AGENTS.md` sigue siendo autoridad persistente, pero no lo releas completo por defecto.
+   Consulta únicamente las secciones relevantes para la tarea mediante búsqueda dirigida.
+
+3. Lee sólo los documentos de `docs/` relacionados directamente con el subsistema afectado.
+
+4. Inspecciona primero los archivos modificados o directamente involucrados.
+   No vuelvas a auditar subsistemas ya validados si no cambiaron.
 
 ## 1. Jerarquía documental — qué documento governa qué
 
@@ -74,13 +76,30 @@ No apliques `requirements.md` como si fuera arquitectura, ni `architecture.md` c
 
 ## 3. Después de modificar código
 
-Ejecuta siempre, desde la raíz del repo:
+Usa validación escalonada.
 
-```bash
-npm test                                              # todos los workspaces
-npm run build                                         # compila los workspaces
-npm test --workspace=<el workspace que tocaste>       # el relevante primero
-```
+### Fase A — durante implementación
+
+Ejecuta únicamente los tests directamente relacionados con el cambio.
+
+### Fase B — al estabilizar el cambio
+
+Ejecuta:
+
+- tests del workspace afectado;
+- build del workspace afectado.
+
+### Fase C — cierre
+
+Ejecuta tests/build globales sólo si:
+
+- se modificó `packages/contracts`;
+- cambió el protocolo;
+- el cambio afecta varios workspaces;
+- existe riesgo de regresión transversal;
+- se está cerrando una etapa importante antes de integración.
+
+No ejecutes todos los tests del monorepo después de cada modificación pequeña.
 
 Reglas de validación específicas:
 
@@ -97,7 +116,7 @@ Reglas de validación específicas:
   producción se rompe. Verifica con un test que toque el SQL real (ver `__tests__/integration.test.ts`).
 - **Firmware**: no hay runner de MicroPython instalado. Si escribes firmware, la validación disponible
   es el simulador y la revisión de que el código es MicroPython válido por lectura.
-- **Frontend**: `apps/web` hoy no tiene `test` ni `build` en su `package.json`; si los agregás, avísame.
+- **Frontend**: `apps/web` tiene `test` (vitest) y `build` (tsc + vite build) en su `package.json`; tests cubren SerialTransport y RequestManager.
 
 ## 4. Paralelismo
 
@@ -128,9 +147,17 @@ Distinguí siempre entre:
 
 - `packages/contracts` y `tools/esp32-simulator`: implementados, con tests, commiteados.
 - `apps/api`: implementado y con tests, pero historically **sin versionar** — confirmá con `git status`.
-- `apps/web` y `firmware/esp32`: vacíos salvo `package.json` / `.gitkeep`. Casi todo el trabajo
-  restante está ahí.
-- Rama activa: `master`, un solo commit. `mittenv1/` es un repo independiente aparte.
+- `apps/web`: implementado con React + Vite + TypeScript, tests en vitest, build funcional. `firmware/esp32`: vacío salvo `package.json` / `.gitkeep`.  Casi todo el trabajo restante está ahí.
+
+Este worktree de implementación debe operar normalmente sobre:
+
+`opencode/work`
+
+Verifica siempre mediante:
+
+`git branch --show-current`
+
+No asumas `master`. El repositorio principal `../v2` mantiene `master` protegido y es usado por Hermes para orquestación/revisión.
 
 ## 7. Comandos de referencia
 

@@ -1,0 +1,115 @@
+import type {
+  User,
+  AuthResponse,
+  LoginCredentials,
+  RegisterData,
+  Gesture,
+  GestureData,
+  GestureListResponse,
+  CreateGestureRequest,
+  UpdateGestureRequest,
+  GestureResponse,
+  ApiError,
+} from '../types';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+class ApiErrorClass extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public fields?: Array<{ field: string; message: string }>
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function getAuthToken(): Promise<string | null> {
+  return localStorage.getItem('auth_token');
+}
+
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = await getAuthToken();
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+  
+  const data = await response.json().catch(() => ({}));
+  
+  if (!response.ok) {
+    const errorMessage = data.message || `HTTP error ${response.status}`;
+    throw new ApiErrorClass(errorMessage, response.status, data.fields);
+  }
+  
+  return data as T;
+}
+
+// Auth endpoints
+export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
+}
+
+export async function register(data: RegisterData): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getCurrentUser(): Promise<User> {
+  return request<User>('/auth/me');
+}
+
+// Gesture endpoints
+export async function getGestures(): Promise<GestureListResponse> {
+  return request<GestureListResponse>('/gestures');
+}
+
+export async function getGestureById(id: number): Promise<GestureResponse> {
+  return request<GestureResponse>(`/gestures/${id}`);
+}
+
+export async function createGesture(data: CreateGestureRequest): Promise<GestureResponse> {
+  return request<GestureResponse>('/gestures', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateGesture(id: number, data: UpdateGestureRequest): Promise<GestureResponse> {
+  return request<GestureResponse>(`/gestures/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteGesture(id: number): Promise<void> {
+  await request<void>(`/gestures/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Health check
+export async function healthCheck(): Promise<{ status: string }> {
+  return request<{ status: string }>('/health');
+}
+
+export { ApiErrorClass as ApiError };

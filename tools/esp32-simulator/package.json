@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "test": "jest",
+    "test": "jest --config jest.config.cjs",
     "start": "node dist/simulator.js",
     "dev": "ts-node src/simulator.ts"
   },

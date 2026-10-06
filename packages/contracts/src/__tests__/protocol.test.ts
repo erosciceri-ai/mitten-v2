@@ -203,7 +203,7 @@ describe('protocol', () => {
     });
 
     it('should handle message too large', () => {
-      const largePayload = 'x'.repeat(5000);
+      const largePayload = 'x'.repeat(9000); // Exceeds BOOTSTRAP_MAX_MESSAGE_BYTES (8192)
       const buffer = `{"v":2,"type":"request","id":"req-1","command":"a","payload":{"data":"${largePayload}"}}\n`;
       const result = parseFrames(new TextEncoder().encode(buffer));
       expect(result.frames).toHaveLength(0);

@@ -57,7 +57,7 @@ export const FRAME_DELIMITER_BYTE = 0x0a;
 export const CR_BYTE = 0x0d;
 
 /** Finite local limit used only before maxMessageBytes is known. */
-export const BOOTSTRAP_MAX_MESSAGE_BYTES = 4096;
+export const BOOTSTRAP_MAX_MESSAGE_BYTES = 8192;
 
 const textEncoder = new TextEncoder();
 

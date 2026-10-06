@@ -4,9 +4,19 @@
   "description": "Shared contracts for MITTEN V2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./protocol": {
+      "require": "./dist/protocol.js",
+      "types": "./dist/protocol.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
-    "test": "jest",
+    "test": "jest --config jest.config.cjs",
     "prepare": "npm run build"
   },
   "keywords": ["mitten", "contracts", "protocol"],
