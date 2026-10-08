@@ -102,6 +102,22 @@ def build_error_response(request_id, code, message, details=None):
     }
 
 
+def build_success_response(request_id, result):
+    """Build a generic success response with custom result data."""
+    _require_request_id(request_id)
+    return {
+        "v": PROTOCOL_VERSION,
+        "type": "response",
+        "id": request_id,
+        "ok": True,
+        "result": result,
+    }
+
+
+def build_event(event, data):
+    return {"v": PROTOCOL_VERSION, "type": "event", "event": event, "data": data}
+
+
 def build_state_event(state):
     _require_state(state)
     return {
@@ -147,4 +163,8 @@ def serialize_envelope(envelope):
     except TypeError:
         # MicroPython ujson emits compact JSON and may not accept kwargs.
         text = json.dumps(envelope)
-    return text.encode("utf-8") + b"\n"
+    frame = text.encode("utf-8") + b"\n"
+    from config import BOOTSTRAP_MAX_MESSAGE_BYTES
+    if len(frame) - 1 > BOOTSTRAP_MAX_MESSAGE_BYTES:
+        raise ValueError("MESSAGE_TOO_LARGE")
+    return frame

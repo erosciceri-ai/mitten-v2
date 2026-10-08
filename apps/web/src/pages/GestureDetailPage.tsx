@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useToast } from '../components/ToastContainer';
-import { getGestureById, updateGesture, deleteGesture } from '../services/api';
+import { getGestureById, updateGesture, deleteGesture, generateGestureAudio, getGestureAudioInfo, getGestureAudioBlob } from '../services/api';
 import { validateGestureData } from '@mitten/contracts';
-import type { Gesture, GestureResponse, GestureData, FormErrors } from '../types';
+import type { Gesture, GestureResponse, GestureData, FormErrors, GestureAudioInfo } from '../types';
 
 export function GestureDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,7 +15,12 @@ export function GestureDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  
+
+  // Audio state
+  const [audioInfo, setAudioInfo] = useState<GestureAudioInfo | null>(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
   // Edit form state
   const [editName, setEditName] = useState('');
 
@@ -28,14 +33,59 @@ export function GestureDetailPage() {
       const data = await getGestureById(gestureId);
       setGesture(data);
       setEditName(data.name);
+      await fetchAudioInfo();
     } catch (error) {
-      showToast({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Error al cargar gesto' 
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Error al cargar gesto'
       });
       navigate('/gestures');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchAudioInfo = async () => {
+    if (!gestureId) return;
+    try {
+      const info = await getGestureAudioInfo(gestureId);
+      setAudioInfo(info);
+
+    } catch (error) {
+      setAudioInfo(null);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setAudioUrl(null);
+    if (gestureId && audioInfo?.filePath) {
+      getGestureAudioBlob(gestureId).then(blob => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setAudioUrl(objectUrl);
+      }).catch(error => {
+        if (!cancelled) showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error al cargar audio' });
+      });
+    }
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [gestureId, audioInfo]);
+
+  const handleGenerateAudio = async () => {
+    if (!gestureId) return;
+    setIsGeneratingAudio(true);
+    try {
+      await generateGestureAudio(gestureId);
+      showToast({ type: 'success', message: 'Audio generado correctamente' });
+      await fetchAudioInfo();
+    } catch (error) {
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Error al generar audio'
+      });
+    } finally {
+      setIsGeneratingAudio(false);
     }
   };
 
@@ -46,7 +96,7 @@ export function GestureDetailPage() {
   const validateForm = () => {
     const newErrors: FormErrors = {};
     if (!editName.trim()) newErrors.name = 'El nombre es requerido';
-    else if (editName.length > 60) newErrors.name = 'El nombre no puede exceder 60 caracteres';
+    else if (Array.from(editName).length > 60) newErrors.name = 'El nombre no puede exceder 60 caracteres';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -60,9 +110,9 @@ export function GestureDetailPage() {
       fetchGesture();
       setIsEditing(false);
     } catch (error) {
-      showToast({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Error al actualizar' 
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Error al actualizar'
       });
     } finally {
       setIsSaving(false);
@@ -80,9 +130,9 @@ export function GestureDetailPage() {
       showToast({ type: 'success', message: 'Gesto eliminado correctamente' });
       navigate('/gestures');
     } catch (error) {
-      showToast({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Error al eliminar' 
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Error al eliminar'
       });
     } finally {
       setIsDeleting(false);
@@ -106,8 +156,9 @@ export function GestureDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent"></div>
+      <div className="flex items-center justify-center min-h-[400px]" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent" aria-hidden="true"></div>
+        <span className="sr-only">Cargando gesto…</span>
       </div>
     );
   }
@@ -142,8 +193,7 @@ export function GestureDetailPage() {
           <div>
             <h1 className="text-2xl font-bold text-text">{gesture.name}</h1>
             <div className="flex items-center gap-3 mt-1 text-sm text-text-muted">
-              <span className="font-mono">ID: {gesture.id}</span>
-              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-medium">Pista: {gesture.audioTrack}</span>
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-medium">Pista de audio {gesture.audioTrack}</span>
               <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">Guardado</span>
             </div>
           </div>
@@ -180,12 +230,14 @@ export function GestureDetailPage() {
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 maxLength={60}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? 'edit-name-error' : 'edit-name-help'}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
                   errors.name ? 'border-error' : 'border-border'
                 }`}
               />
-              {errors.name && <p className="mt-1 text-sm text-error">{errors.name}</p>}
-              <p className="mt-1 text-sm text-text-muted">{editName.length}/60 caracteres</p>
+              {errors.name && <p id="edit-name-error" className="mt-1 text-sm text-error" role="alert">{errors.name}</p>}
+              <p id="edit-name-help" className="mt-1 text-sm text-text-muted tabular-nums">{Array.from(editName).length}/60 caracteres</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -203,18 +255,18 @@ export function GestureDetailPage() {
       {/* Gesture Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-surface rounded-lg border border-border p-6">
-          <h3 className="text-lg font-semibold text-text mb-4">Metadatos</h3>
+          <h3 className="text-lg font-semibold text-text mb-4">Información del gesto</h3>
           <dl className="space-y-3">
             <div className="flex justify-between">
-              <dt className="text-text-muted">ID Interno</dt>
+              <dt className="text-text-muted">Identificador</dt>
               <dd className="font-mono font-medium">{gesture.id}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-text-muted">Pista de Audio (audioTrack)</dt>
+              <dt className="text-text-muted">Pista de audio</dt>
               <dd className="font-mono font-medium">{gesture.audioTrack}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-text-muted">Convención DFPlayer</dt>
+              <dt className="text-text-muted">Archivo en la microSD</dt>
               <dd className="font-mono text-sm">/mp3/{gesture.audioTrack.toString().padStart(4, '0')}.mp3</dd>
             </div>
             <div className="flex justify-between">
@@ -229,21 +281,74 @@ export function GestureDetailPage() {
         </div>
 
         <div className="bg-surface rounded-lg border border-border p-6">
-          <h3 className="text-lg font-semibold text-text mb-4">Estado de Sincronización</h3>
-          <p className="text-text-muted">
-            Este gesto está guardado en el backend. Para usarlo con MITTEN, 
-            sincroniza tu biblioteca desde la página de sincronización.
-          </p>
+          <h3 className="text-lg font-semibold text-text mb-4">Voz del gesto</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-text-muted">Estado</span>
+              {audioInfo?.filePath ? (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-sm font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                  Generado
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-sm font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
+                  Pendiente
+                </span>
+              )}
+            </div>
+            {audioInfo?.generatedAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-text-muted">Generado</span>
+                <span className="font-mono text-sm">{new Date(audioInfo.generatedAt).toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <span className="text-text-muted">Pista</span>
+              <span className="font-mono">#{gesture.audioTrack}</span>
+            </div>
+            <button
+              onClick={handleGenerateAudio}
+              disabled={isGeneratingAudio}
+              className="w-full px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {isGeneratingAudio ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Generando…
+                </>
+              ) : audioInfo?.filePath ? (
+                'Regenerar audio'
+              ) : (
+                'Generar audio'
+              )}
+            </button>
+            {audioUrl && (
+              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                <audio controls src={audioUrl} className="flex-1" />
+                <a
+                  href={audioUrl}
+                  download={`${gesture.name}.mp3`}
+                  className="px-2 py-1 text-sm text-primary hover:underline"
+                >
+                  Descargar
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Gesture Data Details */}
-      <div className="bg-surface rounded-lg border border-border p-6">
-        <h3 className="text-lg font-semibold text-text mb-4">Datos del Gesto (GestureData)</h3>
+      <details className="bg-surface rounded-lg border border-border p-6">
+        <summary className="cursor-pointer text-lg font-semibold text-text hover:text-primary">Detalles técnicos de la captura</summary>
         <p className="text-text-muted mb-4">
           Versión {gesture.data.version} • {gesture.data.dimensions} dimensiones • {gesture.data.sampleCount} muestras
         </p>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Object.entries(dataPreview).map(([key, value]) => (
             <div key={key} className="bg-gray-50 rounded-lg p-4">
@@ -255,7 +360,7 @@ export function GestureDetailPage() {
 
         {/* Summary Statistics */}
         <div className="mt-6">
-          <h4 className="font-medium text-text mb-3">Estadísticas por Dimensión (Summary)</h4>
+          <h4 className="font-medium text-text mb-3">Estadísticas por sensor</h4>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -283,7 +388,7 @@ export function GestureDetailPage() {
         {/* Raw Samples (first 5) */}
         <details className="mt-6">
           <summary className="cursor-pointer font-medium text-text hover:text-primary">
-            Ver primeras 5 muestras (raw)
+            Ver las primeras 5 muestras sin procesar
           </summary>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-xs font-mono">
@@ -315,7 +420,7 @@ export function GestureDetailPage() {
             )}
           </div>
         </details>
-      </div>
+      </details>
     </div>
   );
 }

@@ -85,11 +85,7 @@ export class RequestManager {
       payload: options.payload ?? payload,
     };
 
-    // Determine timeout based on command
-    let timeout = options.timeout ?? this.timeouts.default;
-    if (command === 'device.handshake') timeout = this.timeouts.handshake;
-    else if (command === 'capture.start') timeout = this.timeouts.capture;
-    else if (command === 'sync.commit') timeout = this.timeouts.syncCommit;
+    const timeout = options.timeout ?? this.getTimeoutForCommand(command);
 
     const promise = new Promise<ResponseResult>((resolve, reject) => {
       const timeoutHandle = setTimeout(() => {
@@ -193,8 +189,6 @@ export class RequestManager {
     switch (command) {
       case 'device.handshake':
         return this.timeouts.handshake;
-      case 'capture.start':
-        return this.timeouts.capture;
       case 'sync.commit':
         return this.timeouts.syncCommit;
       default:

@@ -212,6 +212,14 @@ export class NdjsonParser {
     return { frames, errors, remaining: this.pending.slice() };
   }
 
+  discardIncomplete(): ParseError | null {
+    if (!this.pending.length) return null;
+    const rawData = preview(this.pending);
+    this.pending = new Uint8Array();
+    this.discardingOversizedFrame = true; // Resynchronize at the next LF.
+    return { type: 'INCOMPLETE_MESSAGE', message: 'Incomplete frame timed out', rawData };
+  }
+
   reset(): void {
     this.pending = new Uint8Array();
     this.discardingOversizedFrame = false;

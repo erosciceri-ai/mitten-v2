@@ -44,3 +44,28 @@ data/
 
 # Turbo
 .turbo/
+# Python caches and board-specific wiring
+__pycache__/
+*.py[cod]
+.pytest_cache/
+firmware/esp32/hardware_config.py
+# Firmware runtime data
+firmware/esp32/gestures.json
+firmware/esp32/gestures.staging
+
+# Accidental Windows files
+nul
+**/nul
+
+# Local generic agent skills
+.agents/skills/banner-design/
+.agents/skills/brand/
+.agents/skills/design-system/
+.agents/skills/design/
+.agents/skills/slides/
+.agents/skills/ui-styling/
+.agents/skills/ui-ux-pro-max/
+
+# Local design-tool state and generated reports
+/.impeccable/
+/apps/web/.impeccable/

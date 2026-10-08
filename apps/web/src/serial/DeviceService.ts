@@ -33,6 +33,8 @@ import {
   validateSyncGestureResult,
   validateSyncCommitResult,
   validateSyncAbortResult,
+  validateProtocolV2Message,
+  validateGesture,
 } from '@mitten/contracts';
 import { SerialTransport } from './SerialTransport';
 import { RequestManager } from './RequestManager';
@@ -66,6 +68,8 @@ export class DeviceService {
   private handshakeTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
   private pendingCaptureRequestId: string | null = null;
   private currentSyncId: string | null = null;
+  private syncIdleTimeoutMs = 10000;
+  private syncIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(handlers: EventHandlers = {}) {
     this.handlers = handlers;
@@ -128,6 +132,7 @@ export class DeviceService {
   }
 
   async connect(): Promise<DeviceInfo> {
+    if (this.transport.getState() === 'error') await this.transport.disconnect();
     if (this.transport.getState() !== 'closed') {
       throw new Error('Already connected or connecting');
     }
@@ -152,6 +157,7 @@ export class DeviceService {
       return deviceInfo;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection failed';
+      await this.disconnect();
       this.setConnectionStatus('error', null, message);
       this.handlers.onError?.(error instanceof Error ? error : new Error(message));
       throw error;
@@ -161,6 +167,7 @@ export class DeviceService {
   async disconnect(): Promise<void> {
     this.clearHandshakeTimeout();
     this.clearCaptureOperationTimeout();
+    this.clearSyncIdleTimer();
     this.requestManager.cancelAllRequests('Disconnected');
     await this.transport.disconnect();
     this.deviceInfo = null;
@@ -264,7 +271,9 @@ export class DeviceService {
 
     this.pendingCaptureRequestId = requestId;
 
-    const result = await promise;
+    let result: CaptureStartResult;
+    try { result = await promise; }
+    catch (error) { this.pendingCaptureRequestId = null; throw error; }
 
     const validation = validateCaptureStartResult(result);
     if (!validation.valid) {
@@ -273,7 +282,7 @@ export class DeviceService {
     }
 
     // Start the operation timeout for the terminal event
-    this.startCaptureOperationTimeout(result.operationTimeoutMs);
+    if (this.pendingCaptureRequestId === requestId) this.startCaptureOperationTimeout(result.operationTimeoutMs);
 
     return {
       requestId,
@@ -307,6 +316,8 @@ export class DeviceService {
     }
 
     this.currentSyncId = syncId;
+    this.syncIdleTimeoutMs = result.idleTimeoutMs;
+    this.refreshSyncIdleTimer();
     this.activeSync = {
       syncId: result.syncId,
       profileId,
@@ -324,10 +335,12 @@ export class DeviceService {
     index: number,
     gesture: Gesture
   ): Promise<SyncGestureResult> {
+    const validation = validateGesture(gesture);
+    if (!validation.valid) throw new Error(validation.errors.join('; '));
     const payload: SyncGesturePayload = {
       syncId,
       index,
-      gesture,
+      gesture: { id: gesture.id, name: gesture.name, audioTrack: gesture.audioTrack, data: gesture.data },
     };
 
     const { promise } = this.requestManager.sendRequest<SyncGesturePayload, SyncGestureResult>(
@@ -335,13 +348,25 @@ export class DeviceService {
       payload
     );
 
-    const result = await promise;
-
-    const validation = validateSyncGestureResult(result);
-    if (!validation.valid) {
-      throw new Error(`Invalid sync gesture response: ${validation.errors.join(', ')}`);
+    let result: SyncGestureResult;
+    try { result = await promise; }
+    catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith('Request timeout:')) throw error;
+      const status = await this.getStatus();
+      if (status.activeSync?.syncId !== syncId) throw error;
+      if (status.activeSync.nextIndex === index + 1) {
+        result = { syncId, receivedCount: status.activeSync.receivedCount, nextIndex: status.activeSync.nextIndex };
+      } else if (status.activeSync.nextIndex === index) {
+        result = await this.requestManager.sendRequest<SyncGesturePayload, SyncGestureResult>('sync.gesture', payload).promise;
+      } else throw error;
     }
 
+    const responseValidation = validateSyncGestureResult(result);
+    if (!responseValidation.valid) {
+      throw new Error(`Invalid sync gesture response: ${responseValidation.errors.join(', ')}`);
+    }
+
+    this.refreshSyncIdleTimer();
     // Update active sync state
     if (this.activeSync && this.activeSync.syncId === syncId) {
       this.activeSync.receivedCount = result.receivedCount;
@@ -354,6 +379,8 @@ export class DeviceService {
   }
 
   async commitSync(syncId: string): Promise<SyncCommitResult> {
+    const expected = this.activeSync;
+    this.clearSyncIdleTimer();
     const payload: SyncCommitPayload = { syncId };
 
     const { promise } = this.requestManager.sendRequest<SyncCommitPayload, SyncCommitResult>(
@@ -362,7 +389,14 @@ export class DeviceService {
       { timeout: this.requestManager.getTimeoutForCommand('sync.commit') }
     );
 
-    const result = await promise;
+    let result: SyncCommitResult;
+    try { result = await promise; }
+    catch (error) {
+      if (!(error instanceof Error) || !error.message.startsWith('Request timeout:')) throw error;
+      const status = await this.getStatus();
+      if (!expected || status.activeProfile?.profileId !== expected.profileId || status.activeProfile.profileRevision !== expected.profileRevision) throw error;
+      result = { committed: true, syncId, activeProfile: status.activeProfile };
+    }
 
     const validation = validateSyncCommitResult(result);
     if (!validation.valid) {
@@ -394,13 +428,34 @@ export class DeviceService {
       throw new Error(`Invalid sync abort response: ${validation.errors.join(', ')}`);
     }
 
+    this.clearSyncIdleTimer();
     this.activeSync = null;
     this.currentSyncId = null;
 
     return result;
   }
 
+  private clearSyncIdleTimer(): void {
+    if (this.syncIdleTimer) clearTimeout(this.syncIdleTimer);
+    this.syncIdleTimer = null;
+  }
+
+  private refreshSyncIdleTimer(): void {
+    this.clearSyncIdleTimer();
+    if (!this.currentSyncId) return;
+    this.syncIdleTimer = setTimeout(() => {
+      const syncId = this.currentSyncId;
+      if (!syncId) return;
+      this.currentSyncId = null; this.activeSync = null;
+      this.requestManager.cancelAllRequests('Synchronization idle timeout');
+      this.handlers.onSyncFailed?.(new Error('Synchronization idle timeout'));
+      void this.abortSync(syncId).catch(error => this.handlers.onError?.(error));
+    }, this.syncIdleTimeoutMs + 500);
+  }
+
   private handleIncomingMessage(envelope: ProtocolEnvelope): void {
+    const validation = validateProtocolV2Message(envelope);
+    if (!validation.valid) { this.handlers.onError?.(new Error(validation.errors.join('; '))); return; }
     // First try to handle as response
     if (this.requestManager.handleResponse(envelope)) {
       return;
@@ -462,6 +517,7 @@ export class DeviceService {
         const data = envelope.data as { syncId: string; error: { code: string; message: string } };
         // Only process sync.failed for the active sync
         if (this.currentSyncId && data.syncId === this.currentSyncId) {
+          this.clearSyncIdleTimer();
           this.activeSync = null;
           this.currentSyncId = null;
           const error = new Error(data.error.message);
@@ -532,6 +588,7 @@ export class DeviceService {
   private handleDisconnect(): void {
     this.clearHandshakeTimeout();
     this.clearCaptureOperationTimeout();
+    this.clearSyncIdleTimer();
     this.requestManager.cancelAllRequests('Serial disconnected');
     
     this.isHandshakeComplete = false;

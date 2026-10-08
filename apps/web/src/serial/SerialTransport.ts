@@ -20,6 +20,9 @@ export class SerialTransport {
   private state: ConnectionState = 'closed';
   private readonly options: Required<SerialTransportOptions>;
   private isReading = false;
+  private cleanupPromise: Promise<void> | null = null;
+  private incompleteTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly onDisconnect = () => this.handleDisconnect();
 
   constructor(options: SerialTransportOptions = {}) {
     this.options = {
@@ -46,6 +49,8 @@ export class SerialTransport {
   }
 
   async connect(): Promise<void> {
+    if (this.cleanupPromise) await this.cleanupPromise;
+    if (this.state === 'error') this.setState('closed');
     if (this.state !== 'closed') {
       throw new Error(`Cannot connect: port is ${this.state}`);
     }
@@ -79,13 +84,11 @@ export class SerialTransport {
       this.startReadLoop();
 
       // Listen for port disconnect
-      port.addEventListener('disconnect', () => {
-        this.handleDisconnect();
-      });
+      port.addEventListener('disconnect', this.onDisconnect);
 
     } catch (error) {
       this.setState('error');
-      this.cleanup();
+      await this.cleanup();
       throw error;
     }
   }
@@ -108,17 +111,11 @@ export class SerialTransport {
         }
 
         if (value && value.length > 0) {
-          const result: ParseResult = this.parser.push(value);
-          
-          // Handle parsed frames
-          for (const frame of result.frames) {
-            this.options.onData(frame);
+          let start = 0;
+          for (let i = 0; i < value.length; i++) {
+            if (value[i] === 10) { this.receivePart(value.subarray(start, i + 1)); start = i + 1; }
           }
-
-          // Handle parse errors
-          for (const error of result.errors) {
-            this.handleParseError(error);
-          }
+          if (start < value.length) this.receivePart(value.subarray(start));
         }
       }
     } catch (error) {
@@ -133,6 +130,18 @@ export class SerialTransport {
     }
   }
 
+  private receivePart(part: Uint8Array): void {
+    const result = this.parser.push(part);
+    if (this.incompleteTimer) clearTimeout(this.incompleteTimer);
+    this.incompleteTimer = null;
+    for (const error of result.errors) this.handleParseError(error);
+    for (const frame of result.frames) this.options.onData(frame);
+    if (result.remaining.length) this.incompleteTimer = setTimeout(() => {
+      const error = this.parser.discardIncomplete();
+      if (error) this.handleParseError(error);
+    }, 5000);
+  }
+
   private handleParseError(error: ParseError): void {
     const errorMessage = `Serial parse error: ${error.message}`;
     console.error(errorMessage, error);
@@ -143,7 +152,7 @@ export class SerialTransport {
     console.error('Serial transport error:', error);
     this.options.onError(error);
     this.setState('error');
-    this.cleanup();
+    void this.cleanup();
   }
 
   private handleDisconnect(): void {
@@ -151,7 +160,7 @@ export class SerialTransport {
       console.log('Serial port disconnected');
       this.setState('error');
       this.options.onError(new Error('Serial port disconnected'));
-      this.cleanup();
+      void this.cleanup();
     }
   }
 
@@ -162,6 +171,7 @@ export class SerialTransport {
 
     const frame = serializeFrame(envelope);
     const data = new TextEncoder().encode(frame);
+    if (data.byteLength - 1 > this.options.maxMessageBytes) throw new Error('MESSAGE_TOO_LARGE');
 
     try {
       await this.writer.write(data);
@@ -172,53 +182,41 @@ export class SerialTransport {
   }
 
   async disconnect(): Promise<void> {
-    if (this.state === 'closed' || this.state === 'closing') {
-      return;
-    }
-
+    if (this.state === 'closed' && !this.cleanupPromise) return;
     this.setState('closing');
-    this.cleanup();
+    await this.cleanup();
     this.setState('closed');
   }
 
-  private cleanup(): void {
-    // Cancel read loop
-    if (this.reader) {
-      try {
-        this.reader.cancel();
-      } catch {
-        // Ignore cancellation errors
+  private cleanup(): Promise<void> {
+    if (this.cleanupPromise) return this.cleanupPromise;
+    this.cleanupPromise = (async () => {
+      if (this.incompleteTimer) clearTimeout(this.incompleteTimer);
+      this.incompleteTimer = null;
+      const reader = this.reader, writer = this.writer, port = this.port;
+      this.reader = null; this.writer = null; this.port = null;
+      if (port) port.removeEventListener('disconnect', this.onDisconnect);
+      const errors: unknown[] = [];
+      if (reader) {
+        try { await reader.cancel(); } catch (error) { errors.push(error); }
+        if (this.readLoopPromise) await this.readLoopPromise;
+        try { reader.releaseLock(); } catch (error) { errors.push(error); }
       }
-      this.reader = null;
-    }
-
-    // Close writer
-    if (this.writer) {
-      try {
-        this.writer.close();
-      } catch {
-        // Ignore close errors
+      if (writer) {
+        try { await writer.close(); } catch (error) { errors.push(error); }
+        try { writer.releaseLock(); } catch (error) { errors.push(error); }
       }
-      this.writer = null;
-    }
-
-    // Close port
-    if (this.port) {
-      try {
-        this.port.close();
-      } catch {
-        // Ignore close errors
-      }
-      this.port = null;
-    }
-
-    // Reset parser
-    this.parser.reset();
-    this.readLoopPromise = null;
+      if (port) { try { await port.close(); } catch (error) { errors.push(error); } }
+      this.parser.reset(); this.readLoopPromise = null; this.isReading = false;
+      if (errors.length) this.options.onError(new Error(`Serial cleanup: ${errors.map(String).join('; ')}`));
+    })().finally(() => { this.cleanupPromise = null; });
+    return this.cleanupPromise;
   }
 
   updateMaxMessageBytes(maxMessageBytes: number): void {
+    if (maxMessageBytes === this.options.maxMessageBytes) return;
     this.parser = new NdjsonParser({ maxMessageBytes });
+    this.options.maxMessageBytes = maxMessageBytes;
   }
 
   async getPorts(): Promise<SerialPort[]> {

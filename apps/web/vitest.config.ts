@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@mitten/contracts': path.resolve(__dirname, '../../packages/contracts/dist/index.js'),
+      '@mitten/contracts': path.resolve(__dirname, '../../packages/contracts/src/index.ts'),
     },
   },
   test: {

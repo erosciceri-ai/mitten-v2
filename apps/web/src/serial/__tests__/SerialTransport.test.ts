@@ -18,7 +18,7 @@ const createMockPort = () => {
   const readable = {
     getReader: vi.fn(() => ({
       read: vi.fn(() => readPromise),
-      cancel: vi.fn(),
+      cancel: vi.fn(() => { readResolver({ done: true }); return Promise.resolve(); }),
       releaseLock: vi.fn(),
     })),
   };

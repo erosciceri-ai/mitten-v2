@@ -149,3 +149,9 @@ export interface ToastMessage {
   message: string;
   duration?: number;
 }
+
+export interface GestureAudioInfo {
+  filePath: string | null;
+  trackNumber: number;
+  generatedAt: string | null;
+}

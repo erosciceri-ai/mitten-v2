@@ -3,7 +3,7 @@ import {
   NdjsonParser,
   ProtocolEnvelope,
   serializeFrame,
-  validateProtocolV2Message,
+  BOOTSTRAP_MAX_MESSAGE_BYTES,
 } from '@mitten/contracts';
 import { SimulatorDispatcher } from './dispatcher';
 
@@ -25,16 +25,15 @@ export function runSimulator(options: SimulatorOptions): void {
   const { stdin, stdout, stderr, captureDelayMs = 25, captureOutcome = 'success', gestureSeed } = options;
 
   const parser = new NdjsonParser();
-  const emittedFrames: ProtocolEnvelope[] = [];
-
   const logDiagnostic = (message: string): void => {
     stderr.write(`[DIAG] ${message}\n`);
   };
 
   const dispatcher = new SimulatorDispatcher(
     (envelope) => {
-      emittedFrames.push(envelope);
+
       const frame = serializeFrame(envelope);
+      if (Buffer.byteLength(frame, 'utf8') - 1 > BOOTSTRAP_MAX_MESSAGE_BYTES) throw new Error('MESSAGE_TOO_LARGE');
       stdout.write(frame);
     },
     {
@@ -47,48 +46,38 @@ export function runSimulator(options: SimulatorOptions): void {
 
   dispatcher.startup();
 
-  let buffer = '';
-
-  const processInput = (chunk: string | Buffer): void => {
-    const data = chunk.toString('utf8');
-    buffer += data;
-
-    while (true) {
-      const newlineIndex = buffer.indexOf('\n');
-      if (newlineIndex === -1) break;
-
-      const line = buffer.slice(0, newlineIndex);
-      buffer = buffer.slice(newlineIndex + 1);
-
-      if (!line.trim()) continue;
-
-      try {
-        const parsed = JSON.parse(line);
-        const validation = validateProtocolV2Message(parsed);
-        if (!validation.valid) {
-          logDiagnostic(`INVALID_MESSAGE: ${validation.errors.join('; ')}`);
-          dispatcher.handleParseError({
-            type: 'INVALID_MESSAGE',
-            message: validation.errors.join('; '),
-            rawData: new TextEncoder().encode(line),
-          });
-          continue;
-        }
-        if (parsed.type === 'request') {
-          dispatcher.dispatch(parsed as ProtocolEnvelope);
-        }
-      } catch {
-        logDiagnostic('INVALID_JSON: Invalid JSON frame');
-        dispatcher.handleParseError({
-          type: 'INVALID_JSON',
-          message: 'Invalid JSON frame',
-          rawData: new TextEncoder().encode(line),
-        });
-      }
+  let incompleteTimer: ReturnType<typeof setTimeout> | undefined;
+  const processPart = (part: Uint8Array): void => {
+    const result = parser.push(part);
+    if (incompleteTimer) clearTimeout(incompleteTimer);
+    for (const error of result.errors) {
+      logDiagnostic(`${error.type}: ${error.message}`);
+      dispatcher.handleParseError(error);
+    }
+    for (const frame of result.frames) {
+      const pending = dispatcher.dispatch(frame);
+      if (pending) void pending.catch(error => logDiagnostic(String(error)));
+    }
+    if (result.remaining.length) {
+      incompleteTimer = setTimeout(() => {
+        const error = parser.discardIncomplete();
+        if (error) dispatcher.handleParseError(error);
+      }, 5000);
+      incompleteTimer.unref();
     }
   };
-
+  const processInput = (chunk: string | Buffer): void => {
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+    // Process in wire order, including errors on either side of a handshake.
+    let start = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      if (bytes[i] === 10) { processPart(bytes.subarray(start, i + 1)); start = i + 1; }
+    }
+    if (start < bytes.length) processPart(bytes.subarray(start));
+  };
   stdin.on('data', processInput);
+  stdin.on('end', () => { if (incompleteTimer) clearTimeout(incompleteTimer); parser.reset(); });
+
 }
 
 if (require.main === module) {

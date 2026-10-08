@@ -1,227 +1,125 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDevice } from '../context/DeviceContext';
-import type { FirmwareState } from '../types';
-
-const getStateColor = (state: FirmwareState) => {
-  switch (state) {
-    case 'IDLE': return 'bg-green-100 text-green-800';
-    case 'CAPTURING': return 'bg-blue-100 text-blue-800';
-    case 'SYNCING': return 'bg-purple-100 text-purple-800';
-    case 'CALIBRATING': return 'bg-yellow-100 text-yellow-800';
-    case 'INITIALIZING': return 'bg-gray-100 text-gray-800';
-    case 'ERROR': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
-  }
-};
-
-const getStateDescription = (state: FirmwareState) => {
-  switch (state) {
-    case 'IDLE': return 'Listo para capturar o sincronizar';
-    case 'CAPTURING': return 'Capturando datos de sensores';
-    case 'SYNCING': return 'Sincronizando biblioteca de gestos';
-    case 'CALIBRATING': return 'Calibrando sensores';
-    case 'INITIALIZING': return 'Inicializando firmware';
-    case 'ERROR': return 'Error - requiere reinicio del dispositivo';
-    default: return 'Estado desconocido';
-  }
-};
+import { getGestureAudioInfo, getGestures } from '../services/api';
+import { getConnectionLabel, getFirmwareStateDescription, getFirmwareStateLabel } from '../utils/devicePresentation';
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const { 
-    isConnected, 
-    connectionStatus, 
-    deviceInfo, 
-    firmwareState, 
-    activeProfile,
-    connect,
-    disconnect,
-    getStatus
-  } = useDevice();
+  const { isConnected, connectionStatus, deviceInfo, firmwareState, activeProfile, syncIsComplete, connect, disconnect, getStatus } = useDevice();
+  const [gestureCount, setGestureCount] = useState(0);
+  const [audioReadyCount, setAudioReadyCount] = useState(0);
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
 
-  const handleConnect = async () => {
-    try {
-      await connect();
-    } catch (error) {
-      // Error handled by ConnectionBanner and toast
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    getGestures()
+      .then(async ({ gestures }) => {
+        const audioStates = await Promise.allSettled(gestures.map((gesture) => getGestureAudioInfo(gesture.id)));
+        if (!cancelled) {
+          setGestureCount(gestures.length);
+          setAudioReadyCount(audioStates.filter((result) => result.status === 'fulfilled' && Boolean(result.value.filePath)).length);
+        }
+      })
+      .finally(() => { if (!cancelled) setIsLoadingLibrary(false); });
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleDisconnect = async () => {
-    await disconnect();
-  };
+  const isConnecting = connectionStatus === 'connecting' || connectionStatus === 'handshake';
+  const missingAudioCount = Math.max(gestureCount - audioReadyCount, 0);
+  const nextStep = !isConnected
+    ? { title: 'Conecta MITTEN', description: 'Usa el cable USB y selecciona su puerto para comenzar.', action: 'Conectar MITTEN', kind: 'connect' as const }
+    : gestureCount === 0
+      ? { title: 'Crea tu primer gesto', description: 'Registra un movimiento y escribe la frase que MITTEN pronunciará.', action: 'Crear gesto', href: '/gestures/new' }
+      : missingAudioCount > 0
+        ? { title: 'Prepara las frases de audio', description: `${missingAudioCount} ${missingAudioCount === 1 ? 'gesto necesita' : 'gestos necesitan'} un MP3 antes del uso autónomo.`, action: 'Revisar biblioteca', href: '/gestures' }
+        : { title: 'Sincroniza el perfil', description: 'Envía la biblioteca completa al guante y luego verifica la microSD.', action: 'Ir a sincronizar', href: '/sync' };
 
-  const handleGetStatus = async () => {
-    try {
-      await getStatus();
-    } catch (error) {
-      // Error handled by toast
-    }
-  };
+  const journey = [
+    { label: 'Conectar', detail: isConnected ? 'Guante conectado' : 'Pendiente', done: isConnected },
+    { label: 'Enseñar gestos', detail: isLoadingLibrary ? 'Consultando…' : `${gestureCount} ${gestureCount === 1 ? 'gesto' : 'gestos'}`, done: gestureCount > 0 },
+    { label: 'Preparar audio', detail: isLoadingLibrary ? 'Consultando…' : gestureCount > 0 ? `${audioReadyCount} de ${gestureCount}` : 'Sin gestos', done: gestureCount > 0 && missingAudioCount === 0 },
+    { label: 'Sincronizar', detail: syncIsComplete ? 'Perfil actualizado' : activeProfile ? `${activeProfile.gestureCount} en MITTEN` : 'Pendiente', done: syncIsComplete },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text">Panel de Control</h1>
-          <p className="text-text-muted mt-1">Bienvenido, {user?.email}</p>
-        </div>
-      </div>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <header>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-[-0.025em] text-text">Prepara MITTEN para hablar</h1>
+        <p className="text-text-muted mt-2 max-w-2xl">Hola, {user?.email}. Completa la configuración y después podrás usar el guante sin mantener esta página abierta.</p>
+      </header>
 
-      {/* Connection Card */}
-      <div className="bg-surface rounded-lg border border-border p-6">
-        <h2 className="text-lg font-semibold text-text mb-4">Conexión MITTEN</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="p-4 rounded-lg bg-background border border-border">
-            <p className="text-sm text-text-muted mb-1">Estado de Conexión</p>
-            <div className="flex items-center gap-2">
-              <span className={`w-3 h-3 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-500' :
-                connectionStatus === 'connecting' || connectionStatus === 'handshake' ? 'bg-yellow-500' :
-                connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
-              }`}></span>
-              <span className="font-medium capitalize">{connectionStatus}</span>
-            </div>
+      <section className="bg-primary text-white rounded-xl p-6 sm:p-8 shadow-md" aria-labelledby="next-step-title">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="max-w-2xl">
+            <p className="text-sm font-medium text-blue-100 mb-2">Siguiente paso</p>
+            <h2 id="next-step-title" className="text-2xl font-bold tracking-[-0.02em]">{nextStep.title}</h2>
+            <p className="text-blue-100 mt-2">{nextStep.description}</p>
           </div>
-
-          {isConnected && deviceInfo && (
-            <>
-              <div className="p-4 rounded-lg bg-background border border-border">
-                <p className="text-sm text-text-muted mb-1">Estado del Firmware</p>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStateColor(firmwareState)}`}>
-                  {firmwareState}
-                </span>
-                <p className="text-sm text-text-muted mt-1">{getStateDescription(firmwareState)}</p>
-              </div>
-
-              <div className="p-4 rounded-lg bg-background border border-border">
-                <p className="text-sm text-text-muted mb-1">Versión</p>
-                <p className="font-mono text-sm">v{deviceInfo.firmwareVersion}</p>
-                <p className="text-xs text-text-muted">Protocolo v{deviceInfo.protocolVersion}</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Device Info */}
-        {isConnected && deviceInfo && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-lg bg-background border border-border">
-            <div>
-              <p className="text-sm text-text-muted mb-1">Capacidad de Gestos</p>
-              <p className="text-2xl font-bold text-text">{deviceInfo.capabilities.maxGestures}</p>
-            </div>
-            <div>
-              <p className="text-sm text-text-muted mb-1">Límite de Mensaje</p>
-              <p className="text-2xl font-bold text-text">{deviceInfo.capabilities.maxMessageBytes.toLocaleString()} bytes</p>
-            </div>
-          </div>
-        )}
-
-        {/* Active Profile */}
-        {isConnected && activeProfile && (
-          <div className="mb-6 p-4 rounded-lg bg-primary-light border border-primary/20">
-            <p className="text-sm text-primary mb-1">Perfil Activo</p>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <span><strong>ID:</strong> {activeProfile.profileId}</span>
-              <span><strong>Revisión:</strong> {activeProfile.profileRevision}</span>
-              <span><strong>Gestos:</strong> {activeProfile.gestureCount} / {deviceInfo?.capabilities.maxGestures || 50}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex flex-wrap gap-3">
-          {!isConnected ? (
-            <button
-              onClick={handleConnect}
-              disabled={connectionStatus === 'connecting' || connectionStatus === 'handshake'}
-              className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {connectionStatus === 'connecting' ? 'Conectando...' : 
-               connectionStatus === 'handshake' ? 'Handshake...' : 'Conectar MITTEN'}
+          {'kind' in nextStep ? (
+            <button onClick={() => connect().catch(() => undefined)} disabled={isConnecting} className="shrink-0 px-5 py-3 bg-white text-primary font-semibold rounded-lg hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+              {isConnecting ? 'Conectando…' : nextStep.action}
             </button>
           ) : (
-            <>
-              <button
-                onClick={handleGetStatus}
-                className="px-4 py-2 bg-gray-100 text-text font-medium rounded-md hover:bg-gray-200 transition-colors"
-              >
-                Actualizar Estado
-              </button>
-              <button
-                onClick={handleDisconnect}
-                className="px-4 py-2 bg-error text-white font-medium rounded-md hover:bg-error/90 transition-colors"
-              >
-                Desconectar
-              </button>
-            </>
+            <Link to={nextStep.href} className="shrink-0 px-5 py-3 bg-white text-primary font-semibold rounded-lg hover:bg-blue-50 transition-colors text-center">{nextStep.action}</Link>
           )}
-          
+        </div>
+      </section>
+
+      <section className="bg-surface rounded-xl border border-border p-5 sm:p-6" aria-labelledby="journey-title">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-5">
+          <div>
+            <h2 id="journey-title" className="text-lg font-semibold text-text">Camino al uso autónomo</h2>
+            <p className="text-sm text-text-muted mt-1">Un gesto pasa de tu mano a una frase guardada en el guante.</p>
+          </div>
+          {syncIsComplete && <span className="text-sm font-medium text-success">Perfil actualizado en esta sesión</span>}
+        </div>
+        <ol className="grid grid-cols-1 md:grid-cols-4 gap-0">
+          {journey.map((step, index) => (
+            <li key={step.label} className="relative flex md:block gap-3 p-3 md:p-4">
+              {index < 3 && <span className="hidden md:block absolute top-7 left-[calc(50%+1rem)] right-[calc(-50%+1rem)] h-px bg-border" aria-hidden="true" />}
+              <span className={`relative z-10 grid place-items-center w-8 h-8 rounded-full text-sm font-bold shrink-0 ${step.done ? 'bg-success text-white' : 'bg-gray-100 text-text-muted'}`} aria-hidden="true">{step.done ? '✓' : index + 1}</span>
+              <div className="md:mt-3"><p className="font-medium text-text">{step.label}</p><p className="text-sm text-text-muted mt-0.5">{step.detail}</p></div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-4 p-4 rounded-lg bg-warning-light text-amber-900">
+          <p className="font-medium">Antes de desconectar la computadora</p>
+          <p className="text-sm mt-1">Copia cada MP3 descargado a la carpeta <code>/mp3</code> de la microSD y comprueba que el número de pista coincida. La web no puede verificar ese paso físico.</p>
+        </div>
+      </section>
+
+      <section className="bg-surface rounded-xl border border-border p-5 sm:p-6" aria-labelledby="device-title">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h2 id="device-title" className="text-lg font-semibold text-text">Estado de MITTEN</h2>
+            <div className="flex flex-wrap items-center gap-2 mt-3" role="status" aria-live="polite">
+              <span className={`px-2.5 py-1 rounded-full text-sm font-medium ${isConnected ? 'bg-success-light text-success' : 'bg-gray-100 text-gray-700'}`}>{getConnectionLabel(connectionStatus)}</span>
+              {isConnected && <span className="px-2.5 py-1 rounded-full text-sm font-medium bg-primary-light text-primary">{getFirmwareStateLabel(firmwareState)}</span>}
+            </div>
+            <p className="text-sm text-text-muted mt-3">{isConnected ? getFirmwareStateDescription(firmwareState) : 'Conecta el guante para capturar gestos, consultar su perfil o sincronizar.'}</p>
+          </div>
           {isConnected && (
-            <>
-              <Link to="/gestures/new" className="px-4 py-2 bg-success text-white font-medium rounded-md hover:bg-success/90 transition-colors inline-flex items-center justify-center">
-                Nuevo Gesto
-              </Link>
-              <Link to="/gestures" className="px-4 py-2 bg-gray-100 text-text font-medium rounded-md hover:bg-gray-200 transition-colors inline-flex items-center justify-center">
-                Ver Biblioteca
-              </Link>
-              <Link to="/sync" className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md hover:bg-purple-700 transition-colors inline-flex items-center justify-center">
-                Sincronizar
-              </Link>
-            </>
+            <div className="flex gap-2">
+              <button onClick={() => getStatus().catch(() => undefined)} className="px-3 py-2 border border-border text-text font-medium rounded-md hover:bg-gray-50 transition-colors">Actualizar</button>
+              <button onClick={() => disconnect()} className="px-3 py-2 text-error font-medium rounded-md hover:bg-error-light transition-colors">Desconectar</button>
+            </div>
           )}
         </div>
-      </div>
 
-      {/* Quick Stats */}
-      {isConnected && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link to="/gestures" className="bg-surface rounded-lg border border-border p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-primary-light text-primary">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted">Total Gestos</p>
-                <p className="text-2xl font-bold text-text">{activeProfile?.gestureCount || 0}</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link to="/gestures/new" className="bg-surface rounded-lg border border-border p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-success-light text-success">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted">Crear Gesto</p>
-                <p className="text-2xl font-bold text-text">Nuevo</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link to="/sync" className="bg-surface rounded-lg border border-border p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-purple-100 text-purple-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-text-muted">Sincronizar</p>
-                <p className="text-2xl font-bold text-text">MITTEN</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      )}
+        {isConnected && deviceInfo && (
+          <details className="mt-5 pt-5 border-t border-border">
+            <summary className="cursor-pointer font-medium text-text hover:text-primary">Detalles técnicos del dispositivo</summary>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 text-sm">
+              <div><dt className="text-text-muted">Firmware</dt><dd className="font-mono mt-1">v{deviceInfo.firmwareVersion}</dd></div>
+              <div><dt className="text-text-muted">Protocolo</dt><dd className="font-mono mt-1">v{deviceInfo.protocolVersion}</dd></div>
+              <div><dt className="text-text-muted">Capacidad</dt><dd className="tabular-nums mt-1">{deviceInfo.capabilities.maxGestures} gestos</dd></div>
+              <div><dt className="text-text-muted">Mensaje máximo</dt><dd className="tabular-nums mt-1">{deviceInfo.capabilities.maxMessageBytes.toLocaleString()} bytes</dd></div>
+            </dl>
+          </details>
+        )}
+      </section>
     </div>
   );
 }

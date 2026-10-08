@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import { useToast } from '../components/ToastContainer';
 import { getGestures, deleteGesture } from '../services/api';
 import type { GestureResponse, GestureListResponse } from '../types';
 
 export function GestureLibraryPage() {
   const { showToast } = useToast();
-  const navigate = useNavigate();
   const [gestures, setGestures] = useState<GestureResponse[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,9 +75,9 @@ export function GestureLibraryPage() {
       </div>
 
       {/* Search */}
-      <div className="bg-surface rounded-lg border border-border p-4">
+      {!isLoading && gestures.length > 0 && <div className="bg-surface rounded-lg border border-border p-4">
         <div className="relative max-w-md">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -87,16 +85,17 @@ export function GestureLibraryPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar gestos por nombre..."
+            aria-label="Buscar gestos por nombre"
             className="w-full pl-10 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
-      </div>
+      </div>}
 
       {/* Gestures List */}
       <div className="bg-surface rounded-lg border border-border overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent mx-auto mb-4" aria-hidden="true"></div>
             <p className="text-text-muted">Cargando gestos...</p>
           </div>
         ) : filteredGestures.length === 0 ? (
@@ -120,28 +119,22 @@ export function GestureLibraryPage() {
         ) : (
           <div className="divide-y divide-border">
             {filteredGestures.map((gesture) => (
-              <Link
-                key={gesture.id}
-                to={`/gestures/${gesture.id}`}
-                className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-4 min-w-0 flex-1">
+              <div key={gesture.id} className="flex items-center justify-between gap-3 p-4 hover:bg-gray-50 transition-colors">
+                <Link to={`/gestures/${gesture.id}`} className="flex items-center gap-4 min-w-0 flex-1 text-text">
                   <div className="p-3 rounded-lg bg-primary-light text-primary flex-shrink-0">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11V6a1.5 1.5 0 0 1 3 0v4-6a1.5 1.5 0 0 1 3 0v6-5a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v5c0 4.4-3.6 8-8 8h-1a7 7 0 0 1-6.2-3.7L2.5 15A1.7 1.7 0 0 1 5 12.8L7 15" />
                     </svg>
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-medium text-text truncate">{gesture.name}</h3>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-text-muted">
-                      <span className="font-mono">ID: {gesture.id}</span>
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">Pista: {gesture.audioTrack}</span>
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">Guardado</span>
-                      <span className="text-xs">Creado: {new Date(gesture.createdAt).toLocaleDateString()}</span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-text-muted">
+                      <span>Pista de audio {gesture.audioTrack}</span>
+                      <span className="text-xs">Creado el {new Date(gesture.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 ml-4">
+                </Link>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={(e) => {
                       e.preventDefault();
@@ -163,7 +156,7 @@ export function GestureLibraryPage() {
                     )}
                   </button>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

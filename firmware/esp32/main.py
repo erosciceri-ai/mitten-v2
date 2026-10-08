@@ -35,13 +35,13 @@ class UartStreamTransport(StreamTransport):
         return None
 
     def write(self, data):
-        return self._uart.write(data)
-
-
-def create_protocol_uart_transport(uart_id=0, baudrate=115200):
-    """Create the real ESP32 transport without importing machine on CPython."""
-    from machine import UART
-    return UartStreamTransport(UART(uart_id, baudrate=baudrate))
+        sent = 0
+        while sent < len(data):
+            count = self._uart.write(data[sent:])
+            if not count:
+                raise OSError("Protocol UART write failed")
+            sent += count
+        return sent
 
 
 async def _yield_ms(milliseconds):
@@ -51,63 +51,52 @@ async def _yield_ms(milliseconds):
         await asyncio.sleep(milliseconds / 1000.0)
 
 
-async def main_loop(transport, max_iterations=None, sleep_ms=1):
-    """Read, parse, dispatch and write Protocol V2 frames without blocking."""
+async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, dfplayer=None):
+    """Own the byte transport; dispatcher owns the single runtime service graph."""
     parser = NdjsonParser()
-
     def emit(envelope):
         transport.write(serialize_envelope(envelope))
-
-    dispatcher = FirmwareDispatcher(emit=emit)
+    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, dfplayer=dfplayer)
     dispatcher.startup()
     pending_since = None
     iterations = 0
-
     while max_iterations is None or iterations < max_iterations:
         iterations += 1
         chunk = transport.read()
+        now = ticks_ms()
         if chunk:
             result = parser.push(chunk)
-            if result.remaining:
-                pending_since = ticks_ms()
-            else:
-                pending_since = None
-
+            pending_since = now if result.remaining else None
             for item_type, item in result.items:
                 if item_type == "error":
                     if dispatcher.handshake_compatible:
                         emit(ErrorHandler.from_parse_error(item))
                     continue
-
-                request = item
                 try:
-                    response = dispatcher.handle_request(request)
-                except Exception as exception:
-                    request_id = request.get("id") if isinstance(request, dict) else None
-                    response = ErrorHandler.from_exception(exception, request_id)
+                    response = dispatcher.handle_request(item)
+                except Exception as error:
+                    response = ErrorHandler.from_exception(error, item.get("id") if isinstance(item, dict) else None)
                 if response is not None:
-                    is_uncorrelated_error = (
-                        response.get("type") == "event"
-                        and response.get("event") == "protocol.error"
-                    )
-                    if dispatcher.handshake_compatible or not is_uncorrelated_error:
+                    uncorrelated = response.get("event") == "protocol.error"
+                    if dispatcher.handshake_compatible or not uncorrelated:
                         emit(response)
-        elif pending_since is not None:
-            elapsed = ticks_diff(ticks_ms(), pending_since)
-            if elapsed >= FRAME_INCOMPLETE_TIMEOUT_MS:
-                parse_error = parser.discard_incomplete()
-                pending_since = None
-                if parse_error is not None and dispatcher.handshake_compatible:
-                    emit(ErrorHandler.from_parse_error(parse_error))
-
+                # Responses always precede state/progress notifications.
+                dispatcher.flush_events()
+        elif pending_since is not None and ticks_diff(now, pending_since) >= FRAME_INCOMPLETE_TIMEOUT_MS:
+            error = parser.discard_incomplete()
+            pending_since = None
+            if error is not None and dispatcher.handshake_compatible:
+                emit(ErrorHandler.from_parse_error(error))
+        dispatcher.update(now)
         await _yield_ms(sleep_ms)
-
     return dispatcher
 
 
 def main():
-    transport = create_protocol_uart_transport()
-    asyncio.run(main_loop(transport))
+    from hardware import create_hardware
+    from hardware_config import BOARD
+    transport, sensors, player = create_hardware(BOARD)
+    asyncio.run(main_loop(transport, sensor_manager=sensors, dfplayer=player))
 
 
 if __name__ == "__main__":

@@ -86,6 +86,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   
   const deviceServiceRef = useRef<DeviceService | null>(null);
   const isMountedRef = useRef(true);
+  const syncGeneration = useRef(0);
 
   // Initialize device service
   useEffect(() => {
@@ -98,6 +99,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         }
       },
       onConnectionStatusChange: (status, info, error) => {
+        if (status === "disconnected" || status === "error") syncGeneration.current++;
         if (isMountedRef.current) {
           setConnectionStatus(status);
           setDeviceInfo(info);
@@ -143,6 +145,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         }
       },
       onSyncFailed: (error) => {
+        syncGeneration.current++;
         if (isMountedRef.current) {
           setIsSyncing(false);
           setSyncError(error.message);
@@ -252,6 +255,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       throw new Error(`Too many gestures (${gestures.length}). Maximum is ${deviceInfo?.capabilities.maxGestures || 50}`);
     }
     
+    const generation = ++syncGeneration.current;
     setIsSyncing(true);
     setSyncError(null);
     setSyncIsComplete(false);
@@ -273,10 +277,12 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       
       // Send each gesture
       for (let i = 0; i < gestures.length; i++) {
+        if (generation !== syncGeneration.current) return;
         await service.sendGesture(syncId, i, gestures[i]);
       }
       
       // Commit sync
+      if (generation !== syncGeneration.current) return;
       await service.commitSync(syncId);
       
     } catch (error) {
@@ -296,16 +302,17 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     const service = deviceServiceRef.current;
     if (!service || !activeSync) return;
     
+    syncGeneration.current++;
     try {
       await service.abortSync(activeSync.syncId);
     } catch (error) {
-      console.error('Failed to abort sync:', error);
-    } finally {
-      setIsSyncing(false);
-      setActiveSync(null);
-      setSyncError(null);
-      setSyncProgress({ sent: 0, total: 0 });
+      setSyncError(error instanceof Error ? error.message : 'Abort failed');
+      throw error;
     }
+    setIsSyncing(false);
+    setActiveSync(null);
+    setSyncError(null);
+    setSyncProgress({ sent: 0, total: 0 });
   }, [activeSync]);
 
   const clearCaptureState = useCallback(() => {

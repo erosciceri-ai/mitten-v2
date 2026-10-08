@@ -35,6 +35,14 @@ FRAME_INCOMPLETE_TIMEOUT_MS = 5000
 CAPTURE_OPERATION_TIMEOUT_MS = 15000
 SYNC_IDLE_TIMEOUT_MS = 10000
 
+# Capture configuration
+CAPTURE_DEFAULT_SAMPLE_COUNT = 50
+CAPTURE_DEFAULT_SAMPLING_PERIOD_MS = 20
+CAPTURE_PREPARING_DURATION_MS = 1000
+
+# Calibration configuration
+CALIBRATION_MIN_SAMPLES = 10
+
 # ============================================================================
 # Framing
 # ============================================================================

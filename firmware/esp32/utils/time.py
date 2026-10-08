@@ -40,3 +40,15 @@ def ticks_add(base, delta):
     if hasattr(time, "ticks_add"):
         return time.ticks_add(base, delta)
     return base + delta
+
+
+def sleep_ms(ms):
+    """Sleep for specified milliseconds."""
+    if hasattr(time, "sleep_ms"):
+        time.sleep_ms(ms)
+    else:
+        time.sleep(ms / 1000.0)
+
+
+# Alias for compatibility
+time_ms = ticks_ms

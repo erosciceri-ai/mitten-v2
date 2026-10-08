@@ -216,6 +216,13 @@ Tras una promoción exitosa:
 
 La estrategia concreta deberá probarse con LittleFS en el ESP32, incluyendo cortes simulados antes, durante y después de la promoción.
 
+La implementación conserva el perfil anterior como `gestures.json.bak` mientras promueve
+y valida el nuevo archivo. Si la promoción falla, restaura el backup; si también falla
+esa restauración, conserva el backup recuperable. En boot, un principal válido tiene
+prioridad; sin principal válido se recupera primero el backup y después el `.tmp`.
+El backup sólo se elimina cuando existe un principal válido. Las pruebas con fallos
+inyectados en CPython no sustituyen la validación de durabilidad en MicroPython/LittleFS.
+
 ### 5.4 Respuesta y evento
 
 - Responder `sync.commit` con `ok: true`, `committed: true`, `activeProfile` actualizado.

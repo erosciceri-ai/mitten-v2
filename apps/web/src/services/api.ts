@@ -31,7 +31,8 @@ async function getAuthToken(): Promise<string | null> {
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  binary = false
 ): Promise<T> {
   const token = await getAuthToken();
   
@@ -49,6 +50,7 @@ async function request<T>(
     headers,
   });
   
+  if (response.ok && binary) return await response.blob() as T;
   const data = await response.json().catch(() => ({}));
   
   if (!response.ok) {
@@ -105,6 +107,21 @@ export async function deleteGesture(id: number): Promise<void> {
   await request<void>(`/gestures/${id}`, {
     method: 'DELETE',
   });
+}
+
+// Audio generation
+export async function generateGestureAudio(id: number): Promise<{ trackNumber: number; filePath: string }> {
+  return request<{ trackNumber: number; filePath: string }>(`/gestures/${id}/audio`, {
+    method: 'POST',
+  });
+}
+
+export async function getGestureAudioInfo(id: number): Promise<{ filePath: string | null; trackNumber: number; generatedAt: string | null }> {
+  return request<{ filePath: string | null; trackNumber: number; generatedAt: string | null }>(`/gestures/${id}/audio`);
+}
+
+export async function getGestureAudioBlob(id: number): Promise<Blob> {
+  return request<Blob>(`/gestures/${id}/audio/file`, {}, true);
 }
 
 // Health check

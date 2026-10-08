@@ -41,24 +41,16 @@ def test_status_before_handshake_is_rejected():
 def test_status_returns_profile_and_sync_metadata():
     dispatcher = FirmwareDispatcher()
     connect(dispatcher)
-    dispatcher.active_profile = {
-        "profileId": "profile-42",
-        "profileRevision": "rev-7",
-        "gestureCount": 2,
-    }
-    dispatcher.active_sync = {
-        "syncId": "sync-a1",
-        "profileId": "profile-42",
-        "profileRevision": "rev-8",
-        "expectedGestureCount": 3,
-        "receivedCount": 1,
-        "nextIndex": 1,
-    }
+    dispatcher.sync_manager.profile_manager.set_profile({
+        "profileId": "profile-42", "profileRevision": "rev-7", "gestureCount": 2, "gestures": []
+    })
+    dispatcher.startup()
+    dispatcher.sync_manager.begin("sync-a1", "profile-42", "rev-8", 3)
 
     response = dispatcher.handle_request(request("status-1"))
 
     assert response["result"]["activeProfile"]["gestureCount"] == 2
-    assert response["result"]["activeSync"]["nextIndex"] == 1
+    assert response["result"]["activeSync"]["nextIndex"] == 0
 
 
 @pytest.mark.parametrize(
@@ -82,11 +74,7 @@ def test_status_reports_each_official_state(target, cause):
         if target == STATE_CAPTURING:
             dispatcher.state.transition(STATE_CAPTURING, cause)
         elif target == STATE_SYNCING:
-            dispatcher.active_sync = {
-                "syncId": "sync-1", "profileId": "p", "profileRevision": "r",
-                "expectedGestureCount": 0, "receivedCount": 0, "nextIndex": 0,
-            }
-            dispatcher.state.transition(STATE_SYNCING, cause)
+            dispatcher.sync_manager.begin("sync-1", "p", "r", 0)
         elif target == STATE_ERROR:
             dispatcher.enter_error("INTERNAL_ERROR", "fatal")
         elif target == STATE_CALIBRATING:

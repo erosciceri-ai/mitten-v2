@@ -1,55 +1,33 @@
+import { asyncHandler } from './asyncHandler.js';
 import { Request, Response, NextFunction } from 'express';
-import { authService } from '../services/authService';
-import { JWTPayload, AppError } from '../types';
+import { authenticateRequest } from '../utils/jwt.js';
 
 export interface AuthenticatedRequest extends Request {
-  user?: JWTPayload;
+  user?: { userId: number; email: string };
 }
 
-export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader) {
-      throw AppError.unauthorized('Authorization header required');
-    }
+export const authMiddleware = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const authHeader = req.headers.authorization;
 
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      throw AppError.unauthorized('Invalid authorization header format. Use: Bearer <token>');
-    }
-
-    const token = parts[1];
-    const payload = authService.verifyToken(token);
-    
-    req.user = payload;
-    next();
-  } catch (error) {
-    next(error);
+  const auth = await authenticateRequest(authHeader);
+  if (!auth) {
+    res.status(401).json({ message: 'Unauthorized', status: 401 });
+    return;
   }
-}
 
-export function optionalAuthMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader) {
-      next();
-      return;
+  req.user = auth;
+  next();
+});
+
+export const optionalAuthMiddleware = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader) {
+    const auth = await authenticateRequest(authHeader);
+    if (auth) {
+      req.user = auth;
     }
-
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      next();
-      return;
-    }
-
-    const token = parts[1];
-    const payload = authService.verifyToken(token);
-    req.user = payload;
-    next();
-  } catch (error) {
-    // Silently ignore invalid tokens for optional auth
-    next();
   }
-}
+
+  next();
+});

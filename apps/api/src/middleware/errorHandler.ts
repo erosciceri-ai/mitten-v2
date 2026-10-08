@@ -1,66 +1,51 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../types';
 import { ZodError } from 'zod';
 
+export class AppError extends Error {
+  constructor(
+    public message: string,
+    public status: number = 500,
+    public fields?: Array<{ field: string; message: string }>
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
 export function errorHandler(err: Error, req: Request, res: Response, next: NextFunction): void {
-  // Log error in development
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('Error:', {
+  console.error('Error:', err);
+
+  if (err instanceof AppError) {
+    res.status(err.status).json({
       message: err.message,
-      stack: err.stack,
-      path: req.path,
-      method: req.method,
+      status: err.status,
+      fields: err.fields,
     });
+    return;
   }
 
-  // Handle Zod validation errors
   if (err instanceof ZodError) {
-    const details = err.errors.map(e => ({
+    const fields = err.errors.map(e => ({
       field: e.path.join('.'),
       message: e.message,
     }));
     res.status(400).json({
-      code: 'VALIDATION_ERROR',
-      message: 'Invalid request data',
-      details: { fields: details },
+      message: 'Validation failed',
+      status: 400,
+      fields,
     });
     return;
   }
 
-  // Handle AppError
-  if (err instanceof AppError) {
-    const response: Record<string, unknown> = {
-      code: err.code,
-      message: err.message,
-    };
-    if (err.details) {
-      response.details = err.details;
-    }
-    res.status(err.statusCode).json(response);
+  if (err.name === 'JsonWebTokenError') {
+    res.status(401).json({ message: 'Invalid token', status: 401 });
     return;
   }
 
-  // Handle JSON parse errors
-  if (err instanceof SyntaxError && 'status' in err && err.status === 400 && 'body' in err) {
-    res.status(400).json({
-      code: 'INVALID_JSON',
-      message: 'Invalid JSON in request body',
-    });
+  if (err.name === 'TokenExpiredError') {
+    res.status(401).json({ message: 'Token expired', status: 401 });
     return;
   }
 
-  // Default internal server error
-  res.status(500).json({
-    code: 'INTERNAL_ERROR',
-    message: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : err.message,
-  });
-}
-
-export function notFoundHandler(req: Request, res: Response): void {
-  res.status(404).json({
-    code: 'NOT_FOUND',
-    message: `Route ${req.method} ${req.path} not found`,
-  });
+  res.status(500).json({ message: 'Internal server error', status: 500 });
 }

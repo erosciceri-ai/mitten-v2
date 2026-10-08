@@ -39,12 +39,14 @@ class FirmwareStateMachine:
     def current(self):
         return self._current
 
-    def startup(self):
+    def startup(self, prepare=None):
         if self._started:
             return False
         self._started = True
         self._emit(self._current)
         self.transition(STATE_CALIBRATING, "startup.calibrating")
+        if prepare is not None:
+            prepare()
         self.transition(STATE_IDLE, "startup.ready")
         return True
 

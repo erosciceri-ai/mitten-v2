@@ -104,18 +104,18 @@ No ejecutes todos los tests del monorepo después de cada modificación pequeña
 Reglas de validación específicas:
 
 - **Protocolo o contratos**: los cambios en `packages/contracts` obligan a `npm test --workspace=packages/contracts`
-  (149 tests) **y** a reconstruir (`npm run build --workspace=packages/contracts`) porque `apps/api` y
+  **y** a reconstruir (`npm run build --workspace=packages/contracts`) porque `apps/api` y
   `tools/esp32-simulator` consumen `dist/`, no el fuente.
 - **Simulador**: `npm run build --workspace=tools/esp32-simulator && npm run simulator`. Ojo: `npm run
   simulator` de la raíz ejecuta `dist/` (puede estar stale); para probar el fuente usa
   `npm run dev --workspace=tools/esp32-simulator`.
-- **Backend, paridad sql.js ↔ test store**: `apps/api/src/db/index.ts` tiene dos implementaciones de
-  persistencia — el SQL real sobre `sql.js` y un *test store* en memoria para las pruebas. Casi todas
-  las suites usan el test store. **Cualquier cambio de esquema, de la asignación first-fit de
-  `audio_track`, o de los límites de 50 gestos debe aplicarse a las DOS**, o las pruebas pasan mientras
-  producción se rompe. Verifica con un test que toque el SQL real (ver `__tests__/integration.test.ts`).
-- **Firmware**: no hay runner de MicroPython instalado. Si escribes firmware, la validación disponible
-  es el simulador y la revisión de que el código es MicroPython válido por lectura.
+- **Backend**: usa `sqlite`/`sqlite3`, migraciones transaccionales y el mismo SQL en producción
+  y pruebas. Con `NODE_ENV=test`, la base siempre es `:memory:` y el audio usa un directorio
+  temporal, aunque se herede `DB_PATH`. Ejecuta las pruebas de migración, rollback y first-fit.
+- **Firmware**: el núcleo y los drivers inyectables tienen tests en CPython/pytest:
+  `python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider`.
+  Cada prueba usa almacenamiento temporal. Esto no sustituye las pruebas de MicroPython,
+  periféricos, memoria y cortes de alimentación en la placa real.
 - **Frontend**: `apps/web` tiene `test` (vitest) y `build` (tsc + vite build) en su `package.json`; tests cubren SerialTransport y RequestManager.
 
 ## 4. Paralelismo
@@ -146,8 +146,11 @@ Distinguí siempre entre:
 ## 6. Estado actual del repo (verificar, no asumir)
 
 - `packages/contracts` y `tools/esp32-simulator`: implementados, con tests, commiteados.
-- `apps/api`: implementado y con tests, pero historically **sin versionar** — confirmá con `git status`.
-- `apps/web`: implementado con React + Vite + TypeScript, tests en vitest, build funcional. `firmware/esp32`: vacío salvo `package.json` / `.gitkeep`.  Casi todo el trabajo restante está ahí.
+- `apps/api`: Express/TypeScript y SQLite, tests Vitest; confirmar cambios pendientes con Git.
+- `apps/web`: React/Vite/TypeScript, tests Vitest de transporte y servicios.
+- `firmware/esp32`: núcleo modular, captura, sincronización recuperable, baseline V1 y drivers
+  ADC/I2C/UART inyectables. `hardware_config.example.py` enumera los datos físicos pendientes;
+  no asumir GPIO ni atenuación. El provider TTS `mock` no produce audio ni lo marca listo.
 
 Este worktree de implementación debe operar normalmente sobre:
 

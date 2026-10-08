@@ -7,11 +7,13 @@
   "exports": {
     ".": {
       "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./protocol": {
       "require": "./dist/protocol.js",
-      "types": "./dist/protocol.d.ts"
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
     }
   },
   "scripts": {
@@ -19,7 +21,11 @@
     "test": "jest --config jest.config.cjs",
     "prepare": "npm run build"
   },
-  "keywords": ["mitten", "contracts", "protocol"],
+  "keywords": [
+    "mitten",
+    "contracts",
+    "protocol"
+  ],
   "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.0",

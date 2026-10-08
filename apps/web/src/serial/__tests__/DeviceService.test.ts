@@ -92,8 +92,28 @@ describe('DeviceService', () => {
     service = new DeviceService(handlers);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await service.disconnect();
     vi.useRealTimers();
+  });
+
+  it('uses the announced sync idle timeout and aborts instead of waiting forever', async () => {
+    const pending=service.startSync('s1','p1','r1',0);
+    const id=mockTransport._getLastSentEnvelope().id;
+    mockTransport._simulateData(createSyncBeginResponse(id,{accepted:true,syncId:'s1',expectedGestureCount:0,receivedCount:0,nextIndex:0,idleTimeoutMs:2000}));
+    await pending;
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(handlers.onSyncFailed).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(handlers.onSyncFailed).toHaveBeenCalledWith(expect.objectContaining({message:'Synchronization idle timeout'}));
+    const abort=mockTransport._getLastSentEnvelope(); expect(abort.command).toBe('sync.abort');
+    mockTransport._simulateData(createSyncAbortResponse(abort.id,{aborted:true,syncId:'s1'}));
+  });
+
+  it('times out capture acceptance after 5000ms, independently of its terminal event', async () => {
+    const pending=service.startCapture().catch((error: Error)=>error);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await pending).toEqual(expect.objectContaining({message:expect.stringContaining('5000ms')}));
   });
 
   describe('connect + handshake', () => {
