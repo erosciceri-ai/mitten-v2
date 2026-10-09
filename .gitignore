@@ -14,6 +14,7 @@ build/
 **/src/**/*.js.map
 **/src/**/*.d.ts.map
 **/src/**/*.tsbuildinfo
+!apps/web/src/global.d.ts
 
 # Environment files (keep the secret-free template tracked)
 .env
