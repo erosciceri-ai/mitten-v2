@@ -3,9 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import { useDevice } from '../context/DeviceContext';
 import type { FirmwareState } from '../types';
 import { getConnectionLabel, getFirmwareStateLabel } from '../utils/devicePresentation';
+import { BrandMark } from './BrandMark';
 
 const navItems = [
-  { path: '/', label: 'Panel', icon: 'home' },
+  { path: '/app', label: 'Panel', icon: 'home' },
   { path: '/gestures', label: 'Gestos', icon: 'gesture' },
   { path: '/sync', label: 'Sincronizar', icon: 'sync' },
 ] as const;
@@ -41,16 +42,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="bg-surface border-b border-border sticky top-0 z-40">
+      <header className="app-header bg-surface border-b border-border sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-3 sm:px-4">
           <div className="flex items-center justify-between gap-3 h-16">
-            <Link to="/" className="flex items-center gap-2 text-lg sm:text-xl font-bold text-primary shrink-0" aria-label="MITTEN V2, ir al panel">
-              <span className="grid place-items-center w-8 h-8 rounded-lg bg-primary text-white" aria-hidden="true">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><NavIcon name="gesture" /></svg>
-              </span>
-              <span className="hidden min-[390px]:inline">MITTEN V2</span>
-              <span className="min-[390px]:hidden">MITTEN</span>
-            </Link>
+            <BrandMark to="/app" />
 
             <nav className="hidden md:flex items-center gap-1" aria-label="Navegación principal">
               {navItems.map((item) => (
@@ -72,7 +67,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
               {isAuthenticated && user && (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm text-text-muted hidden xl:block truncate max-w-52">{user.email}</span>
+                  <Link to="/account" className="flex items-center gap-1.5 px-2 sm:px-2.5 py-2 text-sm text-text-muted hover:text-primary hover:bg-primary-light rounded-md transition-colors min-w-0" aria-current={location.pathname === '/account' ? 'page' : undefined} aria-label={`Cuenta de ${user.email}`}>
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0" /></svg>
+                    <span className="hidden xl:block truncate max-w-44">{user.email}</span>
+                    <span className="hidden sm:block xl:hidden">Cuenta</span>
+                  </Link>
                   <button onClick={logout} className="px-2.5 sm:px-3 py-2 text-sm font-medium text-text-muted hover:text-text hover:bg-gray-100 rounded-md transition-colors whitespace-nowrap">
                     <span className="hidden sm:inline">Cerrar sesión</span><span className="sm:hidden">Salir</span>
                   </button>
@@ -95,7 +94,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1">{children}</div>
       <footer className="bg-surface border-t border-border py-4 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-text-muted">Configura tus gestos y prepara MITTEN para comunicarte sin la computadora.</div>
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left text-sm text-text-muted">
+          <span>Configura tus gestos y prepara MITTEN para comunicarte sin la computadora.</span>
+          <div className="flex items-center gap-4">
+            <Link to="/privacidad" className="font-medium hover:underline">Privacidad</Link>
+            <Link to="/" className="font-medium hover:underline">Conocer el proyecto</Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

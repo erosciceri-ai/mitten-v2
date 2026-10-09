@@ -13,8 +13,12 @@ export const registerSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
+export const googleCredentialSchema = z.object({
+  credential: z.string().min(20, 'Google credential is required').max(5000, 'Google credential is too large'),
+}).strict();
+
 // Count Unicode code points, not UTF-16 code units.
-const gestureName = z.string().refine(value => value.trim().length > 0 && [...value].length <= 60, 'Name must contain 1–60 Unicode code points');
+const gestureName = z.string().refine(value => value.trim().length > 0 && [...value].length <= 60, 'Name must contain 1ï¿½60 Unicode code points');
 const gestureData = z.custom<GestureData>(value => validateGestureData(value).valid, 'Invalid GestureFormat V1 data');
 export const createGestureSchema = z.object({ name: gestureName, data: gestureData }).strict();
 export const updateGestureSchema = z.object({ name: gestureName.optional(), data: gestureData.optional() }).strict()
@@ -43,6 +47,7 @@ export const paginationSchema = z.object({
 // Types
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type GoogleCredentialInput = z.infer<typeof googleCredentialSchema>;
 export type CreateGestureInput = z.infer<typeof createGestureSchema>;
 export type UpdateGestureInput = z.infer<typeof updateGestureSchema>;
 export type GestureIdParam = z.infer<typeof gestureIdParamSchema>;

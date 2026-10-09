@@ -12,6 +12,11 @@ Este directorio contiene la especificación técnica de MITTEN V2.
 | `gesture-format.md` | Contrato canónico y autoritativo de los datos físicos de un gesto (`data`): esquema, unidades, validación, compatibilidad TypeScript/MicroPython y ejemplos. | Formato de gesto |
 | `synchronization.md` | Semántica transaccional de sincronización, staging, commit, abort, persistencia atómica y recuperación. | Sincronización y persistencia |
 
+## Documentos operativos
+
+- `google-authentication.md` — configuración, verificación y política de vinculación para Google Identity Services en MITTEN V2.1.
+- `software-validation.md` — recorrido de validación sin hardware físico.
+
 ## Jerarquía de autoridad
 
 - Dentro del ámbito del **protocolo serie** (wire format, handshake, estados, captura, sincronización, errores, `capabilities.maxMessageBytes`): **`protocol.md` manda**.

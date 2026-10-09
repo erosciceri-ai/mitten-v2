@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContainer';
 import type { FormErrors } from '../types';
+import { BrandMark } from '../components/BrandMark';
+import { GoogleSignInButton, isGoogleSignInConfigured } from '../components/GoogleSignInButton';
 
 export function RegisterPage() {
-  const { register, isLoading } = useAuth();
+  const { register, loginWithGoogle, isLoading } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -13,6 +15,17 @@ export function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    setIsSubmitting(true);
+    try {
+      await loginWithGoogle(credential);
+      showToast({ type: 'success', message: 'Cuenta creada correctamente' });
+      navigate('/app');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [loginWithGoogle, navigate, showToast]);
 
   const validate = () => {
     const newErrors: FormErrors = {};
@@ -33,7 +46,7 @@ export function RegisterPage() {
     try {
       await register({ email, password });
       showToast({ type: 'success', message: 'Cuenta creada correctamente' });
-      navigate('/');
+      navigate('/app');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al registrar';
       if (message.includes('already exists')) {
@@ -53,16 +66,25 @@ export function RegisterPage() {
       <div className="w-full max-w-md">
         <div className="bg-surface rounded-lg shadow-md border border-border p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-light text-primary mb-4">
-              <span className="text-3xl">🤟</span>
-            </div>
-            <h1 className="text-2xl font-bold text-text">Crear Cuenta</h1>
-            <p className="text-text-muted mt-2">Únete a MITTEN V2 y gestiona tus gestos</p>
+            <div className="flex justify-center mb-5"><BrandMark /></div>
+            <h1 className="text-2xl font-bold text-text">Crear cuenta</h1>
+            <p className="text-text-muted mt-2">Sumate a MITTEN V2.1 y administrá tus gestos</p>
           </div>
+
+          {isGoogleSignInConfigured && (
+            <>
+              <GoogleSignInButton
+                onCredential={handleGoogleCredential}
+                onError={message => showToast({ type: 'error', message })}
+                text="signup_with"
+              />
+              <div className="auth-divider"><span>o regístrate con correo</span></div>
+            </>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {errors.form && (
-              <div className="p-3 rounded-md bg-error-light border border-error text-error text-sm">
+              <div className="p-3 rounded-md bg-error-light border border-error text-error text-sm" role="alert">
                 {errors.form}
               </div>
             )}
@@ -82,8 +104,10 @@ export function RegisterPage() {
                 placeholder="usuario@ejemplo.com"
                 disabled={isSubmitting}
                 autoComplete="email"
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? 'register-email-error' : undefined}
               />
-              {errors.email && <p className="mt-1 text-sm text-error">{errors.email}</p>}
+              {errors.email && <p id="register-email-error" className="mt-1 text-sm text-error" role="alert">{errors.email}</p>}
             </div>
 
             <div>
@@ -101,8 +125,14 @@ export function RegisterPage() {
                 placeholder="Mínimo 8 caracteres"
                 disabled={isSubmitting}
                 autoComplete="new-password"
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? 'register-password-error' : 'register-password-help'}
               />
-              {errors.password && <p className="mt-1 text-sm text-error">{errors.password}</p>}
+              {errors.password ? (
+                <p id="register-password-error" className="mt-1 text-sm text-error" role="alert">{errors.password}</p>
+              ) : (
+                <p id="register-password-help" className="mt-1 text-sm text-text-muted">Usá al menos 8 caracteres.</p>
+              )}
             </div>
 
             <div>
@@ -120,8 +150,10 @@ export function RegisterPage() {
                 placeholder="Repite la contraseña"
                 disabled={isSubmitting}
                 autoComplete="new-password"
+                aria-invalid={Boolean(errors.confirmPassword)}
+                aria-describedby={errors.confirmPassword ? 'register-confirm-error' : undefined}
               />
-              {errors.confirmPassword && <p className="mt-1 text-sm text-error">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p id="register-confirm-error" className="mt-1 text-sm text-error" role="alert">{errors.confirmPassword}</p>}
             </div>
 
             <button
@@ -129,7 +161,7 @@ export function RegisterPage() {
               disabled={isSubmitting || isLoading}
               className="w-full py-2.5 px-4 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? 'Creando cuenta...' : 'Crear Cuenta'}
+              {isSubmitting ? 'Creando cuenta…' : 'Crear cuenta'}
             </button>
           </form>
 
@@ -144,7 +176,9 @@ export function RegisterPage() {
         </div>
 
         <div className="mt-6 text-center text-sm text-text-muted">
-          <p>MITTEN V2 — Guante electrónico para traducción de gestos</p>
+          <Link to="/" className="hover:underline">Conocer el proyecto</Link>
+          <span aria-hidden="true"> · </span>
+          <Link to="/privacidad" className="hover:underline">Privacidad</Link>
         </div>
       </div>
     </div>

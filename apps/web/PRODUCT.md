@@ -10,6 +10,8 @@ web
 
 El usuario principal es la persona que utiliza el guante MITTEN para asociar gestos propios con frases habladas. Durante la etapa actual, esa persona puede recibir ayuda para la configuración inicial y la demostración escolar, pero el uso normal previsto debe ser autónomo.
 
+La portada pública también se dirige a docentes, jurados, colaboradores y personas interesadas que necesitan comprender el proyecto antes de crear una cuenta.
+
 ## Product Purpose
 
 MITTEN permite registrar gestos de mano, asociarlos con una frase o nombre y reproducir el audio correspondiente cuando el guante reconoce el gesto. El éxito inmediato consiste en demostrar el recorrido completo y fiable del prototipo escolar. La meta de producto es que la persona pueda comunicarse cotidianamente mediante gestos sin depender de una PC, un navegador o el backend después de configurar y sincronizar el guante.
@@ -40,10 +42,13 @@ MITTEN combina aprendizaje de gestos definidos por cada usuario con reconocimien
 
 ## Brand Commitments
 
-- Nombre del producto: MITTEN V2.
+- Nombre de la evolución de interfaz: MITTEN V2.1. El protocolo serie permanece en Protocol Version 2.
 - Descripción factual: guante electrónico que traduce gestos de mano a audio hablado.
 - La interfaz actual utiliza español claro y directo.
 - La comunicación debe presentar el producto honestamente como prototipo escolar con aspiración de uso cotidiano autónomo.
+- La demostración pública es explicativa: debe distinguirse de una medición real y nunca insinuar precisión clínica o validación con hardware.
+- El contacto público abre el cliente de correo de la persona y no almacena el mensaje en MITTEN; sólo se muestra cuando existe un canal configurado.
+- La política pública debe describir el comportamiento implementado, permanecer disponible sin sesión y señalar cualquier dato institucional pendiente antes de un lanzamiento público.
 
 ## Evidence on Hand
 

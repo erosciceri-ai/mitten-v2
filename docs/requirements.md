@@ -96,6 +96,10 @@ MITTEN V2 comprende:
 - **REQ-USR-005:** Un usuario no debe poder acceder, modificar ni eliminar gestos pertenecientes a otro usuario.
 - **REQ-USR-006:** El backend debe aplicar la autorización sobre cada operación relacionada con gestos; no debe confiar únicamente en restricciones de la interfaz.
 - **REQ-USR-007:** El cierre o vencimiento de una sesión debe impedir el acceso posterior a funciones privadas hasta una nueva autenticación.
+- **REQ-USR-008:** Cuando Google Identity Services esté configurado, el sistema debe permitir crear o recuperar una sesión MITTEN mediante un ID token verificado por el backend.
+- **REQ-USR-009:** Una cuenta MITTEN existente no debe vincularse automáticamente por coincidencia de correo; la vinculación con Google requiere una sesión MITTEN autenticada y el mismo correo verificado.
+- **REQ-USR-010:** La ausencia o indisponibilidad de Google no debe impedir el registro y el inicio de sesión con correo y contraseña.
+- **REQ-USR-011:** Un usuario autenticado debe poder exportar una copia versionada de los datos públicos de su cuenta y de su biblioteca completa, sin incluir hashes de contraseña, credenciales ni identificadores internos de proveedores externos.
 
 ## 5. Biblioteca y gestión de gestos
 

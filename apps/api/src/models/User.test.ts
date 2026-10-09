@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getDatabase } from '../db/index.js';
-import { createUser, findUserByEmail, verifyPassword } from '../models/User.js';
+import { createGoogleUser, createUser, findUserByEmail, findUserByGoogleSub, linkGoogleIdentity, verifyPassword } from '../models/User.js';
 import { 
   createGesture, 
   findAllGestures, 
@@ -11,6 +11,7 @@ import {
   getGestureAudioInfo,
 } from '../models/Gesture.js';
 import type { GestureData } from '@mitten/contracts';
+import { exportAccountData } from '../services/accountExport.js';
 
 const db = await getDatabase();
 
@@ -81,6 +82,36 @@ describe('User Model', () => {
   it('should not allow duplicate emails', async () => {
     await createUser({ email: 'test@example.com', password: 'password123' });
     await expect(createUser({ email: 'test@example.com', password: 'other' })).rejects.toThrow();
+  });
+
+  it('creates and links Google identities without inventing a password', async () => {
+    const googleUser = await createGoogleUser('google@example.com', 'google-sub-1');
+    expect(googleUser.googleLinked).toBe(true);
+    const stored = await findUserByGoogleSub('google-sub-1');
+    expect(stored?.password_hash).toBeNull();
+    expect(stored && verifyPassword(stored, 'anything')).toBe(false);
+
+    const passwordUser = await createUser({ email: 'link@example.com', password: 'password123' });
+    await linkGoogleIdentity(passwordUser.id, 'google-sub-2');
+    expect((await findUserByGoogleSub('google-sub-2'))?.id).toBe(passwordUser.id);
+  });
+
+  it('exports complete gesture data without authentication secrets', async () => {
+    const user = await createUser({ email: 'export@example.com', password: 'password123' });
+    const data = createSampleGestureData();
+    await createGesture({ userId: user.id, name: 'Necesito agua', data });
+
+    const result = await exportAccountData(user.id);
+
+    expect(result).toMatchObject({
+      format: 'mitten-account-export',
+      version: 1,
+      account: { id: user.id, email: user.email, googleLinked: false },
+      gestures: [{ name: 'Necesito agua', audioTrack: 1, data }],
+    });
+    expect(JSON.stringify(result)).not.toContain('password_hash');
+    expect(JSON.stringify(result)).not.toContain('google_sub');
+    await expect(exportAccountData(999)).resolves.toBeNull();
   });
 });
 

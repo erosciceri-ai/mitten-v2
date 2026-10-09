@@ -20,17 +20,17 @@ dobles de transporte; esas pruebas no certifican voz ni decodificación MP3.
 Para cada workspace ejecutar además `tsc --noEmit -p <workspace>/tsconfig.json`
 y su script `build`; construir primero `packages/contracts`.
 
-Resultado de esta corrección: contratos 149, simulador 49, web 65, API 32 y
-firmware 316 pruebas aprobadas (611 en total). Los cuatro `tsc --noEmit` y builds
-pasaron. El entrypoint TypeScript y el compilado `dist/index.js` respondieron
-HTTP 200; la prueba integral también pasó después de la limpieza final.
+La evidencia debe actualizarse al cerrar cada etapa mediante los comandos anteriores. La última
+validación completa del 8 de octubre de 2026 registró 149 pruebas de contratos, 49 del simulador,
+72 de la web, 39 de la API y 316 del firmware: 625 pruebas aprobadas en total. `npm run build`
+también finalizó correctamente y la prueba integral quedó incluida en la suite de la API.
 
 ## Configuración pendiente de entorno y placa
 
 - API: configurar `JWT_SECRET` (mínimo 32 caracteres) desde `.env.example`.
   `TTS_PROVIDER=mock` responde 503 y nunca fabrica ni marca listo un MP3.
-  El provider existente ElevenLabs requiere clave y voice ID; Google/Azure no se
-  anuncian como implementados. Su solicitud usa el formato MP3 de la
+  El provider existente ElevenLabs requiere clave y voice ID; ningún otro proveedor TTS se
+  anuncia como implementado. Su solicitud usa el formato MP3 de la
   [API oficial](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 - Audio: archivos separados en `<AUDIO_DIR>/<userId>/mp3/0001.mp3`…`0050.mp3`.
   La descarga requiere autorización del propietario del gesto. Los metadatos de

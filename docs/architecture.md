@@ -294,6 +294,7 @@ El backend es responsable de:
 - persistencia;
 - biblioteca de gestos;
 - asociación de gestos con usuarios;
+- verificación de identidades externas opcionales y su vinculación explícita con usuarios;
 - validación de datos recibidos;
 - asignación y almacenamiento de identificadores;
 - asignación de `audioTrack` mediante first-fit;

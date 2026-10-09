@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { User, AuthState, LoginCredentials, RegisterData, AuthResponse } from '../types';
-import { login as apiLogin, register as apiRegister, getCurrentUser } from '../services/api';
+import { login as apiLogin, loginWithGoogle as apiLoginWithGoogle, register as apiRegister, getCurrentUser } from '../services/api';
 
 interface AuthContextValue extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -63,6 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    setState(prev => ({ ...prev, isLoading: true }));
+    try {
+      const response = await apiLoginWithGoogle(credential);
+      localStorage.setItem('auth_token', response.token);
+      setState({ user: response.user, token: response.token, isAuthenticated: true, isLoading: false });
+    } catch (error) {
+      setState(prev => ({ ...prev, isLoading: false }));
+      throw error;
+    }
+  }, []);
+
   const register = useCallback(async (data: RegisterData) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
@@ -105,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, refreshUser, clearError }}>
+    <AuthContext.Provider value={{ ...state, login, loginWithGoogle, register, logout, refreshUser, clearError }}>
       {children}
     </AuthContext.Provider>
   );

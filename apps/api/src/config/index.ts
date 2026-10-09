@@ -22,6 +22,7 @@ export const config = {
   elevenLabsApiKey: isTest ? '' : process.env.ELEVENLABS_API_KEY || '',
   elevenLabsVoiceId: isTest ? '' : process.env.ELEVENLABS_VOICE_ID || '',
   corsOrigin: process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 };
 
 export function validateConfig(): void {

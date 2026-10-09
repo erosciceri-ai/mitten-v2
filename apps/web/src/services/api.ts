@@ -10,6 +10,7 @@ import type {
   UpdateGestureRequest,
   GestureResponse,
   ApiError,
+  AccountExport,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -76,8 +77,26 @@ export async function register(data: RegisterData): Promise<AuthResponse> {
   });
 }
 
+export async function loginWithGoogle(credential: string): Promise<AuthResponse> {
+  return request<AuthResponse>('/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ credential }),
+  });
+}
+
+export async function linkGoogleAccount(credential: string): Promise<{ user: User }> {
+  return request<{ user: User }>('/auth/google/link', {
+    method: 'POST',
+    body: JSON.stringify({ credential }),
+  });
+}
+
 export async function getCurrentUser(): Promise<User> {
   return request<User>('/auth/me');
+}
+
+export async function exportAccountData(): Promise<AccountExport> {
+  return request<AccountExport>('/auth/export');
 }
 
 // Gesture endpoints

@@ -58,6 +58,7 @@ export type {
 export interface User {
   id: number;
   email: string;
+  googleLinked: boolean;
 }
 
 export interface AuthState {
@@ -80,6 +81,20 @@ export interface RegisterData {
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+export interface AccountExport {
+  format: 'mitten-account-export';
+  version: 1;
+  exportedAt: string;
+  account: {
+    id: number;
+    email: string;
+    googleLinked: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+  gestures: Array<Gesture & { createdAt: string; updatedAt: string }>;
 }
 
 export interface GestureListResponse {

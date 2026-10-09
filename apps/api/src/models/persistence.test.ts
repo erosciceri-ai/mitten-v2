@@ -88,6 +88,19 @@ it('rolls back incompatible legacy migrations without altering the original tabl
   } finally { await db.close(); }
 });
 
+it('migrates version 1 users for optional Google identities without losing passwords', async () => {
+  const db=await open({filename:':memory:',driver:sqlite3.Database});
+  try {
+    await db.exec("CREATE TABLE users(id INTEGER PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,created_at TEXT,updated_at TEXT); INSERT INTO users VALUES(4,'legacy@test.local','hash','a','b'); PRAGMA user_version=1;");
+    await runMigrations(db);
+    const columns = await db.all<Array<{name:string;notnull:number}>>('PRAGMA table_info(users)');
+    expect(columns.some(column => column.name === 'google_sub')).toBe(true);
+    expect(columns.find(column => column.name === 'password_hash')?.notnull).toBe(0);
+    expect(await db.get('SELECT id,email,password_hash,google_sub FROM users')).toEqual({id:4,email:'legacy@test.local',password_hash:'hash',google_sub:null});
+    expect((await db.get('PRAGMA user_version')).user_version).toBe(2);
+  } finally { await db.close(); }
+});
+
 it('always uses a private in-memory database under the test runner', async () => {
   expect(config.dbPath).toBe(':memory:');
   expect((await (await getDatabase()).get('PRAGMA database_list')).file).toBe('');

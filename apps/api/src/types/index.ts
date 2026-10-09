@@ -10,6 +10,7 @@ export interface UserPublic {
   id: number;
   email: string;
   createdAt: string;
+  googleLinked: boolean;
 }
 
 export interface RegisterRequest {

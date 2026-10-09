@@ -60,17 +60,17 @@ export function GestureLibraryPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-text">Biblioteca de Gestos</h1>
+          <h1 className="text-2xl font-bold text-text">Biblioteca de gestos</h1>
           <p className="text-text-muted mt-1">{total} / 50 gestos</p>
         </div>
         <Link 
           to="/gestures/new" 
           className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover transition-colors inline-flex items-center gap-2"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Nuevo Gesto
+          Nuevo gesto
         </Link>
       </div>
 
@@ -94,13 +94,13 @@ export function GestureLibraryPage() {
       {/* Gestures List */}
       <div className="bg-surface rounded-lg border border-border overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center" role="status" aria-live="polite">
             <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent mx-auto mb-4" aria-hidden="true"></div>
-            <p className="text-text-muted">Cargando gestos...</p>
+            <p className="text-text-muted">Cargando gestos…</p>
           </div>
         ) : filteredGestures.length === 0 ? (
           <div className="p-8 text-center">
-            <svg className="w-16 h-16 mx-auto text-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-16 h-16 mx-auto text-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <h3 className="text-lg font-medium text-text mb-1">{searchQuery ? 'No se encontraron gestos' : 'Biblioteca vacía'}</h3>
@@ -109,10 +109,10 @@ export function GestureLibraryPage() {
             </p>
             {!searchQuery && (
               <Link to="/gestures/new" className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Crear Gesto
+                Crear gesto
               </Link>
             )}
           </div>
@@ -142,15 +142,15 @@ export function GestureLibraryPage() {
                       handleDelete(gesture.id, gesture.name);
                     }}
                     disabled={deletingId === gesture.id}
-                    className="p-2 rounded-md text-text-muted hover:text-error hover:bg-error-light transition-colors disabled:opacity-50"
+                    className="min-w-11 min-h-11 p-2 rounded-md text-text-muted hover:text-error hover:bg-error-light transition-colors disabled:opacity-50"
                     aria-label={`Eliminar ${gesture.name}`}
                   >
                     {deletingId === gesture.id ? (
-                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     )}
