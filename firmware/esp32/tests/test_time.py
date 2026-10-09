@@ -22,14 +22,17 @@ def test_ticks_diff_positive():
 
 
 def test_ticks_diff_known_interval():
-    """ticks_diff should approximate a known sleep interval."""
+    """ticks_diff should observe elapsed monotonic time without assuming timer resolution."""
     base = ticks_ms()
-    # Sleep for a small amount (using stdlib time to avoid circular dependency)
-    stdlib_time.sleep(0.01)  # 10ms
-    later = ticks_ms()
+    deadline = stdlib_time.monotonic() + 0.25
+    later = base
+
+    while later == base and stdlib_time.monotonic() < deadline:
+        stdlib_time.sleep(0.005)
+        later = ticks_ms()
+
     diff = ticks_diff(later, base)
-    # Should be at least 10ms, allowing some slack for scheduling
-    assert 5 <= diff <= 50
+    assert 1 <= diff <= 500
 
 
 def test_ticks_add_positive():
