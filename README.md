@@ -2,6 +2,8 @@
 
 Guante electrónico wearable que traduce gestos de mano a audio hablado.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Una vez configurado y sincronizado, MITTEN puede reconocer gestos y reproducir el audio asociado sin depender de la PC, el navegador, el frontend ni el backend.
 
 La aplicación web se comunica directamente con el ESP32 mediante Web Serial API usando el protocolo serie MITTEN V2.
@@ -17,6 +19,7 @@ La aplicación web se comunica directamente con el ESP32 mediante Web Serial API
 
 ```text
 mitten/
+├── .github/             # CI y actualizaciones automatizadas
 ├── apps/
 │   ├── web/           # React + Vite + TypeScript
 │   └── api/           # Node.js + Express + TypeScript + SQLite
@@ -32,7 +35,12 @@ mitten/
 │   ├── protocol.md
 │   ├── gesture-format.md
 │   ├── synchronization.md
+│   ├── development.md
+│   ├── legacy/          # Documentación histórica de MITTEN V1
 │   └── README.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── LICENSE
 ├── AGENTS.md
 └── README.md
 ```
@@ -53,7 +61,7 @@ ni reemplaza Web Serial. La demostración conceptual de la portada tampoco mide 
 
 ### Requisitos
 
-- Node.js >= 18 (se recomienda Node.js 20 LTS)
+- Node.js >= 20.17.0
 - npm
 - Python 3 con `pytest`, para las pruebas del firmware
 
@@ -145,7 +153,10 @@ Documentos principales:
 - `docs/architecture.md`: arquitectura general del sistema.
 - `docs/software-validation.md`: alcance y evidencia de la validación sin hardware.
 - `docs/google-authentication.md`: configuración y límites de Google Identity Services.
+- `docs/development.md`: preparación, ejecución local y validaciones para contribuir.
+
+Las contribuciones se describen en `CONTRIBUTING.md` y los reportes de seguridad en `SECURITY.md`.
 
 ## Licencia
 
-MIT
+[MIT](LICENSE) © 2026 Eros Ciceri

@@ -39,7 +39,7 @@ Si algo aquí contradice a un documento canónico, **manda el documento**.
 | `docs/architecture.md` | **Límites y responsabilidades entre subsistemas**: qué puede depender de qué, quién es fuente de verdad, flujos de alto nivel, límites de confianza. |
 | `docs/requirements.md` | **Requisitos del producto**: REQ-\*\*\*, criterios CA-\*\*\*, restricciones y fuera de alcance. Responde el *qué*, no el *cómo*. |
 | `docs/README.md` | Índice y regla de desempate entre documentos. |
-| `docs/plan de accion.docx` | Diseño de MITTEN V1. **Sólo referencia histórica.** No define requisitos ni arquitectura de V2. |
+| `docs/legacy/mitten-v1-plan.docx` | Diseño de MITTEN V1. **Sólo referencia histórica.** No define requisitos ni arquitectura de V2. |
 
 **Regla de desempate** (`docs/README.md`): dentro de su ámbito, el documento especializado manda.
 No apliques `requirements.md` como si fuera arquitectura, ni `architecture.md` como si fuera protocolo.
@@ -152,15 +152,14 @@ Distinguí siempre entre:
   ADC/I2C/UART inyectables. `hardware_config.example.py` enumera los datos físicos pendientes;
   no asumir GPIO ni atenuación. El provider TTS `mock` no produce audio ni lo marca listo.
 
-Este worktree de implementación debe operar normalmente sobre:
-
-`opencode/work`
+Trabaja en una rama breve creada desde `main`. Para tareas paralelas, usa un worktree temporal por
+rama y retíralo después de integrar el cambio.
 
 Verifica siempre mediante:
 
 `git branch --show-current`
 
-No asumas `master`. El repositorio principal `../v2` mantiene `master` protegido y es usado por Hermes para orquestación/revisión.
+No implementes cambios directamente sobre `main` salvo autorización explícita del usuario.
 
 ## 7. Comandos de referencia
 

@@ -26,14 +26,13 @@ El objetivo actual es el desarrollo incrementado en la rama `v2/`.
 
 # Rama de desarrollo actual
 
-El repositorio activo es `v2/`.
+El repositorio activo es MITTEN V2 y su rama principal es `main`.
 
-La implementación delegada se realiza normalmente en el worktree
-`../v2-opencode`, rama `opencode/work`.
+Los cambios deben desarrollarse en ramas de trabajo breves y revisarse antes de integrarlos en
+`main`. Si se usa un worktree, debe ser temporal, estar asociado a su propia rama y retirarse al
+terminar.
 
-El `master` del repositorio principal se mantiene protegido durante la implementación.
-
-`mittenv1/` es el repositorio histórico de referencia y **no** debe modificarse como arquitectura principal.
+MITTEN V1 es una referencia histórica externa y **no** debe recuperarse como arquitectura principal.
 
 ---
 

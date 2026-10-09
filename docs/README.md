@@ -16,6 +16,7 @@ Este directorio contiene la especificación técnica de MITTEN V2.
 
 - `google-authentication.md` — configuración, verificación y política de vinculación para Google Identity Services en MITTEN V2.1.
 - `software-validation.md` — recorrido de validación sin hardware físico.
+- `development.md` — entorno local, comandos de desarrollo, validación y contribución.
 
 ## Jerarquía de autoridad
 
@@ -24,16 +25,15 @@ Este directorio contiene la especificación técnica de MITTEN V2.
 - `requirements.md` establece **qué** debe hacer el sistema; `architecture.md` describe **cómo** está organizado; `protocol.md` y `gesture-format.md` definen los **contratos de intercambio** entre subsistemas.
 - Dentro del ámbito de la **sincronización transaccional y persistencia atómica del perfil en el dispositivo**: **`synchronization.md` manda**.
 
-## Documentación histórica (legacy)
+## Documentación histórica
 
-- `plan de accion.docx` — Análisis y diseño de MITTEN V1. **Solo referencia histórica**; no define requisitos ni arquitectura de V2.
-- La implementación V1 en `../mittenv1/` es referencia de comportamiento, no arquitectura a preservar.
+- `legacy/mitten-v1-plan.docx` — análisis y diseño de MITTEN V1. **Solo referencia histórica**; no define requisitos ni arquitectura de V2.
+- El código de MITTEN V1 se conserva fuera de este repositorio como referencia de comportamiento, no como arquitectura a preservar.
 
 ## Documentos futuros (no existen aún)
 
-Los siguientes se crearán cuando sea necesario:
+El siguiente se creará cuando sea necesario:
 - `calibration.md` — Offsets MPU, rangos flex, estrategia de calibración y persistencia.
-- `development.md` — Guía de desarrollo, tooling, testing y contribución.
 
 ## Decisiones ya cerradas (no requieren nuevos documentos)
 

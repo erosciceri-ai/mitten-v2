@@ -1,6 +1,6 @@
 {
   "name": "mitten-v2",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "MITTEN V2 — Guante electrónico para traducir gestos de mano a audio hablado",
   "private": true,
   "workspaces": [
@@ -15,6 +15,6 @@
     "simulator": "npm run start --workspace=tools/esp32-simulator"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.17.0"
   }
 }
