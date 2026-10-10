@@ -37,6 +37,7 @@ import {
   validateGesture,
 } from '@mitten/contracts';
 import { SerialTransport } from './SerialTransport';
+import type { DeviceTransport, DeviceTransportFactory, DeviceTransportHandlers } from './DeviceTransport';
 import { RequestManager } from './RequestManager';
 import type { Gesture, GestureData } from '../types';
 
@@ -57,7 +58,7 @@ export interface DeviceServiceEvents {
 type EventHandlers = Partial<DeviceServiceEvents>;
 
 export class DeviceService {
-  private transport: SerialTransport;
+  private transport: DeviceTransport;
   private requestManager: RequestManager;
   private handlers: EventHandlers = {};
   private deviceInfo: DeviceInfo | null = null;
@@ -71,16 +72,17 @@ export class DeviceService {
   private syncIdleTimeoutMs = 10000;
   private syncIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(handlers: EventHandlers = {}) {
+  constructor(handlers: EventHandlers = {}, transportFactory?: DeviceTransportFactory) {
     this.handlers = handlers;
 
-    this.transport = new SerialTransport({
-      baudRate: 115200,
-      maxMessageBytes: 8192,
+    const transportHandlers: DeviceTransportHandlers = {
       onData: (envelope) => this.handleIncomingMessage(envelope),
       onError: (error) => this.handleTransportError(error),
       onStateChange: (state) => this.handleTransportStateChange(state),
-    });
+    };
+    this.transport = transportFactory
+      ? transportFactory(transportHandlers)
+      : new SerialTransport({ ...transportHandlers, baudRate: 115200, maxMessageBytes: 8192 });
 
     this.requestManager = new RequestManager(
       (envelope) => this.transport.send(envelope),
@@ -94,7 +96,7 @@ export class DeviceService {
     );
   }
 
-  getTransport(): SerialTransport {
+  getTransport(): DeviceTransport {
     return this.transport;
   }
 
@@ -559,9 +561,7 @@ export class DeviceService {
         this.handlers.onError?.(new Error(`Capture operation timed out after ${operationTimeoutMs}ms`));
       }
     }, operationTimeoutMs + marginMs);
-    if (this.captureOperationTimeoutHandle && typeof this.captureOperationTimeoutHandle.unref === 'function') {
-      this.captureOperationTimeoutHandle.unref();
-    }
+    (this.captureOperationTimeoutHandle as unknown as { unref?: () => void })?.unref?.();
   }
 
   private clearCaptureOperationTimeout(): void {

@@ -19,10 +19,18 @@ class ApiErrorClass extends Error {
   constructor(
     message: string,
     public status: number,
-    public fields?: Array<{ field: string; message: string }>
+    public fields?: Array<{ field: string; message: string }>,
+    public missingTracks?: Array<{ gestureId: number; name: string; audioTrack: number; file: string }>
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+export class ApiUnavailableError extends Error {
+  constructor() {
+    super('API desconectada. Iniciá MITTEN con npm run dev y volvé a intentar.');
+    this.name = 'ApiUnavailableError';
   }
 }
 
@@ -46,17 +54,20 @@ async function request<T>(
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
   
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+  } catch {
+    throw new ApiUnavailableError();
+  }
   
   if (response.ok && binary) return await response.blob() as T;
   const data = await response.json().catch(() => ({}));
   
   if (!response.ok) {
+    if (response.status >= 500 && !data.message) throw new ApiUnavailableError();
     const errorMessage = data.message || `HTTP error ${response.status}`;
-    throw new ApiErrorClass(errorMessage, response.status, data.fields);
+    throw new ApiErrorClass(errorMessage, response.status, data.fields, data.missingTracks);
   }
   
   return data as T;
@@ -141,6 +152,14 @@ export async function getGestureAudioInfo(id: number): Promise<{ filePath: strin
 
 export async function getGestureAudioBlob(id: number): Promise<Blob> {
   return request<Blob>(`/gestures/${id}/audio/file`, {}, true);
+}
+
+export async function downloadAudioPackage(): Promise<Blob> {
+  return request<Blob>('/audio/package', {}, true);
+}
+
+export async function getReadiness(): Promise<{ status: 'ready' | 'degraded'; services: { api: string; sqlite: string; tts: { provider: string; available: boolean; message?: string } } }> {
+  return request('/ready');
 }
 
 // Health check

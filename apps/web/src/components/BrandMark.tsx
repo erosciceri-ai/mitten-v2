@@ -2,24 +2,44 @@ import { Link } from 'react-router-dom';
 
 interface BrandMarkProps {
   to?: string;
-  inverse?: boolean;
+  surface?: 'dark' | 'light';
+  variant?: 'navigation' | 'signature' | 'isotype';
+  className?: string;
 }
 
-export function BrandMark({ to = '/', inverse = false }: BrandMarkProps) {
+const brandAssets = {
+  dark: {
+    navigation: '/brand/02_logo_sin_eslogan.svg',
+    signature: '/brand/01_logo_principal_oscuro.svg',
+    isotype: '/brand/06_isotipo_gradiente.svg',
+  },
+  light: {
+    navigation: '/brand/03_logo_para_fondo_claro.svg',
+    signature: '/brand/03_logo_para_fondo_claro.svg',
+    isotype: '/brand/06_isotipo_gradiente.svg',
+  },
+} as const;
+
+export function BrandMark({
+  to = '/',
+  surface = 'dark',
+  variant = 'navigation',
+  className = '',
+}: BrandMarkProps) {
+  const label = to === '/app' ? 'MITTEN, ir al panel' : 'MITTEN, ir al inicio';
+  const asset = brandAssets[surface][variant];
+
   return (
     <Link
       to={to}
-      className={`brand-mark ${inverse ? 'brand-mark--inverse' : ''}`}
-      aria-label={to === '/app' ? 'MITTEN, ir al panel' : 'MITTEN, ir al inicio'}
+      className={`brand-mark brand-mark--${variant} ${className}`.trim()}
+      aria-label={label}
     >
-      <span className="brand-mark__symbol" aria-hidden="true">
-        <svg viewBox="0 0 32 32" role="img">
-          <path d="M9.2 14.7V8.9a2.1 2.1 0 0 1 4.2 0v4.4-7a2.1 2.1 0 0 1 4.2 0v7-5.6a2.1 2.1 0 0 1 4.2 0v7-3.4a2.1 2.1 0 0 1 4.2 0v6.1C26 23.8 21.8 28 16.4 28h-1.2a9.1 9.1 0 0 1-8.1-4.9l-2.4-4.5a2.3 2.3 0 0 1 3.5-2.9l3 2.4" />
-          <path d="M11.3 24.5c3.3-1.6 6.5-1.7 9.8-.1" />
-        </svg>
-      </span>
-      <span className="brand-mark__name">MITTEN</span>
-      <span className="brand-mark__version">V2.1</span>
+      <img className="brand-mark__asset" src={asset} alt="" aria-hidden="true" />
+      {variant === 'navigation' ? (
+        <img className="brand-mark__mobile-asset" src={brandAssets[surface].isotype} alt="" aria-hidden="true" />
+      ) : null}
+      {variant !== 'signature' ? <span className="brand-mark__version">V2.1</span> : null}
     </Link>
   );
 }

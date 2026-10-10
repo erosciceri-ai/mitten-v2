@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 dotenv.config({ path: resolve(apiRoot, '.env') });
-const isTest = process.env.NODE_ENV === 'test';
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -18,7 +18,10 @@ export const config = {
   // Tests must never open development data, even when DB_PATH is inherited.
   dbPath: isTest ? ':memory:' : resolve(apiRoot, process.env.DB_PATH || 'data/mitten.db'),
   audioDir: isTest ? mkdtempSync(resolve(tmpdir(), 'mitten-test-audio-')) : resolve(apiRoot, process.env.AUDIO_DIR || 'data/audio'),
-  ttsProvider: isTest ? 'mock' : process.env.TTS_PROVIDER || 'mock',
+  ttsProvider: isTest ? process.env.TTS_PROVIDER || 'mock' : process.env.TTS_PROVIDER || 'mock',
+  piperExecutable: isTest ? '' : process.env.PIPER_EXECUTABLE || '',
+  piperModel: isTest ? '' : process.env.PIPER_MODEL || '',
+  piperTimeoutMs: Number(process.env.PIPER_TIMEOUT_MS || 60000),
   elevenLabsApiKey: isTest ? '' : process.env.ELEVENLABS_API_KEY || '',
   elevenLabsVoiceId: isTest ? '' : process.env.ELEVENLABS_VOICE_ID || '',
   corsOrigin: process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -26,8 +29,10 @@ export const config = {
 };
 
 export function validateConfig(): void {
-  if (!['mock', 'elevenlabs'].includes(config.ttsProvider)) throw new Error('Unsupported TTS_PROVIDER; use mock or elevenlabs');
+  const providers = isTest ? ['mock', 'fixture', 'elevenlabs', 'piper'] : ['mock', 'elevenlabs', 'piper'];
+  if (!providers.includes(config.ttsProvider)) throw new Error('Unsupported TTS_PROVIDER; use mock, elevenlabs or piper');
   if (config.jwtSecret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters long');
   if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65535) throw new Error('Invalid PORT');
   if (config.corsOrigin === '*') throw new Error('An explicit frontend origin is required');
+  if (!Number.isSafeInteger(config.piperTimeoutMs) || config.piperTimeoutMs < 1000 || config.piperTimeoutMs > 300000) throw new Error('PIPER_TIMEOUT_MS must be between 1000 and 300000');
 }

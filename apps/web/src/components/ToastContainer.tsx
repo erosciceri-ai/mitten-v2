@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { CheckCircle2, CircleAlert, Info, TriangleAlert, X } from 'lucide-react';
 import type { ToastMessage } from '../types';
 
 interface ToastContextValue {
@@ -56,10 +57,10 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
 
   const getIcon = (type: ToastMessage['type']) => {
     switch (type) {
-      case 'success': return '✓';
-      case 'error': return '✕';
-      case 'warning': return '⚠';
-      case 'info': return 'ℹ';
+      case 'success': return CheckCircle2;
+      case 'error': return CircleAlert;
+      case 'warning': return TriangleAlert;
+      case 'info': return Info;
     }
   };
 
@@ -68,19 +69,20 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
       case 'success': return 'bg-success-light border-success text-success';
       case 'error': return 'bg-error-light border-error text-error';
       case 'warning': return 'bg-warning-light border-warning text-warning';
-      case 'info': return 'bg-primary-light border-primary text-primary';
+      case 'info': return 'bg-primary-light border-signal/40 text-[#b9f8fb]';
     }
   };
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 sm:left-auto z-50 flex flex-col gap-2 sm:w-full sm:max-w-sm" aria-live="polite" aria-relevant="additions">
-      {toasts.map((toast) => (
-        <div
+    <div className="fixed bottom-20 left-4 right-4 z-50 flex flex-col gap-2 sm:left-auto sm:w-full sm:max-w-sm md:bottom-4" aria-live="polite" aria-relevant="additions">
+      {toasts.map((toast) => {
+        const Icon = getIcon(toast.type);
+        return <div
           key={toast.id}
           className={`flex items-start gap-3 p-4 rounded-lg border shadow-lg animate-slide-in ${getClasses(toast.type)}`}
           role="alert"
         >
-          <span className="flex-shrink-0 text-lg" aria-hidden="true">{getIcon(toast.type)}</span>
+          <Icon className="mt-0.5 size-5 flex-shrink-0" aria-hidden="true" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">{toast.message}</p>
           </div>
@@ -89,12 +91,10 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
             className="flex-shrink-0 p-1 rounded hover:bg-black/10 transition-colors"
             aria-label="Cerrar notificación"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="size-5" aria-hidden="true" />
           </button>
         </div>
-      ))}
+      })}
     </div>
   );
 }

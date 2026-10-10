@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T16:42:08.2764453-03:00",
+  "title": "Design System: MITTEN V2.1",
+  "extensions": {
+    "colorMeta": {
+      "brand-blue": { "role": "primary", "displayName": "Azul de vínculo", "tonalRamp": ["#061B2C", "#0A3453", "#0E507E", "#126BAA", "#1695F4", "#58B4F7", "#9BD2FA", "#E8F5FE"] },
+      "brand-blue-hover": { "role": "primary", "displayName": "Azul de vínculo claro", "tonalRamp": ["#081D29", "#0D394D", "#145673", "#1F779D", "#37B6FF", "#70CAFF", "#A9E0FF", "#EDF9FF"] },
+      "brand-blue-deep": { "role": "primary", "displayName": "Azul profundo activo", "tonalRamp": ["#050C14", "#091724", "#102D4C", "#1E4D78", "#39709E", "#6B9BC0", "#A7C5DB", "#ECF4F9"] },
+      "signal-cyan": { "role": "primary", "displayName": "Cian de señal", "tonalRamp": ["#00282A", "#00474A", "#00696D", "#00949A", "#00D3DD", "#4DE1E7", "#9AEFF2", "#E8FCFD"] },
+      "attention-violet": { "role": "secondary", "displayName": "Violeta de atención", "tonalRamp": ["#17112F", "#281F50", "#3B2F75", "#5541A9", "#7A5CFF", "#9E88FF", "#C5B8FF", "#F0ECFF"] },
+      "navy": { "role": "neutral", "displayName": "Navy de origen", "tonalRamp": ["#05070C", "#0B0F1A", "#151D2D", "#263449", "#46566C", "#78869A", "#B5BFCC", "#F1F4F7"] },
+      "surface": { "role": "neutral", "displayName": "Panel técnico", "tonalRamp": ["#070D16", "#101D30", "#1B304D", "#2C486B", "#4B6687", "#788DA7", "#B1BECD", "#F0F4F7"] },
+      "surface-elevated": { "role": "neutral", "displayName": "Panel elevado", "tonalRamp": ["#09101A", "#16263D", "#243B5A", "#385576", "#587493", "#8196AD", "#B7C3D0", "#F2F5F8"] },
+      "mist": { "role": "neutral", "displayName": "Niebla azul", "tonalRamp": ["#080E17", "#14243A", "#223955", "#355170", "#55708F", "#7E93AA", "#B5C1CF", "#F1F4F7"] },
+      "border": { "role": "neutral", "displayName": "Línea estructural", "tonalRamp": ["#0E141F", "#1A2739", "#2A3C57", "#415773", "#62758E", "#8999AC", "#BBC4CF", "#F2F4F7"] },
+      "input-border": { "role": "neutral", "displayName": "Borde de entrada", "tonalRamp": ["#101722", "#233348", "#38506F", "#526B8A", "#7088A4", "#96A8BA", "#C2CBD5", "#F4F6F8"] },
+      "foreground": { "role": "neutral", "displayName": "Blanco frío", "tonalRamp": ["#17191A", "#333536", "#55585A", "#7D8184", "#A8AEB2", "#CDD3D7", "#E7ECEF", "#F7FBFF"] },
+      "muted": { "role": "neutral", "displayName": "Azul grisáceo", "tonalRamp": ["#11171E", "#29333F", "#48586A", "#6F8296", "#99AABC", "#B6C5D8", "#D5DFE9", "#F3F7FA"] },
+      "success": { "role": "tertiary", "displayName": "Verde de confirmación", "tonalRamp": ["#0E2A22", "#17473A", "#236C59", "#35977D", "#5DE0B7", "#8AE9CC", "#B8F2DF", "#EDFCF6"] },
+      "success-surface": { "role": "tertiary", "displayName": "Superficie de confirmación", "tonalRamp": ["#071210", "#102D2B", "#1C4A45", "#316A62", "#538C82", "#7EABA3", "#B6CDC8", "#F1F7F6"] },
+      "warning": { "role": "tertiary", "displayName": "Ámbar de cautela", "tonalRamp": ["#2E1D0B", "#543817", "#7E5725", "#AD7835", "#F2B35E", "#F6CA8C", "#F9DFBB", "#FFF7EA"] },
+      "warning-surface": { "role": "tertiary", "displayName": "Superficie de cautela", "tonalRamp": ["#130E08", "#352718", "#574127", "#775D3B", "#997B59", "#B99E7C", "#D9C7AF", "#F8F2EA"] },
+      "error": { "role": "tertiary", "displayName": "Coral de error", "tonalRamp": ["#321116", "#5A222B", "#843943", "#B95762", "#FF8F9B", "#FFADB6", "#FFCDD2", "#FFF1F3"] },
+      "error-surface": { "role": "tertiary", "displayName": "Superficie de error", "tonalRamp": ["#14090C", "#351C25", "#56303C", "#754957", "#966674", "#B78B96", "#D8B9C0", "#F8F0F2"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Titulares breves de portada con escala editorial." },
+      "headline": { "displayName": "Headline", "purpose": "Encabezados de sección pública y transiciones narrativas." },
+      "title": { "displayName": "Title", "purpose": "Títulos de panel y bloques operativos." },
+      "body": { "displayName": "Body", "purpose": "Instrucciones, explicaciones y contenido principal." },
+      "label": { "displayName": "Label", "purpose": "Estados compactos, cejas y metadatos." }
+    },
+    "shadows": [
+      { "name": "control-active", "value": "0 12px 30px rgb(22 149 244 / 0.24)", "purpose": "Acompaña la llamada primaria sin convertirla en un resplandor expansivo." },
+      { "name": "panel-operational", "value": "0 18px 46px rgb(0 0 0 / 0.20)", "purpose": "Separa paneles funcionales del fondo navy." },
+      { "name": "surface-featured", "value": "0 24px 70px rgb(0 0 0 / 0.30)", "purpose": "Eleva tableros o siguientes pasos con jerarquía real." },
+      { "name": "header-translucent", "value": "0 8px 30px rgb(0 0 0 / 0.20)", "purpose": "Mantiene el contexto de navegación sticky." }
+    ],
+    "motion": [
+      { "name": "control-response", "value": "160ms ease", "purpose": "Hover, foco y cambio de color en controles." },
+      { "name": "signal-response", "value": "220ms ease", "purpose": "Cambio de estado en rutas e indicadores de señal." },
+      { "name": "enter-emphasis", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Entrada contenida del hero y transiciones de señal." },
+      { "name": "reduced-motion", "value": "1ms linear", "purpose": "Sustituye desplazamientos y transiciones cuando el sistema solicita movimiento reducido." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "375px" },
+      { "name": "mobile-nav", "value": "768px" },
+      { "name": "narrative-stack", "value": "900px" },
+      { "name": "desktop", "value": "1024px" },
+      { "name": "wide", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción primaria única con el gradiente oficial azul–cian.",
+      "html": "<button class=\"ds-btn-primary\">Crear gesto <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-btn-primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border: 1px solid transparent; border-radius: 12px; color: #0b0f1a; background: linear-gradient(100deg,#1167ff 0%,#1695f4 42%,#02c3e9 78%,#00d3dd 100%); box-shadow: 0 12px 30px rgb(22 149 244 / .24); font: 700 14px/1.2 Inter, 'Segoe UI', sans-serif; transition: filter 150ms ease, box-shadow 150ms ease, transform 150ms ease; } .ds-btn-primary:hover { filter: brightness(1.1); box-shadow: 0 15px 36px rgb(22 149 244 / .3); } .ds-btn-primary:focus-visible { outline: 3px solid rgb(0 211 221 / .35); outline-offset: 3px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Acción secundaria sobre panel técnico.",
+      "html": "<button class=\"ds-btn-outline\">Actualizar</button>",
+      "css": ".ds-btn-outline { min-height: 44px; padding: 12px 16px; border: 1px solid #2a3c57; border-radius: 12px; color: #f7fbff; background: #101d30; font: 700 14px/1.2 Inter, 'Segoe UI', sans-serif; transition: color 150ms ease, background 150ms ease, border-color 150ms ease, transform 150ms ease; } .ds-btn-outline:hover { color: #fff; border-color: rgb(0 211 221 / .6); background: #102d4c; } .ds-btn-outline:focus-visible { outline: 3px solid rgb(0 211 221 / .35); outline-offset: 3px; } .ds-btn-outline:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Acción terciaria de bajo peso visual.",
+      "html": "<button class=\"ds-btn-ghost\">Detalles técnicos</button>",
+      "css": ".ds-btn-ghost { min-height: 44px; padding: 12px 16px; border: 1px solid transparent; border-radius: 12px; color: #b6c5d8; background: transparent; font: 700 14px/1.2 Inter, 'Segoe UI', sans-serif; transition: color 150ms ease, background 150ms ease, transform 150ms ease; } .ds-btn-ghost:hover { color: #f7fbff; background: #14243a; } .ds-btn-ghost:focus-visible { outline: 3px solid rgb(0 211 221 / .35); outline-offset: 3px; } .ds-btn-ghost:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Acción destructiva separada de la jerarquía de marca.",
+      "html": "<button class=\"ds-btn-destructive\">Desconectar</button>",
+      "css": ".ds-btn-destructive { min-height: 44px; padding: 12px 16px; border: 1px solid transparent; border-radius: 12px; color: #ff8f9b; background: #351c25; font: 700 14px/1.2 Inter, 'Segoe UI', sans-serif; transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease; } .ds-btn-destructive:hover { background: rgb(255 143 155 / .15); } .ds-btn-destructive:focus-visible { outline: 3px solid rgb(255 143 155 / .25); outline-offset: 3px; } .ds-btn-destructive:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Campo oscuro con etiqueta visible y foco cian.",
+      "html": "<label class=\"ds-field-label\">Nombre del gesto<input class=\"ds-field\" placeholder=\"Por ejemplo, Agua\"></label>",
+      "css": ".ds-field-label { display: grid; gap: 6px; color: #d8e6f4; font: 700 13px/1.3 Inter, 'Segoe UI', sans-serif; } .ds-field { min-height: 44px; padding: 10px 13px; border: 1px solid #38506f; border-radius: 10.4px; color: #f7fbff; background: #16263d; font: 400 16px/1.5 Inter, 'Segoe UI', sans-serif; transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease; } .ds-field::placeholder { color: #8296af; opacity: 1; } .ds-field:hover { border-color: #4a678b; } .ds-field:focus { border-color: #00d3dd; outline: 3px solid rgb(0 211 221 / .16); outline-offset: 1px; background: #0d1b2d; } .ds-field[aria-invalid=\"true\"] { border-color: #ff8f9b; box-shadow: 0 0 0 3px rgb(255 143 155 / .12); }"
+    },
+    {
+      "name": "Success Status Badge",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "Estado compacto expresado con texto y color semántico.",
+      "html": "<span class=\"ds-status-success\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m7 12 3 3 7-7\"></path></svg> Conectado</span>",
+      "css": ".ds-status-success { min-height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid rgb(93 224 183 / .25); border-radius: 999px; color: #5de0b7; background: #102d2b; font: 700 12px/1.2 Inter, 'Segoe UI', sans-serif; } .ds-status-success svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; } .ds-status-success:focus-visible { outline: 3px solid rgb(93 224 183 / .25); outline-offset: 3px; }"
+    },
+    {
+      "name": "Operational Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Contenedor funcional que organiza estado y acciones sin ocultar el fondo navy.",
+      "html": "<section class=\"ds-panel\"><h3>Estado de MITTEN</h3><p>MITTEN puede capturar gestos o recibir tu biblioteca.</p></section>",
+      "css": ".ds-panel { max-width: 560px; padding: 24px; border: 1px solid #2a3c57; border-radius: 16px; color: #f7fbff; background: #101d30; box-shadow: 0 18px 46px rgb(0 0 0 / .2); font-family: Inter, 'Segoe UI', sans-serif; } .ds-panel h3 { margin: 0; font-size: 19.2px; line-height: 1.2; } .ds-panel p { margin: 9px 0 0; color: #b6c5d8; font-size: 16px; line-height: 1.6; } .ds-panel:focus-within { border-color: rgb(0 211 221 / .6); }"
+    },
+    {
+      "name": "Warning Notice",
+      "kind": "custom",
+      "description": "Aviso de demostración o preparación física con significado explícito.",
+      "html": "<section class=\"ds-notice-warning\" role=\"status\"><svg class=\"ds-notice-warning__icon\" aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path></svg><div><strong>Simulación activa</strong><p>No hay un guante físico conectado.</p></div></section>",
+      "css": ".ds-notice-warning { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; border: 1px solid rgb(242 179 94 / .3); border-radius: 13.6px; color: #f2b35e; background: #352718; font-family: Inter, 'Segoe UI', sans-serif; } .ds-notice-warning__icon { width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .ds-notice-warning strong { font-size: 15.7px; } .ds-notice-warning p { margin: 4px 0 0; font-size: 14px; line-height: 1.55; } .ds-notice-warning:focus-within { outline: 3px solid rgb(242 179 94 / .22); outline-offset: 2px; }"
+    },
+    {
+      "name": "Signal Progress",
+      "kind": "custom",
+      "refersTo": "progress-track",
+      "description": "Progreso operativo con señal azul–cian y valor accesible.",
+      "html": "<div class=\"ds-progress\" role=\"progressbar\" aria-label=\"Sincronización\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"64\"><span style=\"width:64%\"></span></div>",
+      "css": ".ds-progress { height: 8px; overflow: hidden; border-radius: 999px; background: #09111d; box-shadow: inset 0 0 0 1px #38506f; } .ds-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(100deg,#1167ff 0%,#1695f4 42%,#02c3e9 78%,#00d3dd 100%); transition: width 180ms ease; } .ds-progress:focus-visible { outline: 3px solid rgb(0 211 221 / .35); outline-offset: 3px; } @media (prefers-reduced-motion: reduce) { .ds-progress span { transition: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "La señal que encuentra voz",
+    "overview": "MITTEN convierte una lectura técnica en una intención humana: la interfaz hace visible cómo una señal nace en la mano, atraviesa el sistema y termina en una frase. El mundo visual es integralmente oscuro, preciso y sereno; el azul y el cian dibujan recorridos, estados y acciones sin convertir cada control en un efecto luminoso.\n\nLa portada puede ser persuasiva y editorial, pero siempre explica capacidades reales. La aplicación privada es más densa y operativa: estado del dispositivo, siguiente paso y resultado verificable preceden a la decoración. En ambos contextos, la marca V1.2, el lenguaje directo y la honestidad del prototipo mantienen una sola voz.",
+    "keyCharacteristics": [
+      "Navy profundo continuo, con superficies técnicas claramente escalonadas.",
+      "Azul y cian como señal activa; violeta sólo como acento moderado.",
+      "Tipografía Inter firme, grande y compacta en títulos, legible y respirada en contenido.",
+      "Una acción primaria inequívoca por pantalla o bloque decisivo.",
+      "Estados reales expresados con texto, iconografía y color semántico.",
+      "Logotipos oficiales V1.2 consumidos como activos, nunca reconstruidos."
+    ],
+    "rules": [
+      { "name": "The Signal Is Scarce Rule", "body": "El azul, el cian y el gradiente se reservan para marca, señal y acción; si todo brilla, nada comunica prioridad.", "section": "colors" },
+      { "name": "The Semantic Truth Rule", "body": "Éxito, advertencia y error conservan sus colores propios y nunca dependen sólo del color para transmitir significado.", "section": "colors" },
+      { "name": "The Local First Type Rule", "body": "Inter es la primera opción, pero no se descarga desde un servicio remoto; el stack local debe conservar jerarquía y legibilidad.", "section": "typography" },
+      { "name": "The Logo Is Not Type Rule", "body": "El wordmark nunca se recrea con Inter ni con otra fuente: sólo se muestran los SVG oficiales V1.2 sin editar.", "section": "typography" },
+      { "name": "The One Primary Path Rule", "body": "Cada pantalla o bloque decisivo presenta una única acción primaria; las alternativas se expresan como outline, ghost o enlaces.", "section": "layout" },
+      { "name": "The State Before Ornament Rule", "body": "En flujos privados, el estado real, la próxima acción y su consecuencia ocupan la jerarquía antes que cualquier recurso narrativo.", "section": "layout" },
+      { "name": "The Tonal First Rule", "body": "La jerarquía se resuelve primero con navy, panel y panel elevado; la sombra confirma la separación, no la reemplaza.", "section": "elevation" },
+      { "name": "The Contained Glow Rule", "body": "Los resplandores sólo acompañan señal o acción y deben permanecer contenidos, sin nubes decorativas sobre controles funcionales.", "section": "elevation" },
+      { "name": "The Radius Follows Hierarchy Rule", "body": "Cuanto mayor y más estructural es la superficie, mayor puede ser su radio; no se aplica el mismo redondeo a cada agrupación.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do mantener el navy como fondo integral y construir profundidad con panel, panel elevado, borde y sombra ambiental.",
+      "Do reservar el gradiente oficial para la acción primaria, el progreso destacado y momentos inequívocos de marca.",
+      "Do mostrar estados de conexión, captura, sincronización y error con texto, iconografía y color semántico.",
+      "Do usar los SVG oficiales V1.2 sin editar y cambiar al isotipo cuando el wordmark pierda legibilidad.",
+      "Do comprobar 375, 768, 1024 y 1440 px, foco visible, contraste WCAG AA y `prefers-reduced-motion`.",
+      "Do mantener una portada persuasiva pero factual y una aplicación privada orientada a completar tareas."
+    ],
+    "donts": [
+      "Don't presentar MITTEN como traductor universal de lengua de señas, dispositivo médico o sistema con precisión perfecta.",
+      "Don't usar azul o cian como único indicador de estado ni como texto normal sobre blanco.",
+      "Don't aplicar gradientes, resplandores o tarjetas a cada elemento; la rareza sostiene la jerarquía.",
+      "Don't recrear el wordmark con una fuente, modificar la M, separar las ondas ni recolorear los logos.",
+      "Don't introducir fuentes remotas, emojis como iconos de UI o dependencias visuales sin una necesidad concreta.",
+      "Don't ocultar la acción primaria, el estado del dispositivo o los límites del prototipo detrás de decoración."
+    ]
+  }
+}

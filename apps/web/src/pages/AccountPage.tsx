@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { GoogleSignInButton, isGoogleSignInConfigured } from '../components/GoogleSignInButton';
+import { PageHeader } from '../components/ui/mitten-ui';
+import { Button } from '../components/ui/button';
 import { useToast } from '../components/ToastContainer';
 import { useAuth } from '../context/AuthContext';
 import { exportAccountData, linkGoogleAccount } from '../services/api';
@@ -40,12 +42,9 @@ export function AccountPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-[-0.025em] text-text">Tu cuenta</h1>
-        <p className="text-text-muted mt-2">Administra cómo ingresas a MITTEN.</p>
-      </header>
+      <PageHeader eyebrow="Preferencias" title="Tu cuenta" description="Administrá cómo ingresás a MITTEN y descargá una copia de tus datos." />
 
-      <section className="bg-surface rounded-xl border border-border p-5 sm:p-6" aria-labelledby="identity-title">
+      <section className="app-panel p-5 sm:p-6" aria-labelledby="identity-title">
         <h2 id="identity-title" className="text-lg font-semibold text-text">Identidad</h2>
         <dl className="mt-4 grid gap-3 text-sm">
           <div><dt className="text-text-muted">Correo</dt><dd className="font-medium mt-1">{user?.email}</dd></div>
@@ -53,21 +52,22 @@ export function AccountPage() {
         </dl>
       </section>
 
-      <section className="bg-surface rounded-xl border border-border p-5 sm:p-6" aria-labelledby="data-title">
+      <section className="app-panel p-5 sm:p-6" aria-labelledby="data-title">
         <h2 id="data-title" className="text-lg font-semibold text-text">Tus datos</h2>
-        <p className="text-text-muted mt-2 max-w-xl">Descarga un archivo JSON con los datos públicos de tu cuenta y todos los gestos de tu biblioteca. No incluye credenciales ni archivos MP3.</p>
-        <button
-          className="mt-5 px-4 py-2.5 rounded-md border border-primary text-primary font-medium hover:bg-primary-light disabled:opacity-50 disabled:cursor-wait transition-colors"
+        <p className="text-text-muted mt-2 max-w-xl">Descargá un archivo JSON con los datos públicos de tu cuenta y todos los gestos de tu biblioteca. No incluye credenciales ni archivos MP3.</p>
+        <Button
+          className="mt-5"
+          variant="outline"
           type="button"
           disabled={isExporting}
           onClick={handleExport}
         >
           {isExporting ? 'Preparando copia…' : 'Descargar mis datos'}
-        </button>
+        </Button>
       </section>
 
       {!user?.googleLinked && (
-        <section className="bg-surface rounded-xl border border-border p-5 sm:p-6" aria-labelledby="google-link-title">
+        <section className="app-panel p-5 sm:p-6" aria-labelledby="google-link-title">
           <h2 id="google-link-title" className="text-lg font-semibold text-text">Vincular Google</h2>
           <p className="text-text-muted mt-2 max-w-xl">La cuenta de Google debe usar el mismo correo que tu cuenta MITTEN. Después podrás entrar con cualquiera de los dos métodos.</p>
           {error && <p className="mt-4 p-3 rounded-md bg-error-light text-error text-sm" role="alert">{error}</p>}

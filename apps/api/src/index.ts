@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.js';
 import gestureRoutes from './routes/gestures.js';
 import healthRoutes from './routes/health.js';
+import audioRoutes from './routes/audio.js';
 import { getDatabase, closeDatabase } from './db/index.js';
 
 const app = express();
@@ -24,6 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/gestures', gestureRoutes);
+app.use('/api/audio', audioRoutes);
 app.use('/api', healthRoutes);
 
 // 404 handler

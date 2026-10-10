@@ -49,14 +49,14 @@ describe('simulator CLI transport', () => {
   });
 
   test('times out incomplete messages and resynchronizes', () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       const d=device(); d.stdin.write(d.handshake); d.stdin.write('{"v":');
-      jest.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(5000);
       d.stdin.write('2}\n'+serializeFrame(createStatusRequest('recovered'))); d.stdin.end();
       expect(d.frames).toContainEqual(expect.objectContaining({type:'event',event:'protocol.error',data:{error:expect.objectContaining({code:'INCOMPLETE_MESSAGE'})}}));
       expect(d.frames).toContainEqual(expect.objectContaining({type:'response',id:'recovered',ok:true}));
-    } finally { jest.useRealTimers(); }
+    } finally { vi.useRealTimers(); }
   });
   test('malformed input does not crash and stdout contains only valid protocol frames', async () => {
     const stdin = new PassThrough();

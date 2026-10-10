@@ -82,7 +82,7 @@ describe('DeviceService', () => {
 
     // Mock SerialTransport before importing DeviceService
     vi.doMock('../SerialTransport', () => ({
-      SerialTransport: vi.fn().mockImplementation((options: any) => {
+      SerialTransport: vi.fn().mockImplementation(function (options: any) {
         mockTransport._setHandlers(options);
         return mockTransport;
       }),

@@ -1,18 +1,24 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { GestureLibraryPage } from './pages/GestureLibraryPage';
-import { CreateGesturePage } from './pages/CreateGesturePage';
-import { GestureDetailPage } from './pages/GestureDetailPage';
-import { SyncPage } from './pages/SyncPage';
 import { Layout } from './components/Layout';
 import { ToastProvider } from './components/ToastContainer';
 import { ConnectionBanner } from './components/ConnectionBanner';
-import { PublicHomePage } from './pages/PublicHomePage';
-import { AccountPage } from './pages/AccountPage';
-import { PrivacyPage } from './pages/PrivacyPage';
+
+const PublicHomePage = lazy(() => import('./pages/PublicHomePage').then((module) => ({ default: module.PublicHomePage })));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((module) => ({ default: module.PrivacyPage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })));
+const RegisterPage = lazy(() => import('./pages/RegisterPage').then((module) => ({ default: module.RegisterPage })));
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const GestureLibraryPage = lazy(() => import('./pages/GestureLibraryPage').then((module) => ({ default: module.GestureLibraryPage })));
+const CreateGesturePage = lazy(() => import('./pages/CreateGesturePage').then((module) => ({ default: module.CreateGesturePage })));
+const GestureDetailPage = lazy(() => import('./pages/GestureDetailPage').then((module) => ({ default: module.GestureDetailPage })));
+const SyncPage = lazy(() => import('./pages/SyncPage').then((module) => ({ default: module.SyncPage })));
+const AccountPage = lazy(() => import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })));
+
+function RouteFallback() {
+  return <div className="flex min-h-[45vh] items-center justify-center" role="status" aria-live="polite"><div className="size-10 animate-spin rounded-full border-4 border-primary border-t-transparent" aria-hidden="true" /><span className="sr-only">Cargando pantalla…</span></div>;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -57,7 +63,7 @@ export function App() {
     <ProtectedRoute>
       <ConnectionBanner />
       <Layout>
-        <main id="main-content" className="flex-1 w-full max-w-7xl mx-auto px-4 py-8">
+        <main id="main-content" className="app-main flex-1 w-full max-w-7xl mx-auto px-4 sm:px-5 py-7 sm:py-10">
           {page}
         </main>
       </Layout>
@@ -66,7 +72,7 @@ export function App() {
 
   return (
     <ToastProvider>
-      <Routes>
+      <Suspense fallback={<RouteFallback />}><Routes>
             <Route path="/" element={<PublicHomePage />} />
             <Route path="/privacidad" element={<PrivacyPage />} />
             <Route path="/login" element={
@@ -86,7 +92,7 @@ export function App() {
             <Route path="/sync" element={protectedPage(<SyncPage />)} />
             <Route path="/account" element={protectedPage(<AccountPage />)} />
             <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      </Routes></Suspense>
     </ToastProvider>
   );
 }

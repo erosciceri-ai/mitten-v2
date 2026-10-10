@@ -16,7 +16,7 @@ describe('PublicHomePage', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Gestos personales');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Cada gesto tiene algo que decir');
     expect(screen.getByRole('heading', { name: 'De la mano al parlante, en tres momentos.' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Una arquitectura pequeña, comprensible y mantenible.' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Abrir la aplicación' }).getAttribute('href')).toBe('/login');

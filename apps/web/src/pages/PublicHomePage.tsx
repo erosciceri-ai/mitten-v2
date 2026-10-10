@@ -45,31 +45,11 @@ function HeroSystemDiagram() {
       <svg className="hero-system__art" viewBox="0 0 520 430" role="img" aria-labelledby="hero-diagram-title hero-diagram-description">
         <title id="hero-diagram-title">Cómo MITTEN convierte un gesto en audio</title>
         <desc id="hero-diagram-description">Una mano equipada con sensores envía datos al ESP32, que activa una pista de audio.</desc>
-        <defs>
-          <linearGradient id="glove-fill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#e2f7f4" />
-            <stop offset="1" stopColor="#b8e8e2" />
-          </linearGradient>
-          <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="16" stdDeviation="18" floodColor="#092f3b" floodOpacity=".16" />
-          </filter>
-        </defs>
-
         <path className="hero-system__orbit" d="M71 320C154 369 277 377 376 318C446 276 475 193 437 120" />
         <circle className="hero-system__signal" cx="71" cy="320" r="7" />
 
-        <g filter="url(#soft-shadow)">
-          <path className="hero-system__glove" fill="url(#glove-fill)" d="M128 296c-20-35-28-72-23-111l7-58c2-15 23-13 23 2v58-99c0-17 24-18 25-1l2 92 2-119c0-18 26-18 27 0l3 118 2-102c0-17 25-17 26 0l3 108 4-75c1-16 24-15 25 1l4 104c2 58-40 111-98 119-48 6-93-16-113-37Z" />
-        </g>
-
-        <g className="hero-system__sensor-lines" aria-hidden="true">
-          <path d="M146 94v95" /><path d="M176 66v111" /><path d="M208 82v100" /><path d="M239 114v76" /><path d="M139 209c30 21 64 24 101 7" />
-        </g>
-
-        <g className="hero-system__module" transform="translate(158 227)">
-          <rect width="74" height="55" rx="12" />
-          <path d="M15 17h44M15 27h29M15 37h36" />
-          <circle cx="59" cy="37" r="4" />
+        <g className="hero-system__brand" aria-label="Isotipo oficial MITTEN">
+          <image href="/brand/06_isotipo_gradiente.svg" x="82" y="126" width="190" height="173" />
         </g>
 
         <g className="hero-system__node" transform="translate(355 64)">
@@ -126,9 +106,8 @@ export function PublicHomePage() {
         <section className="hero-section">
           <div className="public-container hero-grid">
             <div className="hero-copy">
-              <p className="hero-kicker">Guante electrónico de comunicación</p>
-              <h1>Gestos personales convertidos en frases habladas.</h1>
-              <p className="hero-lead">MITTEN aprende movimientos de la mano, los reconoce en un ESP32 y reproduce audio sin depender de una computadora durante el uso cotidiano.</p>
+              <h1>Cada gesto tiene algo que decir.</h1>
+              <p className="hero-lead">MITTEN es un guante inteligente de comunicación que reconoce gestos configurados y reproduce sus mensajes de voz sin depender de una computadora durante el uso cotidiano.</p>
               <div className="hero-actions">
                 <a className="button button--primary" href="#funcionamiento">Descubrir MITTEN</a>
                 <Link className="button button--quiet" to="/login">Configurar mi guante</Link>
@@ -161,7 +140,6 @@ export function PublicHomePage() {
         <section className="public-section story-section" id="alcance" aria-labelledby="purpose-title">
           <div className="public-container story-grid">
             <div className="section-heading">
-              <p className="section-index">Objetivo y alcance</p>
               <h2 id="purpose-title">Tecnología para expresar una intención de forma directa.</h2>
             </div>
             <div className="story-copy">
@@ -184,7 +162,6 @@ export function PublicHomePage() {
           <div className="public-container">
             <div className="section-heading section-heading--horizontal">
               <div>
-                <p className="section-index">Funcionamiento</p>
                 <h2 id="process-title">De la mano al parlante, en tres momentos.</h2>
               </div>
               <p>La web prepara el perfil. El guante realiza el reconocimiento y reproduce la frase de manera local.</p>
@@ -204,7 +181,6 @@ export function PublicHomePage() {
           <div className="public-container">
             <div className="section-heading section-heading--horizontal">
               <div>
-                <p className="section-index">Hardware y software</p>
                 <h2 id="technology-title">Una arquitectura pequeña, comprensible y mantenible.</h2>
               </div>
               <p>Cada pieza tiene una responsabilidad concreta. La nube no participa del reconocimiento cotidiano.</p>
@@ -249,15 +225,14 @@ export function PublicHomePage() {
         <section className="public-section capability-section" aria-labelledby="capability-title">
           <div className="public-container capability-grid">
             <div className="section-heading">
-              <p className="section-index">Aplicación web</p>
               <h2 id="capability-title">Preparar el guante sin ocultar lo importante.</h2>
               <p>La interfaz acompaña la conexión, el aprendizaje y la sincronización, mostrando siempre el estado real de MITTEN.</p>
               <Link className="text-link" to="/login">Entrar al panel de configuración</Link>
             </div>
             <ul className="capability-list">
-              <li><strong>Biblioteca personal</strong><span>Crea, edita, busca y elimina gestos propios.</span></li>
-              <li><strong>Captura guiada</strong><span>Registra el movimiento directamente desde el guante.</span></li>
-              <li><strong>Audio asociado</strong><span>Prepara y revisa la frase que reproducirá cada gesto.</span></li>
+              <li><strong>Biblioteca personal</strong><span>Creá, editá, buscá y eliminá gestos propios.</span></li>
+              <li><strong>Captura guiada</strong><span>Registrá el movimiento directamente desde el guante.</span></li>
+              <li><strong>Audio asociado</strong><span>Prepará y revisá la frase que reproducirá cada gesto.</span></li>
               <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo sin perder el anterior ante un fallo.</span></li>
             </ul>
           </div>
@@ -266,7 +241,6 @@ export function PublicHomePage() {
         <section className="public-section faq-section" aria-labelledby="faq-title">
           <div className="public-container faq-grid">
             <div className="section-heading">
-              <p className="section-index">Preguntas frecuentes</p>
               <h2 id="faq-title">Lo esencial, antes de conectar el guante.</h2>
             </div>
             <div className="faq-list">
@@ -283,7 +257,6 @@ export function PublicHomePage() {
         <section className="contact-section" id="contacto" aria-labelledby="contact-title">
           <div className={`public-container contact-panel ${contactEmail ? 'contact-panel--form' : ''}`}>
             <div>
-              <p className="section-index">Contacto</p>
               <h2 id="contact-title">Conversemos sobre MITTEN.</h2>
               <p>Consultas sobre el proyecto, demostraciones educativas y posibilidades de colaboración.</p>
             </div>
@@ -301,7 +274,7 @@ export function PublicHomePage() {
 
       <footer className="public-footer">
         <div className="public-container public-footer__inner">
-          <BrandMark inverse />
+          <BrandMark />
           <p>MITTEN V2.1 · Prototipo funcional educativo.</p>
           <div className="public-footer__links">
             <Link to="/privacidad">Privacidad</Link>

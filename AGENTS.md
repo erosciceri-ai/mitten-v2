@@ -312,6 +312,20 @@ Los valores específicos de entorno deben usar variables de configuración/entor
 
 # Reglas de diseño del frontend
 
+Antes de crear o modificar interfaces, estilos, componentes visuales, recursos de marca o
+animaciones, lee en este orden:
+
+1. [`docs/branding/BRAND.md`](docs/branding/BRAND.md), autoridad para identidad, color, logotipo y
+   lenguaje de marca.
+2. Los SVG maestros aprobados de [`apps/web/public/brand/`](apps/web/public/brand/), que deben
+   utilizarse sin redibujarlos ni modificarlos.
+3. [`apps/web/DESIGN_SYSTEM.md`](apps/web/DESIGN_SYSTEM.md), autoridad para la implementación del
+   sistema visual en el frontend.
+
+Ante una contradicción de identidad, `BRAND.md` y los activos V1.2 prevalecen. El sistema de diseño
+define cómo aplicar esa identidad a componentes, accesibilidad y responsive, y también documenta
+las condiciones de uso de Refero Design, Magic UI, React Bits, Motion, GSAP y Lenis.
+
 Usar:
 
 - React.
@@ -604,3 +618,15 @@ Debe mantenerse alineado con los documentos canónicos. Ante una contradicción,
 - Cuando el dispositivo anuncie explícitamente un timeout aplicable, el frontend debe respetar el valor anunciado.
 - El algoritmo de reconocimiento V1 será el baseline inicial de V2; el algoritmo definitivo podrá mejorarse después.
 - `docs/synchronization.md` forma parte de la jerarquía documental y es el documento especializado para sincronización/persistencia atómica.
+
+## Identidad de marca MITTEN
+
+Para cualquier modificación de interfaz, branding,
+tipografía, colores, iconografía o recursos visuales,
+consultar y respetar `docs/branding/BRAND.md`.
+
+Los logotipos oficiales V1.2 se encuentran en
+`apps/web/public/brand/`.
+
+No rediseñar ni modificar los activos maestros sin
+autorización explícita.

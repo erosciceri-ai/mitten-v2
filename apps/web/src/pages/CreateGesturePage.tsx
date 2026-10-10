@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Check, CircleDot, Hand, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDevice } from '../context/DeviceContext';
 import { useToast } from '../components/ToastContainer';
+import { Button } from '../components/ui/button';
+import { Notice, PageHeader, ProgressBar } from '../components/ui/mitten-ui';
 import { createGesture } from '../services/api';
 import type { FormErrors } from '../types';
 
@@ -112,7 +115,7 @@ export function CreateGesturePage() {
   const getPhaseDescription = (phase: CapturePhase) => {
     switch (phase) {
       case 'PREPARING': return 'Preparando sensores...';
-      case 'RECORDING': return 'Grabando gesto... Realiza el gesto ahora';
+      case 'RECORDING': return 'Grabando gesto… Realizá el gesto ahora';
       case 'PROCESSING': return 'Procesando datos capturados...';
     }
   };
@@ -120,61 +123,34 @@ export function CreateGesturePage() {
   const getPhaseLabel = (phase: CapturePhase) => {
     switch (phase) {
       case 'PREPARING': return 'Preparando';
-      case 'RECORDING': return 'Realiza el gesto';
+      case 'RECORDING': return 'Realizá el gesto';
       case 'PROCESSING': return 'Procesando';
     }
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-[-0.025em] text-text">Enseñar un gesto</h1>
-          <p className="text-text-muted mt-2">Registra el movimiento y escribe la frase que MITTEN dirá.</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Aprendizaje" title="Enseñar un gesto" description="Registrá el movimiento y escribí la frase que MITTEN dirá." />
 
       {/* Connection Check */}
       {!isConnected && (
-        <div className="bg-warning-light border border-warning text-amber-900 p-4 rounded-lg" role="status">
-          <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v10m0 4v.01M5 8.5a8 8 0 1 0 14 0" /></svg>
-            <div>
-              <p className="font-medium">MITTEN no está conectado</p>
-              <p className="text-sm mt-1">Conecta el guante para habilitar la captura.</p>
-              <button onClick={() => connect().catch(() => undefined)} disabled={connectionStatus === 'connecting' || connectionStatus === 'handshake'} className="mt-3 px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-60 transition-colors">
-                {connectionStatus === 'connecting' || connectionStatus === 'handshake' ? 'Conectando…' : 'Conectar MITTEN'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <Notice tone="warning" title="MITTEN no está conectado" live actions={<Button size="sm" onClick={() => connect().catch(() => undefined)} disabled={connectionStatus === 'connecting' || connectionStatus === 'handshake'}>{connectionStatus === 'connecting' || connectionStatus === 'handshake' ? 'Conectando…' : 'Conectar MITTEN'}</Button>}>Conectá el guante para habilitar la captura.</Notice>
       )}
 
       {/* Capture Section */}
-      <div className="bg-surface rounded-lg border border-border p-6">
-        <h2 className="text-lg font-semibold text-text mb-4">Captura de Gesto</h2>
+      <section className="app-panel p-6" aria-labelledby="capture-title">
+        <p className="app-eyebrow">Paso 1 de 2</p><h2 id="capture-title" className="mb-4 text-lg font-bold text-text">Captura del movimiento</h2>
 
         {!captureStarted && !capturedGestureData ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-light text-primary mb-4">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11V6a1.5 1.5 0 0 1 3 0v4-6a1.5 1.5 0 0 1 3 0v6-5a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v5c0 4.4-3.6 8-8 8h-1a7 7 0 0 1-6.2-3.7L2.5 15A1.7 1.7 0 0 1 5 12.8L7 15" />
-              </svg>
+              <Hand className="size-10" aria-hidden="true" />
             </div>
-            <h3 className="text-lg font-medium text-text mb-2">Iniciar Captura</h3>
-            <p className="text-text-muted mb-6">Presiona el botón y realiza el gesto con el guante</p>
-            <button
-              onClick={handleCapture}
-              disabled={!isConnected || firmwareState !== 'IDLE' || isCapturing}
-              className="px-6 py-3 bg-primary text-white font-medium rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="6" strokeWidth={2} />
-              </svg>
-              Iniciar Captura
-            </button>
+            <h3 className="text-lg font-medium text-text mb-2">Iniciar captura</h3>
+            <p className="text-text-muted mb-6">Presioná el botón y realizá el gesto con el guante.</p>
+            <Button size="lg" onClick={handleCapture} disabled={!isConnected || firmwareState !== 'IDLE' || isCapturing}><CircleDot aria-hidden="true" />Iniciar captura</Button>
             {!isConnected && (
-              <p className="text-sm text-text-muted mt-3">Conecta MITTEN primero</p>
+              <p className="text-sm text-text-muted mt-3">Conectá MITTEN primero.</p>
             )}
             {isConnected && firmwareState !== 'IDLE' && (
               <p className="text-sm text-warning mt-3">Dispositivo en estado: {firmwareState}</p>
@@ -182,35 +158,28 @@ export function CreateGesturePage() {
           </div>
         ) : captureStarted && isCapturing && capturePhase ? (
           <div className="text-center py-8" role="status" aria-live="polite">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 text-blue-600 mb-4">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-light text-signal mb-4">
               <span className="w-4 h-4 rounded-full bg-current animate-pulse" aria-hidden="true" />
             </div>
             <h3 className="text-lg font-medium text-text mb-2">{getPhaseLabel(capturePhase)}</h3>
             <p className="text-text-muted mb-6">{getPhaseDescription(capturePhase)}</p>
             
             <div className="w-full max-w-md mx-auto">
-              <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-2" role="progressbar" aria-label="Progreso de captura" aria-valuemin={0} aria-valuemax={100} aria-valuenow={captureProgress}>
-                <div 
-                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                  style={{ width: `${captureProgress}%` }}
-                ></div>
-              </div>
+              <ProgressBar value={captureProgress} label="Progreso de captura" />
               <p className="text-sm text-text-muted">{captureProgress}%</p>
             </div>
           </div>
         ) : capturedGestureData && !isCapturing ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-success-light text-success mb-4">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="size-10" aria-hidden="true" />
             </div>
-            <h3 className="text-lg font-medium text-text mb-2">Captura Completada</h3>
+            <h3 className="text-lg font-medium text-text mb-2">Captura completada</h3>
             <p className="text-text-muted mb-6">
               Se capturaron {capturedGestureData.sampleCount} muestras en {capturedGestureData.captureDurationMs}ms
             </p>
             
-            <div className="bg-gray-50 rounded-lg p-4 text-left max-w-md mx-auto mb-6">
+            <div className="rounded-lg bg-mist p-4 text-left max-w-md mx-auto mb-6">
               <p className="text-sm font-medium text-text mb-2">Datos del gesto:</p>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between">
@@ -233,40 +202,28 @@ export function CreateGesturePage() {
             </div>
             
             <div className="flex justify-center gap-3">
-              <button
-                onClick={handleRetryCapture}
-                className="px-4 py-2 border border-border text-text font-medium rounded-md hover:bg-gray-50 transition-colors"
-              >
-                Repetir Captura
-              </button>
+              <Button variant="outline" onClick={handleRetryCapture}>Repetir captura</Button>
             </div>
           </div>
         ) : captureError ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-error-light text-error mb-4">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="size-10" aria-hidden="true" />
             </div>
-            <h3 className="text-lg font-medium text-text mb-2">Error en la Captura</h3>
+            <h3 className="text-lg font-medium text-text mb-2">Error en la captura</h3>
             <p className="text-text-muted mb-6">{captureError}</p>
-            <button
-              onClick={handleRetryCapture}
-              className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover transition-colors"
-            >
-              Reintentar
-            </button>
+            <Button onClick={handleRetryCapture}>Reintentar</Button>
           </div>
         ) : null}
-      </div>
+      </section>
 
       {/* Name Input */}
-      <div className="bg-surface rounded-lg border border-border p-6">
-        <h2 className="text-lg font-semibold text-text mb-4">Información del Gesto</h2>
+      <section className="app-panel p-6">
+        <h2 className="text-lg font-semibold text-text mb-4">Información del gesto</h2>
         
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-text mb-1">
-            Nombre del Gesto <span className="text-error">*</span>
+            Nombre del gesto <span className="text-error">*</span>
           </label>
           <input
             id="name"
@@ -276,44 +233,32 @@ export function CreateGesturePage() {
             maxLength={60}
             aria-invalid={Boolean(errors.name)}
             aria-describedby={errors.name ? 'name-error' : 'name-help'}
-            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
-              errors.name ? 'border-error' : 'border-border'
-            }`}
+            className="app-field"
             placeholder="Ej: hola, gracias, adiós..."
             disabled={isSubmitting}
           />
           {errors.name && <p id="name-error" className="mt-1 text-sm text-error" role="alert">{errors.name}</p>}
           <p id="name-help" className="mt-1 text-sm text-text-muted tabular-nums">{Array.from(name).length}/60 caracteres</p>
         </div>
-      </div>
+      </section>
 
       {/* Submit */}
       <div className="flex justify-end gap-3">
         {errors.capture && <p className="self-center text-sm text-error" role="alert">{errors.capture}</p>}
-        <button
-          onClick={() => navigate('/gestures')}
-          className="px-4 py-2 border border-border text-text font-medium rounded-md hover:bg-gray-50 transition-colors"
-          disabled={isSubmitting}
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !capturedGestureData || !name.trim()}
-          className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isSubmitting ? 'Guardando...' : 'Guardar Gesto'}
-        </button>
+        <Button variant="outline" onClick={() => navigate('/gestures')} disabled={isSubmitting}>Cancelar</Button>
+        <Button onClick={handleSubmit} disabled={isSubmitting || !capturedGestureData || !name.trim()}>
+          {isSubmitting ? 'Guardando…' : 'Guardar gesto'}
+        </Button>
       </div>
 
       {/* Help Text */}
-      <div className="bg-gray-50 rounded-lg p-4 text-sm text-text-muted">
+      <div className="rounded-lg border border-border bg-mist p-4 text-sm text-text-muted">
         <p className="font-medium mb-2">Cómo obtener una buena captura</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Conecta MITTEN y espera hasta que aparezca como listo.</li>
-          <li>Inicia la captura y adopta el gesto cuando la pantalla te lo indique.</li>
-          <li>Mantén la mano estable hasta que termine el registro.</li>
-          <li>Escribe la frase que deseas comunicar y guarda el gesto.</li>
+          <li>Conectá MITTEN y esperá hasta que aparezca como listo.</li>
+          <li>Iniciá la captura y adoptá el gesto cuando la pantalla te lo indique.</li>
+          <li>Mantené la mano estable hasta que termine el registro.</li>
+          <li>Escribí la frase que querés comunicar y guardá el gesto.</li>
         </ol>
       </div>
     </div>

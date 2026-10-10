@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { exportAccountData, getGestureAudioBlob, linkGoogleAccount, loginWithGoogle } from './api';
+import { ApiUnavailableError, exportAccountData, getGestureAudioBlob, linkGoogleAccount, loginWithGoogle } from './api';
 
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 it('downloads the gesture audio with bearer authentication through the central API',async () => {
@@ -15,6 +15,13 @@ it('downloads the gesture audio with bearer authentication through the central A
 it('does not turn an audio authorization failure into a playable blob',async () => {
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false,status:401,json:async()=>({message:'Unauthorized'})}));
   await expect(getGestureAudioBlob(42)).rejects.toMatchObject({status:401,message:'Unauthorized'});
+});
+
+it('reports a disconnected API instead of leaking a generic network or proxy error', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+  await expect(loginWithGoogle('credential')).rejects.toBeInstanceOf(ApiUnavailableError);
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
+  await expect(loginWithGoogle('credential')).rejects.toMatchObject({ message: expect.stringContaining('API desconectada') });
 });
 
 it('sends Google credentials only to the central authentication endpoints', async () => {

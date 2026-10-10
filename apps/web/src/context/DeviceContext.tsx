@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { DeviceService } from '../serial/DeviceService';
+import { DemoTransport, type DemoDeviceControls } from '../serial/DemoTransport';
 import {
   FirmwareState,
 } from '../types';
@@ -15,6 +16,9 @@ import type {
 } from '../types';
 
 interface DeviceContextValue {
+  deviceMode: 'hardware' | 'demo';
+  setDeviceMode: (mode: 'hardware' | 'demo') => void;
+  isDemoMode: boolean;
   // Connection state
   connectionStatus: ConnectionStatus;
   deviceInfo: DeviceInfo | null;
@@ -50,6 +54,8 @@ interface DeviceContextValue {
   startCapture: () => Promise<void>;
   startSync: (profileId: string, profileRevision: string, gestures: Gesture[]) => Promise<void>;
   abortSync: () => Promise<void>;
+  restartDemoDevice: () => Promise<void>;
+  simulateRecognition: (gestureId?: number) => Promise<boolean>;
   
   // State resetters
   clearCaptureState: () => void;
@@ -61,6 +67,9 @@ interface DeviceContextValue {
 const DeviceContext = createContext<DeviceContextValue | null>(null);
 
 export function DeviceProvider({ children }: { children: ReactNode }) {
+  const [deviceMode, setDeviceModeState] = useState<'hardware' | 'demo'>(() =>
+    sessionStorage.getItem('mitten_device_mode') === 'demo' ? 'demo' : 'hardware'
+  );
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -167,7 +176,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           console.error(`Device error [${code}]:`, message, details);
         }
       },
-    });
+    }, deviceMode === 'demo' ? handlers => new DemoTransport(handlers) : undefined);
     
     deviceServiceRef.current = service;
     
@@ -175,7 +184,16 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       isMountedRef.current = false;
       service.disconnect().catch(console.error);
     };
-  }, []);
+  }, [deviceMode]);
+
+  const setDeviceMode = useCallback((mode: 'hardware' | 'demo') => {
+    if (connectionStatus !== 'disconnected' && connectionStatus !== 'error') {
+      throw new Error('Desconecta el dispositivo antes de cambiar de modo');
+    }
+    sessionStorage.setItem('mitten_device_mode', mode);
+    setConnectionError(null);
+    setDeviceModeState(mode);
+  }, [connectionStatus]);
 
   const connect = useCallback(async () => {
     const service = deviceServiceRef.current;
@@ -315,6 +333,23 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     setSyncProgress({ sent: 0, total: 0 });
   }, [activeSync]);
 
+  const restartDemoDevice = useCallback(async () => {
+    const service = deviceServiceRef.current;
+    if (!service || deviceMode !== 'demo') throw new Error('El reinicio simulado sólo está disponible en modo demostración');
+    const transport = service.getTransport() as unknown as DemoDeviceControls;
+    await service.disconnect();
+    await transport.restart();
+    const info = await service.connect();
+    setDeviceInfo(info);
+    await getStatus();
+  }, [deviceMode, getStatus]);
+
+  const simulateRecognition = useCallback(async (gestureId?: number) => {
+    const service = deviceServiceRef.current;
+    if (!service || deviceMode !== 'demo') throw new Error('El reconocimiento simulado sólo está disponible en modo demostración');
+    return (service.getTransport() as unknown as DemoDeviceControls).recognize(gestureId);
+  }, [deviceMode]);
+
   const clearCaptureState = useCallback(() => {
     setCaptureError(null);
     setCapturedGestureData(null);
@@ -337,6 +372,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: DeviceContextValue = {
+    deviceMode,
+    setDeviceMode,
+    isDemoMode: deviceMode === 'demo',
     connectionStatus,
     deviceInfo,
     connectionError,
@@ -361,6 +399,8 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     startCapture,
     startSync,
     abortSync,
+    restartDemoDevice,
+    simulateRecognition,
     clearCaptureState,
     clearSyncState,
     clearRecognition,

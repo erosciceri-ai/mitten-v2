@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   test: {
     environment: 'node',
+    env: { NODE_ENV: 'test', TTS_PROVIDER: 'mock' },
     include: ['src/**/*.test.ts'],
     globals: true,
     setupFiles: ['./src/test/setup.ts'],

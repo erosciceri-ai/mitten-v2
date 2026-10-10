@@ -51,7 +51,7 @@ export function GoogleSignInButton({ onCredential, onError, text = 'continue_wit
       });
       window.google.accounts.id.renderButton(containerRef.current, {
         type: 'standard',
-        theme: 'outline',
+        theme: 'filled_black',
         size: 'large',
         shape: 'rectangular',
         text,

@@ -69,4 +69,10 @@ nul
 
 # Local design-tool state and generated reports
 /.impeccable/
-/apps/web/.impeccable/
+/apps/web/.impeccable/*
+!/apps/web/.impeccable/design.json
+
+# Local TTS runtime, Piper voice and generated setup state (never committed)
+/.runtime/
+/apps/web/test-results/
+/apps/web/playwright-report/

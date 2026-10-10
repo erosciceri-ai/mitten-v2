@@ -3,10 +3,11 @@ import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import app from '../index.js';
 import { createUser } from '../models/User.js';
-import { createGesture, generateGestureAudio, updateGesture, deleteGesture, getGestureAudioInfo } from '../models/Gesture.js';
+import { createGesture, generateGestureAudio, updateGesture, deleteGesture, getGestureAudioInfo, findAllGestures } from '../models/Gesture.js';
 import { generateToken } from '../utils/jwt.js';
 import { gestureData } from '../test/gesture.js';
 import { generateTTS, getAudioFilePath } from '../services/tts.js';
+import JSZip from 'jszip';
 
 vi.mock('../services/tts.js', async importOriginal => ({
   ...await importOriginal<typeof import('../services/tts.js')>(), generateTTS: vi.fn(),
@@ -66,5 +67,29 @@ it('does not publish stale generation after deletion and track reuse', async () 
   finish({audio:Buffer.from('stale'),provider:'test'});
   await assertion;
   expect((await getGestureAudioInfo(user.id,replacement.id))?.filePath).toBeNull();
+});
+
+it('blocks incomplete microSD packages and returns only the authenticated user tracks', async () => {
+  const a = await owner(), b = await owner();
+  const first = await createGesture({ userId: a.user.id, name: 'Necesito agua', data: gestureData });
+  await createGesture({ userId: a.user.id, name: 'Gracias', data: gestureData });
+  const foreign = await createGesture({ userId: b.user.id, name: 'Privado', data: gestureData });
+  provider.mockResolvedValue({ audio: Buffer.concat([Buffer.from('ID3'), Buffer.alloc(200)]), provider: 'test' });
+  await generateGestureAudio(a.user.id, first.id);
+  await generateGestureAudio(b.user.id, foreign.id);
+  const incomplete = await fetch(`${base}/audio/package`, { headers: a.headers });
+  expect(incomplete.status).toBe(409);
+  expect(await incomplete.json()).toMatchObject({ missingTracks: [{ name: 'Gracias', audioTrack: 2, file: 'mp3/0002.mp3' }] });
+
+  const second = (await findAllGestures(a.user.id))[1];
+  await generateGestureAudio(a.user.id, second.id);
+  const response = await fetch(`${base}/audio/package`, { headers: a.headers });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-disposition')).toContain('mitten-microsd.zip');
+  const zip = await JSZip.loadAsync(await response.arrayBuffer());
+  expect(Object.keys(zip.files).sort()).toEqual(['COPIAR_A_MICROSD.txt', 'manifest.json', 'mp3/', 'mp3/0001.mp3', 'mp3/0002.mp3']);
+  const manifest = JSON.parse(await zip.file('manifest.json')!.async('text'));
+  expect(manifest.tracks.map((track: { name: string }) => track.name)).toEqual(['Necesito agua', 'Gracias']);
+  expect(JSON.stringify(manifest)).not.toContain('Privado');
 });
 

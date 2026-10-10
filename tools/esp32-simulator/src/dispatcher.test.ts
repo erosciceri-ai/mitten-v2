@@ -1016,7 +1016,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Use fake timers from the start
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     // Start a sync transaction
     dispatcher.dispatch(createSyncBeginRequest('sync-begin-timeout', {
@@ -1028,7 +1028,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Wait for the idle timeout (10 seconds)
-    jest.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 100);
+    vi.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 100);
 
     // Should emit sync.failed event with SYNC_TIMEOUT
     const syncFailedEvent = getSyncFailedEvent(emitted);
@@ -1050,7 +1050,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     expect(statusResponse.result.activeSync).toBeNull();
     expect(statusResponse.result.activeProfile).toBeNull(); // No previous profile
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('sync: timeout discards staging and preserves previous active profile', () => {
@@ -1063,7 +1063,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Use fake timers from the start
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     // First, create an active profile
     dispatcher.dispatch(createSyncBeginRequest('sync-begin-old', {
@@ -1100,7 +1100,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Wait for timeout
-    jest.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 100);
+    vi.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 100);
 
     // Should emit sync.failed
     const syncFailedEvent = getSyncFailedEvent(emitted);
@@ -1117,7 +1117,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     });
     expect(statusResponse.result.activeSync).toBeNull();
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('sync: timer cancelled after successful commit', () => {
@@ -1130,7 +1130,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Use fake timers from the start
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     dispatcher.dispatch(createSyncBeginRequest('sync-begin-commit', {
       syncId: 'sync-commit',
@@ -1147,7 +1147,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Advance time past the original timeout
-    jest.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 1000);
+    vi.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 1000);
 
     // Should NOT emit sync.failed (timer was cancelled on commit)
     const syncFailedEvents = emitted.filter(e => e.type === 'event' && e.event === 'sync.failed');
@@ -1164,7 +1164,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     });
     expect(statusResponse.result.activeSync).toBeNull();
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('sync: timer cancelled after abort', () => {
@@ -1177,7 +1177,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Use fake timers from the start
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     dispatcher.dispatch(createSyncBeginRequest('sync-begin-abort', {
       syncId: 'sync-abort',
@@ -1191,7 +1191,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Advance time past the original timeout
-    jest.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 1000);
+    vi.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 1000);
 
     // Should NOT emit sync.failed (timer was cancelled on abort)
     const syncFailedEvents = emitted.filter(e => e.type === 'event' && e.event === 'sync.failed');
@@ -1199,7 +1199,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
 
     expect(dispatcher.currentState).toBe(FirmwareState.IDLE);
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test('sync: multiple sequential sync transactions', async () => {
@@ -1306,7 +1306,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Use fake timers from the start
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     // Start a sync that will timeout
     dispatcher.dispatch(createSyncBeginRequest('sync-timeout-1', {
@@ -1318,7 +1318,7 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     emitted.length = 0;
 
     // Wait for timeout
-    jest.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 100);
+    vi.advanceTimersByTime(SYNC_IDLE_TIMEOUT_MS + 100);
 
     // Verify sync.failed emitted
     let syncFailedEvent = getSyncFailedEvent(emitted);
@@ -1390,6 +1390,6 @@ describe('SimulatorDispatcher - Synchronization (Phase 2)', () => {
     });
     expect(statusResponse.result.activeSync).toBeNull();
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 });

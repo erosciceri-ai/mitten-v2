@@ -1,4 +1,6 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { lazy, Suspense, type CSSProperties, useEffect, useState } from 'react';
+
+const SignalWaves = lazy(() => import('./react-bits/Waves/Waves'));
 
 type DemoStage = 'idle' | 'sensing' | 'matching' | 'speaking';
 
@@ -42,7 +44,6 @@ export function ProjectDemo() {
     <section className="public-section demo-section" id="demostracion" aria-labelledby="demo-title">
       <div className="public-container demo-grid">
         <div className="section-heading demo-copy">
-          <p className="section-index">Demostración conceptual</p>
           <h2 id="demo-title">Seguí una señal mientras se convierte en voz.</h2>
           <p>
             Esta secuencia explica el recorrido de los datos. No simula la precisión del reconocimiento
@@ -59,6 +60,9 @@ export function ProjectDemo() {
         </div>
 
         <div className={`signal-console signal-console--${stage}`}>
+          <Suspense fallback={null}>
+            <SignalWaves className="signal-console__waves" lineColor="#00D3DD" backgroundColor="transparent" waveAmpX={18} waveAmpY={8} xGap={18} yGap={42} maxCursorMove={24} />
+          </Suspense>
           <div className="signal-console__topline">
             <span>MITTEN / recorrido local</span>
             <span className="signal-console__state" aria-live="polite">{stages[stage].label}</span>

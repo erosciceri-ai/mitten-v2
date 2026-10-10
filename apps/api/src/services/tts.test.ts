@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { config, validateConfig } from '../config/index.js';
-import { generateTTS } from './tts.js';
+import { executeProcess, generateTTS, PiperTTSProvider } from './tts.js';
 const saved={...config};
 afterEach(() => { Object.assign(config,saved); vi.unstubAllGlobals(); });
 it('mock and unsupported providers never claim to generate MP3',async () => {
@@ -10,6 +13,35 @@ it('mock and unsupported providers never claim to generate MP3',async () => {
     expect(validateConfig).toThrow('Unsupported TTS_PROVIDER');
     await expect(generateTTS({text:'Hola'})).rejects.toMatchObject({status:503});
   }
+});
+
+it('terminates a Piper subprocess that exceeds its configured timeout', async () => {
+  await expect(executeProcess(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], { stdin: 'Hola', timeoutMs: 25 }))
+    .rejects.toMatchObject({ status: 504, message: expect.stringContaining('timeout') });
+});
+
+it('validates Piper output and propagates its timeout without publishing partial bytes', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'mitten-piper-test-'));
+  const model = join(workspace, 'voice.onnx');
+  await writeFile(model, 'model');
+  await writeFile(`${model}.json`, '{}');
+  try {
+    const validMp3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(200)]);
+    const successful = new PiperTTSProvider(process.execPath, model, 1000, async (_command, args) => {
+      await writeFile(args[args.indexOf('--output') + 1], validMp3);
+    });
+    await expect(successful.synthesize({ text: 'Hola' })).resolves.toMatchObject({ provider: 'piper', audio: validMp3 });
+
+    const invalid = new PiperTTSProvider(process.execPath, model, 1000, async (_command, args) => {
+      await writeFile(args[args.indexOf('--output') + 1], 'not mp3');
+    });
+    await expect(invalid.synthesize({ text: 'Hola' })).rejects.toMatchObject({ status: 502 });
+
+    const timedOut = new PiperTTSProvider(process.execPath, model, 1000, async () => {
+      throw Object.assign(new Error('Piper exceeded its timeout'), { status: 504 });
+    });
+    await expect(timedOut.synthesize({ text: 'Hola' })).rejects.toMatchObject({ status: 504 });
+  } finally { await rm(workspace, { recursive: true, force: true }); }
 });
 it('validates provider response before publishing bytes',async () => {
   config.ttsProvider='elevenlabs'; config.elevenLabsApiKey='test'; config.elevenLabsVoiceId='test';

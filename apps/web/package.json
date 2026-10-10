@@ -9,15 +9,23 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@mitten/contracts": "file:../../packages/contracts",
+    "@mitten/esp32-simulator": "file:../../tools/esp32-simulator",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.4.0",
+    "lucide-react": "^1.53.0",
+    "motion": "^14.0.0",
+    "radix-ui": "^1.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.6.0",
@@ -28,7 +36,7 @@
     "jsdom": "^25.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.3.0",
-    "vite": "^5.0.0",
-    "vitest": "^2.1.0"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.11"
   }
 }

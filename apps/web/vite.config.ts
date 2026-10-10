@@ -9,13 +9,14 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@mitten/contracts': path.resolve(__dirname, '../../packages/contracts/src/index.ts'),
+      '@mitten/esp32-simulator': path.resolve(__dirname, '../../tools/esp32-simulator/src/index.ts'),
     },
   },
   server: {
-    port: 5173,
+    port: Number(process.env.WEB_PORT || 5173),
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:3000',
         changeOrigin: true,
       },
     },

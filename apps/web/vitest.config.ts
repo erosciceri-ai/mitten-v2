@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@mitten/contracts': path.resolve(__dirname, '../../packages/contracts/src/index.ts'),
+      '@mitten/esp32-simulator': path.resolve(__dirname, '../../tools/esp32-simulator/src/index.ts'),
     },
   },
   test: {

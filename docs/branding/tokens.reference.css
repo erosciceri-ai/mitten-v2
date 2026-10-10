@@ -1,0 +1,22 @@
+/* MITTEN — Tokens de identidad v1.1 (propuesta técnica).
+   No modifica el proyecto; revisar antes de integrarlo. */
+:root {
+  --mitten-blue: #1695F4;
+  --mitten-cyan: #00D3DD;
+  --mitten-violet: #7A5CFF;
+  --mitten-white: #FFFFFF;
+  --mitten-navy: #0B0F1A;
+  --mitten-gradient: linear-gradient(100deg, #1167FF 0%, #1695F4 42%, #02C3E9 78%, #00D3DD 100%);
+  --mitten-text: #FFFFFF; /* sobre azul oscuro */
+  --mitten-text-on-light: #0B0F1A;
+  --mitten-page-bg: #0B0F1A;
+  --mitten-panel-bg: #101D30;
+  --mitten-border: #274061;
+  --mitten-text-muted: #9DB1C8;
+  --mitten-radius-card: 12px;
+  --mitten-font-ui: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+/* Accesibilidad: #1695F4 sobre blanco = 3.16:1, no para texto normal.
+   #00D3DD sobre blanco = 1.85:1, no para texto normal.
+   Para acciones azules/cian usar texto oscuro (#0B0F1A).
+   No usar gradientes como único indicador de estado. */

@@ -27,8 +27,8 @@ export function getFirmwareStateDescription(state: FirmwareState): string {
     case 'IDLE': return 'MITTEN puede capturar gestos o recibir tu biblioteca.';
     case 'CAPTURING': return 'MITTEN está registrando un gesto.';
     case 'SYNCING': return 'MITTEN está recibiendo la biblioteca.';
-    case 'CALIBRATING': return 'Mantén el guante quieto mientras ajusta sus sensores.';
-    case 'INITIALIZING': return 'Espera mientras MITTEN prepara sus componentes.';
+    case 'CALIBRATING': return 'Mantené el guante quieto mientras ajusta sus sensores.';
+    case 'INITIALIZING': return 'Esperá mientras MITTEN prepara sus componentes.';
     case 'ERROR': return 'Reinicia el dispositivo antes de continuar.';
     default: return 'No se pudo interpretar el estado del dispositivo.';
   }

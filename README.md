@@ -98,14 +98,11 @@ en `apps/web/.env.example`; las credenciales y claves externas nunca deben commi
 
 ### Iniciar la aplicación
 
-Abrí dos terminales desde la raíz del repositorio:
+Iniciá API y web desde una sola terminal. El comando espera el readiness de la API antes de abrir
+la web y cierra ambos procesos al terminar:
 
 ```bash
-# Terminal 1: API en http://localhost:3000
-npm run dev --workspace=apps/api
-
-# Terminal 2: web en http://localhost:5173
-npm run dev --workspace=apps/web
+npm run dev
 ```
 
 Para verla desde un celular conectado al mismo Wi-Fi:
@@ -124,6 +121,7 @@ npm test          # Contratos, API, web y simulador
 npm run build     # Compilar todos los workspaces
 python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider
 npm run simulator # Iniciar el simulador CLI después de compilar
+npm run test:e2e   # Recorrido completo de navegador con simulador y MP3 fixture
 ```
 
 ## Integraciones opcionales
@@ -132,7 +130,9 @@ npm run simulator # Iniciar el simulador CLI después de compilar
   `VITE_GOOGLE_CLIENT_ID` en la web y `GOOGLE_CLIENT_ID` en la API. Ver
   `docs/google-authentication.md`.
 - **Audio:** `TTS_PROVIDER=mock` devuelve un estado explícito de audio no disponible y nunca fabrica
-  un MP3. ElevenLabs requiere `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID`.
+  un MP3. Para voz argentina local, ejecutá `npm run tts:setup`; consulta
+  [`docs/demo-software-mp3.md`](docs/demo-software-mp3.md). ElevenLabs sigue disponible como
+  adaptador opcional.
 - **Hardware:** el recorrido físico debe validarse en el ESP32, sensores, MPU6050, DFPlayer Mini,
   microSD y parlante reales antes de afirmar que el prototipo completo está certificado.
 

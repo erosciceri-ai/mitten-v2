@@ -16,6 +16,7 @@ Este directorio contiene la especificación técnica de MITTEN V2.
 
 - `google-authentication.md` — configuración, verificación y política de vinculación para Google Identity Services en MITTEN V2.1.
 - `software-validation.md` — recorrido de validación sin hardware físico.
+- `demo-software-mp3.md` — arranque único, modo demostración, Piper, paquete microSD y puerta de validación física.
 - `development.md` — entorno local, comandos de desarrollo, validación y contribución.
 
 ## Jerarquía de autoridad

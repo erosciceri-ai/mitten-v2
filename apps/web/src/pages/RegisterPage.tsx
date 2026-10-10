@@ -5,6 +5,7 @@ import { useToast } from '../components/ToastContainer';
 import type { FormErrors } from '../types';
 import { BrandMark } from '../components/BrandMark';
 import { GoogleSignInButton, isGoogleSignInConfigured } from '../components/GoogleSignInButton';
+import { Button } from '../components/ui/button';
 
 export function RegisterPage() {
   const { register, loginWithGoogle, isLoading } = useAuth();
@@ -62,9 +63,9 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="auth-shell min-h-screen flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="bg-surface rounded-lg shadow-md border border-border p-8">
+        <div className="auth-panel bg-surface rounded-xl border border-border p-7 sm:p-8">
           <div className="text-center mb-8">
             <div className="flex justify-center mb-5"><BrandMark /></div>
             <h1 className="text-2xl font-bold text-text">Crear cuenta</h1>
@@ -78,7 +79,7 @@ export function RegisterPage() {
                 onError={message => showToast({ type: 'error', message })}
                 text="signup_with"
               />
-              <div className="auth-divider"><span>o regístrate con correo</span></div>
+              <div className="auth-divider"><span>o registrate con correo</span></div>
             </>
           )}
 
@@ -98,9 +99,7 @@ export function RegisterPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
-                  errors.email ? 'border-error' : 'border-border'
-                }`}
+                className="app-field"
                 placeholder="usuario@ejemplo.com"
                 disabled={isSubmitting}
                 autoComplete="email"
@@ -119,9 +118,7 @@ export function RegisterPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
-                  errors.password ? 'border-error' : 'border-border'
-                }`}
+                className="app-field"
                 placeholder="Mínimo 8 caracteres"
                 disabled={isSubmitting}
                 autoComplete="new-password"
@@ -137,17 +134,15 @@ export function RegisterPage() {
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-text mb-1">
-                Confirmar Contraseña
+                Confirmar contraseña
               </label>
               <input
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
-                  errors.confirmPassword ? 'border-error' : 'border-border'
-                }`}
-                placeholder="Repite la contraseña"
+                className="app-field"
+                placeholder="Repetí la contraseña"
                 disabled={isSubmitting}
                 autoComplete="new-password"
                 aria-invalid={Boolean(errors.confirmPassword)}
@@ -156,20 +151,21 @@ export function RegisterPage() {
               {errors.confirmPassword && <p id="register-confirm-error" className="mt-1 text-sm text-error" role="alert">{errors.confirmPassword}</p>}
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting || isLoading}
-              className="w-full py-2.5 px-4 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full"
+              size="lg"
             >
               {isSubmitting ? 'Creando cuenta…' : 'Crear cuenta'}
-            </button>
+            </Button>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-text-muted">
-              ¿Ya tienes cuenta?{' '}
+              ¿Ya tenés cuenta?{' '}
               <Link to="/login" className="text-primary hover:underline font-medium">
-                Inicia sesión
+                Iniciá sesión
               </Link>
             </p>
           </div>

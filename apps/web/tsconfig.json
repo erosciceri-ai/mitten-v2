@@ -29,6 +29,9 @@
       ],
       "@mitten/contracts/protocol": [
         "../../packages/contracts/src/protocol.ts"
+      ],
+      "@mitten/esp32-simulator": [
+        "../../tools/esp32-simulator/src/index.ts"
       ]
     },
     "types": [

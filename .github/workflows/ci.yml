@@ -37,6 +37,12 @@ jobs:
       - name: Test Node.js workspaces
         run: npm test
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test software demo journey
+        run: npm run test:e2e
+
       - name: Build Node.js workspaces
         run: npm run build
 

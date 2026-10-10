@@ -35,7 +35,6 @@ export function PrivacyPage() {
 
         <article className="legal-document">
           <header>
-            <p className="section-index">Transparencia de datos</p>
             <h1>Política de privacidad de MITTEN V2.1</h1>
             <p className="legal-updated">Última actualización: 8 de octubre de 2026</p>
           </header>
@@ -111,7 +110,7 @@ export function PrivacyPage() {
 
       <footer className="public-footer">
         <div className="public-container public-footer__inner">
-          <BrandMark inverse />
+          <BrandMark />
           <p>MITTEN V2.1 · Prototipo funcional educativo.</p>
           <Link to="/">Conocer el proyecto</Link>
         </div>

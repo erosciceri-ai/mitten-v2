@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { useToast } from '../components/ToastContainer';
+import { Button } from '../components/ui/button';
+import { StatusBadge } from '../components/ui/mitten-ui';
 import { getGestureById, updateGesture, deleteGesture, generateGestureAudio, getGestureAudioInfo, getGestureAudioBlob } from '../services/api';
-import { validateGestureData } from '@mitten/contracts';
 import type { Gesture, GestureResponse, GestureData, FormErrors, GestureAudioInfo } from '../types';
 
 export function GestureDetailPage() {
@@ -171,9 +173,7 @@ export function GestureDetailPage() {
         </svg>
         <h3 className="text-lg font-medium text-text mb-1">Gesto no encontrado</h3>
         <p className="text-text-muted">El gesto solicitado no existe o fue eliminado</p>
-        <Link to="/gestures" className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover transition-colors">
-          Volver a la biblioteca
-        </Link>
+        <Button asChild className="mt-4"><Link to="/gestures">Volver a la biblioteca</Link></Button>
       </div>
     );
   }
@@ -185,39 +185,26 @@ export function GestureDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link to="/gestures" className="p-2 rounded-md text-text-muted hover:bg-gray-100 hover:text-text transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
+          <Button asChild variant="ghost" size="icon"><Link to="/gestures" aria-label="Volver a la biblioteca"><ArrowLeft aria-hidden="true" /></Link></Button>
           <div>
-            <h1 className="text-2xl font-bold text-text">{gesture.name}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-[-0.035em] text-text text-balance">{gesture.name}</h1>
             <div className="flex items-center gap-3 mt-1 text-sm text-text-muted">
-              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-medium">Pista de audio {gesture.audioTrack}</span>
-              <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">Guardado</span>
+              <StatusBadge tone="primary">Pista de audio {gesture.audioTrack}</StatusBadge>
+              <StatusBadge tone="success">Guardado</StatusBadge>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="px-3 py-1.5 border border-border text-text font-medium rounded-md hover:bg-gray-50 transition-colors"
-          >
+          <Button variant="outline" size="sm" onClick={() => setIsEditing(!isEditing)}>
             {isEditing ? 'Cancelar' : 'Editar'}
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="px-3 py-1.5 bg-error text-white font-medium rounded-md hover:bg-error/90 disabled:opacity-50 transition-colors"
-          >
-            {isDeleting ? 'Eliminando...' : 'Eliminar'}
-          </button>
+          </Button>
+          <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>{isDeleting ? 'Eliminando…' : 'Eliminar'}</Button>
         </div>
       </div>
 
       {/* Edit Form */}
       {isEditing && (
-        <div className="bg-surface rounded-lg border border-border p-6">
+        <div className="app-panel p-6">
           <h2 className="text-lg font-semibold text-text mb-4">Editar Nombre</h2>
           <div className="flex flex-col sm:flex-row gap-4 items-end">
             <div className="flex-1">
@@ -232,21 +219,13 @@ export function GestureDetailPage() {
                 maxLength={60}
                 aria-invalid={Boolean(errors.name)}
                 aria-describedby={errors.name ? 'edit-name-error' : 'edit-name-help'}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
-                  errors.name ? 'border-error' : 'border-border'
-                }`}
+                className="app-field"
               />
               {errors.name && <p id="edit-name-error" className="mt-1 text-sm text-error" role="alert">{errors.name}</p>}
               <p id="edit-name-help" className="mt-1 text-sm text-text-muted tabular-nums">{Array.from(editName).length}/60 caracteres</p>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={handleUpdate}
-                disabled={isSaving}
-                className="px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 transition-colors"
-              >
-                {isSaving ? 'Guardando...' : 'Guardar'}
-              </button>
+              <Button onClick={handleUpdate} disabled={isSaving}>{isSaving ? 'Guardando…' : 'Guardar'}</Button>
             </div>
           </div>
         </div>
@@ -254,7 +233,7 @@ export function GestureDetailPage() {
 
       {/* Gesture Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-surface rounded-lg border border-border p-6">
+        <div className="app-panel p-6">
           <h3 className="text-lg font-semibold text-text mb-4">Información del gesto</h3>
           <dl className="space-y-3">
             <div className="flex justify-between">
@@ -280,21 +259,15 @@ export function GestureDetailPage() {
           </dl>
         </div>
 
-        <div className="bg-surface rounded-lg border border-border p-6">
+        <div className="app-panel p-6">
           <h3 className="text-lg font-semibold text-text mb-4">Voz del gesto</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-text-muted">Estado</span>
               {audioInfo?.filePath ? (
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-sm font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                  Generado
-                </span>
+                <StatusBadge tone="success">Generado</StatusBadge>
               ) : (
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-sm font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
-                  Pendiente
-                </span>
+                <StatusBadge tone="warning">Pendiente</StatusBadge>
               )}
             </div>
             {audioInfo?.generatedAt && (
@@ -307,17 +280,10 @@ export function GestureDetailPage() {
               <span className="text-text-muted">Pista</span>
               <span className="font-mono">#{gesture.audioTrack}</span>
             </div>
-            <button
-              onClick={handleGenerateAudio}
-              disabled={isGeneratingAudio}
-              className="w-full px-4 py-2 bg-primary text-white font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-            >
+            <Button className="w-full" onClick={handleGenerateAudio} disabled={isGeneratingAudio}>
               {isGeneratingAudio ? (
                 <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
                   Generando…
                 </>
               ) : audioInfo?.filePath ? (
@@ -325,9 +291,9 @@ export function GestureDetailPage() {
               ) : (
                 'Generar audio'
               )}
-            </button>
+            </Button>
             {audioUrl && (
-              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+              <div className="flex items-center gap-2 rounded-md bg-mist p-2">
                 <audio controls src={audioUrl} className="flex-1" />
                 <a
                   href={audioUrl}
@@ -343,7 +309,7 @@ export function GestureDetailPage() {
       </div>
 
       {/* Gesture Data Details */}
-      <details className="bg-surface rounded-lg border border-border p-6">
+      <details className="app-panel p-6">
         <summary className="cursor-pointer text-lg font-semibold text-text hover:text-primary">Detalles técnicos de la captura</summary>
         <p className="text-text-muted mb-4">
           Versión {gesture.data.version} • {gesture.data.dimensions} dimensiones • {gesture.data.sampleCount} muestras
@@ -351,7 +317,7 @@ export function GestureDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Object.entries(dataPreview).map(([key, value]) => (
-            <div key={key} className="bg-gray-50 rounded-lg p-4">
+            <div key={key} className="rounded-lg bg-mist p-4">
               <dt className="text-sm text-text-muted mb-1">{key}</dt>
               <dd className="font-mono text-sm text-text break-all">{String(value)}</dd>
             </div>

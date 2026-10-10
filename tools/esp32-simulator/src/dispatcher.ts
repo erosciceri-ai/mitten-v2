@@ -17,6 +17,7 @@ import {
   createErrorResponse,
   createHandshakeResponse,
   createProtocolErrorEvent,
+  createRecognitionDetectedEvent,
   createStatusResponse,
   createSyncAbortResponse,
   createSyncBeginResponse,
@@ -182,6 +183,26 @@ export class SimulatorDispatcher {
 
   get currentState(): FirmwareState {
     return this.state.current;
+  }
+
+  /** Reboots the simulated firmware while retaining its committed profile. */
+  restart(): void {
+    this.clearSyncIdleTimer();
+    this.handshakeCompatible = false;
+    this.activeCaptureRequestId = null;
+    this.activeSync = null;
+    this.started = false;
+    this.startup();
+  }
+
+  /** Emits the same informational event that real firmware emits after recognition. */
+  recognize(gestureId?: number): boolean {
+    const gesture = gestureId === undefined
+      ? this.activeProfile?.gestures[0]
+      : this.activeProfile?.gestures.find(candidate => candidate.id === gestureId);
+    if (!gesture || !this.handshakeCompatible || this.state.current !== FirmwareState.IDLE) return false;
+    this.emit(createRecognitionDetectedEvent({ gestureId: gesture.id, audioTrack: gesture.audioTrack }));
+    return true;
   }
 
   private handleHandshake(request: RequestEnvelope<string, object>): void {
@@ -611,9 +632,7 @@ export class SimulatorDispatcher {
   private startSyncIdleTimer(): void {
     this.clearSyncIdleTimer();
     this.syncIdleTimer = setTimeout(() => this.handleSyncIdleTimeout(), SYNC_IDLE_TIMEOUT_MS);
-    if (this.syncIdleTimer && typeof this.syncIdleTimer.unref === 'function') {
-      this.syncIdleTimer.unref();
-    }
+    (this.syncIdleTimer as unknown as { unref?: () => void })?.unref?.();
   }
 
   private clearSyncIdleTimer(): void {
