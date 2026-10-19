@@ -130,41 +130,6 @@ class TestSensorManager:
             assert len(s) == 7
 
 
-class TestSensorCalibration:
-    """Calibration data management."""
-
-    def test_calibration_data_structure(self):
-        """CalibrationData holds flex min/max and MPU offsets."""
-        from sensors import CalibrationData
-        cal = CalibrationData()
-        assert hasattr(cal, 'flex_min')
-        assert hasattr(cal, 'flex_max')
-        assert hasattr(cal, 'mpu_x_offset')
-        assert hasattr(cal, 'mpu_y_offset')
-        # Initial values set for incremental min/max update
-        assert cal.flex_min == [4095]*5
-        assert cal.flex_max == [0]*5
-        assert cal.mpu_x_offset == 0.0
-        assert cal.mpu_y_offset == 0.0
-
-    def test_calibration_apply(self):
-        """apply_calibration corrects raw values."""
-        from sensors import CalibrationData
-        cal = CalibrationData()
-        cal.flex_min = [100]*5
-        cal.flex_max = [3000]*5
-        cal.mpu_x_offset = 2.0
-        cal.mpu_y_offset = -1.0
-        
-        raw = [500]*5 + [10.0, 5.0]
-        calibrated = cal.apply(raw)
-        assert len(calibrated) == 7
-        # Flex remains raw ADC
-        assert calibrated[:5] == raw[:5]
-        # MPU should have offsets applied
-        assert abs(calibrated[5] - (10.0 - 2.0)) < 0.01
-        assert abs(calibrated[6] - (5.0 + 1.0)) < 0.01
-
 def test_real_register_reads_and_raw_adc_order():
     bus=I2C(); mpu=MPU6050(); mpu.initialize(bus)
     assert bus.writes == [(0x68,0x6B,b'\x00'),(0x68,0x1B,b'\x00'),(0x68,0x1C,b'\x00')]

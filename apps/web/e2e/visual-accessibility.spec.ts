@@ -44,13 +44,73 @@ test('las superficies privadas responden sin overflow horizontal', async ({ page
 
   for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ['/app', '/gestures', '/learn', '/sync', '/account']) {
+    for (const [route, heading] of [
+      ['/app', 'Prepará MITTEN para hablar'],
+      ['/gestures', 'Biblioteca de gestos'],
+      ['/gestures/new', 'Enseñar un gesto'],
+      ['/sync', 'Sincronizar con MITTEN'],
+      ['/account', 'Tu cuenta'],
+    ]) {
       await page.goto(route);
+      await expect(page).toHaveURL(new URL(route, page.url()).href);
+      await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible();
       const dimensions = await page.evaluate(() => ({
         clientWidth: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,
+        overflowingElements: Array.from(document.querySelectorAll('body *'))
+          .map((element) => ({
+            tag: element.tagName.toLowerCase(),
+            className: typeof element.className === 'string' ? element.className : '',
+            right: Math.round(element.getBoundingClientRect().right),
+            width: Math.round(element.getBoundingClientRect().width),
+          }))
+          .filter((element) => element.right > document.documentElement.clientWidth)
+          .sort((a, b) => b.right - a.right)
+          .slice(0, 10),
       }));
-      expect(dimensions.scrollWidth, `${route} desborda a ${width}px`).toBeLessThanOrEqual(dimensions.clientWidth);
+      expect(dimensions.scrollWidth, `${route} desborda a ${width}px: ${JSON.stringify(dimensions.overflowingElements)}`).toBeLessThanOrEqual(dimensions.clientWidth);
+      if (route === '/app') {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        const navigationGeometry = await page.evaluate(() => {
+          const desktopNavigation = document.querySelector('header nav[aria-label="Navegación principal"]');
+          const mobileNavigation = document.querySelector('.app-mobile-nav');
+          const footer = document.querySelector('footer');
+          const visible = (element: Element | null) => Boolean(element && getComputedStyle(element).display !== 'none');
+          const rect = (element: Element | null) => {
+            if (!element) return null;
+            const { top, bottom, left, right } = element.getBoundingClientRect();
+            return { top: Math.round(top), bottom: Math.round(bottom), left: Math.round(left), right: Math.round(right) };
+          };
+          const footerLinks = Array.from(footer?.querySelectorAll('a') ?? []).map((link) => ({
+            text: link.textContent?.trim(),
+            rect: rect(link),
+          }));
+          const mobileRect = rect(mobileNavigation);
+          const obscuredFooterLinks = footerLinks.filter(({ rect: linkRect }) =>
+            visible(footer) && visible(mobileNavigation) && mobileRect && linkRect &&
+            linkRect.bottom > mobileRect.top && linkRect.top < mobileRect.bottom,
+          );
+          return {
+            desktopVisible: visible(desktopNavigation),
+            mobileVisible: visible(mobileNavigation),
+            footerVisible: visible(footer),
+            mobileRect,
+            footerLinks,
+            obscuredFooterLinks,
+          };
+        });
+        expect(Number(navigationGeometry.desktopVisible) + Number(navigationGeometry.mobileVisible), `${width}px navigation visibility: ${JSON.stringify(navigationGeometry)}`).toBe(1);
+        expect(navigationGeometry.obscuredFooterLinks, `${width}px footer links obscured at scroll end: ${JSON.stringify(navigationGeometry)}`).toEqual([]);
+        const navigation = page.locator(navigationGeometry.mobileVisible ? '.app-mobile-nav' : 'header nav[aria-label="Navegación principal"]');
+        for (const link of await navigation.locator('a').all()) {
+          await expect(link).toBeVisible();
+          const href = await link.getAttribute('href');
+          expect(href).toMatch(/^(\/app|\/gestures|\/sync)$/);
+          await link.click();
+          await expect(page).toHaveURL(new URL(href!, page.url()).href);
+          await page.goto('/app');
+        }
+      }
     }
   }
 });

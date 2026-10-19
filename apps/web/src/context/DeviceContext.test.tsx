@@ -1,8 +1,8 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
-import { DeviceProvider, useDevice } from '../../context/DeviceContext';
-import { FirmwareState, CapturePhase, ProtocolError, ProtocolErrorCode, SyncFailedData } from '../../types';
-import type { DeviceInfo, CaptureProgressData, CaptureCompletedData, CaptureFailedData, ActiveProfileInfo, ActiveSyncInfo, RecognitionDetectedData } from '../../types';
+import { DeviceProvider, useDevice } from './DeviceContext';
+import { FirmwareState, CapturePhase, ProtocolError, ProtocolErrorCode } from '../types';
+import type { DeviceInfo, CaptureProgressData, CaptureCompletedData, CaptureFailedData, ActiveProfileInfo, ActiveSyncInfo, RecognitionDetectedData } from '../types';
 
 // Create a mock DeviceService class that properly simulates callbacks
 const { mockDeviceServiceInstance, MockDeviceServiceClass, defaultConnectImpl, defaultDisconnectImpl } = vi.hoisted(() => {
@@ -67,7 +67,7 @@ const { mockDeviceServiceInstance, MockDeviceServiceClass, defaultConnectImpl, d
     _triggerOnCaptureFailed: vi.fn((data: CaptureFailedData) => currentHandlers.onCaptureFailed?.(data)),
     _triggerOnSyncProgress: vi.fn((sent: number, total: number) => currentHandlers.onSyncProgress?.(sent, total)),
     _triggerOnSyncCompleted: vi.fn((profile: ActiveProfileInfo) => currentHandlers.onSyncCompleted?.(profile)),
-    _triggerOnSyncFailed: vi.fn((data: SyncFailedData) => currentHandlers.onSyncFailed?.(data)),
+    _triggerOnSyncFailed: vi.fn((error: Error) => currentHandlers.onSyncFailed?.(error)),
     _triggerOnRecognitionDetected: vi.fn((data: RecognitionDetectedData) => currentHandlers.onRecognitionDetected?.(data)),
     _triggerOnError: vi.fn((error: Error) => currentHandlers.onError?.(error)),
     _triggerOnDeviceError: vi.fn((code: string, message: string, details?: Record<string, unknown>) => currentHandlers.onDeviceError?.(code, message, details)),
@@ -89,7 +89,7 @@ const { mockDeviceServiceInstance, MockDeviceServiceClass, defaultConnectImpl, d
   return { mockDeviceServiceInstance: mockFns, MockDeviceServiceClass, defaultConnectImpl, defaultDisconnectImpl };
 });
 
-vi.mock('../../serial/DeviceService', () => {
+vi.mock('../serial/DeviceService', () => {
   return { DeviceService: MockDeviceServiceClass };
 });
 
@@ -405,42 +405,24 @@ describe('DeviceContext', () => {
       });
     });
 
-    it('should handle sync error', async () => {
-      let syncPromise: Promise<unknown> = Promise.resolve();
-      mockDeviceServiceInstance.startSync.mockImplementation(() => {
-        syncPromise = (async () => {
-          const error: ProtocolError = { code: ProtocolErrorCode.SYNC_TIMEOUT, message: 'Sync failed' };
-          mockDeviceServiceInstance._triggerOnSyncFailed({ syncId: 'sync-1', error });
-          throw new Error('Sync failed');
-        })();
-        return syncPromise;
-      });
-
-      const device = getTestDevice();
+    it('should handle a sync failure event without a rejected request masking it', async () => {
       await act(async () => {
-        try {
-          await device.startSync('profile-1', 'rev-1', []);
-        } catch (e) {
-          // Expected - component re-throws after setting error state
-        }
+        mockDeviceServiceInstance._triggerOnSyncFailed(new Error('Sync failed'));
       });
 
-      // Catch the rejected promise to avoid unhandled rejection
-      await syncPromise.catch(() => {});
-
-      await waitFor(() => {
-        expect(screen.getByTestId('sync-error').textContent).toBe('Sync failed');
-      });
+      expect(screen.getByTestId('sync-error').textContent).toBe('Sync failed');
+      expect(getTestDevice().isSyncing).toBe(false);
+      expect(getTestDevice().activeSync).toBeNull();
     });
 
-    it('should abort sync', async () => {
-      mockDeviceServiceInstance.startSync.mockResolvedValue({ syncId: 'sync-1', accepted: true });
-      mockDeviceServiceInstance.sendGesture.mockResolvedValue({ accepted: true });
-      mockDeviceServiceInstance.commitSync.mockResolvedValue({ committed: true });
-      mockDeviceServiceInstance.abortSync.mockResolvedValue({ aborted: true, syncId: 'sync-1' });
+    it('should abort pending gesture upload without sending more gestures or committing', async () => {
+      let finishUpload!: (result: { accepted: boolean }) => void;
+      mockDeviceServiceInstance.sendGesture.mockImplementationOnce(() => new Promise(resolve => {
+        finishUpload = resolve;
+      }));
 
       const device = getTestDevice();
-      // First start a sync with at least one gesture so it doesn't auto-complete
+      // Hold the first upload pending so cancellation occurs before commit.
       const testGesture = {
         id: 1,
         name: 'Test',
@@ -457,58 +439,45 @@ describe('DeviceContext', () => {
           samplingPeriodMs: 100,
         },
       };
+      let synchronization!: Promise<void>;
       await act(async () => {
-        await device.startSync('profile-1', 'rev-1', [testGesture]);
+        synchronization = device.startSync('profile-1', 'rev-1', [testGesture, { ...testGesture, id: 2, audioTrack: 2 }]);
       });
+      expect(mockDeviceServiceInstance.sendGesture).toHaveBeenCalledTimes(1);
+      expect(mockDeviceServiceInstance.commitSync).not.toHaveBeenCalled();
+      const syncId = getTestDevice().activeSync!.syncId;
+      expect(getTestDevice().isSyncing).toBe(true);
 
-      await waitFor(() => {
-        expect(mockDeviceServiceInstance.startSync).toHaveBeenCalled();
-      });
-
-      // Get fresh device reference after state update
-      const deviceAfterSync = getTestDevice();
-
-      // The sync is now in progress (activeSync is set), abort it
       await act(async () => {
-        await deviceAfterSync.abortSync();
+        await getTestDevice().abortSync();
+        finishUpload({ accepted: true });
+        await synchronization;
       });
 
-      await waitFor(() => {
-        expect(mockDeviceServiceInstance.abortSync).toHaveBeenCalled();
-      });
+      expect(mockDeviceServiceInstance.abortSync).toHaveBeenCalledExactlyOnceWith(syncId);
+      expect(mockDeviceServiceInstance.sendGesture).toHaveBeenCalledTimes(1);
+      expect(mockDeviceServiceInstance.commitSync).not.toHaveBeenCalled();
+      expect(getTestDevice().isSyncing).toBe(false);
+      expect(getTestDevice().activeSync).toBeNull();
+      expect(getTestDevice().syncProgress).toEqual({ sent: 0, total: 0 });
+      expect(screen.queryByTestId('sync-error')).toBeNull();
     });
 
-    it('should clear sync state', async () => {
-      let syncPromise: Promise<unknown> = Promise.resolve();
-      mockDeviceServiceInstance.startSync.mockImplementation(() => {
-        syncPromise = (async () => {
-          const error: ProtocolError = { code: ProtocolErrorCode.SYNC_TIMEOUT, message: 'Sync failed' };
-          mockDeviceServiceInstance._triggerOnSyncFailed({ syncId: 'sync-1', error });
-          throw new Error('Sync failed');
-        })();
-        return syncPromise;
-      });
-
-      const device = getTestDevice();
+    it('should report a rejected sync request, abort it, and clear the error', async () => {
+      mockDeviceServiceInstance.startSync.mockRejectedValueOnce(new Error('Sync failed'));
       await act(async () => {
-        try {
-          await device.startSync('profile-1', 'rev-1', []);
-        } catch (e) {
-          // Expected - component re-throws after setting error state
-        }
+        await expect(getTestDevice().startSync('profile-1', 'rev-1', [])).rejects.toThrow('Sync failed');
       });
-
-      // Catch the rejected promise to avoid unhandled rejection
-      await syncPromise.catch(() => {});
-
-      await waitFor(() => {
-        expect(screen.getByTestId('sync-error').textContent).toBe('Sync failed');
-      });
+      const syncId = mockDeviceServiceInstance.startSync.mock.calls[0][0];
+      expect(mockDeviceServiceInstance.abortSync).toHaveBeenCalledExactlyOnceWith(syncId);
+      expect(mockDeviceServiceInstance.sendGesture).not.toHaveBeenCalled();
+      expect(mockDeviceServiceInstance.commitSync).not.toHaveBeenCalled();
+      expect(getTestDevice().isSyncing).toBe(false);
+      expect(screen.getByTestId('sync-error').textContent).toBe('Sync failed');
 
       await act(async () => {
-        device.clearSyncState();
+        getTestDevice().clearSyncState();
       });
-
       expect(screen.queryByTestId('sync-error')).toBeNull();
     });
   });

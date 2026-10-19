@@ -22,6 +22,7 @@ export const config = {
   piperExecutable: isTest ? '' : process.env.PIPER_EXECUTABLE || '',
   piperModel: isTest ? '' : process.env.PIPER_MODEL || '',
   piperTimeoutMs: Number(process.env.PIPER_TIMEOUT_MS || 60000),
+  piperLengthScale: Number(process.env.PIPER_LENGTH_SCALE || 1.15),
   elevenLabsApiKey: isTest ? '' : process.env.ELEVENLABS_API_KEY || '',
   elevenLabsVoiceId: isTest ? '' : process.env.ELEVENLABS_VOICE_ID || '',
   corsOrigin: process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -35,4 +36,5 @@ export function validateConfig(): void {
   if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65535) throw new Error('Invalid PORT');
   if (config.corsOrigin === '*') throw new Error('An explicit frontend origin is required');
   if (!Number.isSafeInteger(config.piperTimeoutMs) || config.piperTimeoutMs < 1000 || config.piperTimeoutMs > 300000) throw new Error('PIPER_TIMEOUT_MS must be between 1000 and 300000');
+  if (!Number.isFinite(config.piperLengthScale) || config.piperLengthScale < 0.5 || config.piperLengthScale > 2) throw new Error('PIPER_LENGTH_SCALE must be between 0.5 and 2');
 }

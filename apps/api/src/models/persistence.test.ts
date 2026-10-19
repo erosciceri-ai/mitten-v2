@@ -24,7 +24,7 @@ it('allocates all 50 tracks independently for two users and keeps global IDs uni
     }
   }
   expect(ids.size).toBe(100);
-  await expect(createGesture({ userId:a.id, name:'51', data:gestureData })).rejects.toThrow('audio tracks');
+  await expect(createGesture({ userId:a.id, name:'51', data:gestureData })).rejects.toThrow('No available audio tracks');
 });
 
 it('uses first-fit after deletion and preserves track and id during edits', async () => {

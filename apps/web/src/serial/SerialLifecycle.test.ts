@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { SerialTransport } from '../SerialTransport';
+import { SerialTransport } from './SerialTransport';
 
 const active: SerialTransport[] = [];
 afterEach(async () => { for (const t of active.splice(0)) await t.disconnect(); vi.useRealTimers(); });

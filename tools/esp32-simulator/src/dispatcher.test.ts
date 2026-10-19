@@ -314,23 +314,6 @@ describe('SimulatorDispatcher', () => {
     await firstOperation;
   });
 
-  test('rejects capture.start when not in IDLE state', () => {
-    const emitted: ProtocolEnvelope[] = [];
-    const dispatcher = new SimulatorDispatcher(envelope => emitted.push(envelope));
-    dispatcher.startup();
-    // Don't do handshake, so state stays IDLE but handshakeCompatible is false
-    // Actually, we need a state that's not IDLE. Let's test with a dispatcher that hasn't done startup properly
-    // or we can test that capture.start is rejected in CALIBRATING state
-    // For this test, we'll just verify the state machine prevents capture in non-IDLE
-    emitted.length = 0;
-
-    // Manually set state to CALIBRATING by not calling startup fully
-    // Actually, the state machine goes INITIALIZING -> CALIBRATING -> IDLE during startup
-    // So we can't easily test non-IDLE without modifying the state machine
-    // Let's skip this test since DEVICE_BUSY covers the in-progress case
-    expect(true).toBe(true);
-  });
-
   test('emits capture.failed and returns to IDLE on a simulated sensor failure', async () => {
     const emitted: ProtocolEnvelope[] = [];
     const dispatcher = new SimulatorDispatcher(envelope => emitted.push(envelope), {

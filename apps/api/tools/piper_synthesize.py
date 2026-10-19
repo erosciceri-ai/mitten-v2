@@ -6,20 +6,24 @@ import sys
 import wave
 from pathlib import Path
 import lameenc
-from piper import PiperVoice
+from piper import PiperVoice, SynthesisConfig
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--length-scale", type=float, default=1.15)
     args = parser.parse_args()
-    text = sys.stdin.read().strip()
+    if not 0.5 <= args.length_scale <= 2:
+        raise ValueError("length scale must be between 0.5 and 2")
+    # Node writes UTF-8 bytes. Windows pipes otherwise default to the local code page.
+    text = sys.stdin.buffer.read().decode("utf-8").strip()
     if not text:
         raise ValueError("text is empty")
     voice = PiperVoice.load(args.model)
     wav_buffer = io.BytesIO()
     with wave.open(wav_buffer, "wb") as wav_file:
-        voice.synthesize_wav(text, wav_file)
+        voice.synthesize_wav(text, wav_file, syn_config=SynthesisConfig(length_scale=args.length_scale))
     wav_buffer.seek(0)
     with wave.open(wav_buffer, "rb") as wav_file:
         encoder = lameenc.Encoder()

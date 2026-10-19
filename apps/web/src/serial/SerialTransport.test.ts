@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SerialTransport } from '../SerialTransport';
+import { SerialTransport } from './SerialTransport';
 import { PROTOCOL_VERSION } from '@mitten/contracts';
 
 const createMockPort = () => {
@@ -60,12 +60,18 @@ describe('SerialTransport', () => {
 
   describe('constructor', () => {
     it('should initialize with default options', () => { expect(new SerialTransport().getState()).toBe('closed'); });
-    it('should accept custom options', () => { expect(new SerialTransport({ baudRate: 9600 }).getState()).toBe('closed'); });
+    it('should open the port at the custom baud rate', async () => {
+      transport = new SerialTransport({ baudRate: 9600 });
+      await transport.connect();
+      expect(mockPort.open).toHaveBeenCalledExactlyOnceWith({ baudRate: 9600 });
+      expect(transport.getState()).toBe('open');
+    });
   });
 
   describe('connect', () => {
     it('should connect and transition through states', async () => {
       await transport.connect();
+      expect(mockPort.open).toHaveBeenCalledExactlyOnceWith({ baudRate: 115200 });
       expect(onStateChange).toHaveBeenCalledWith('opening');
       expect(onStateChange).toHaveBeenCalledWith('open');
       expect(transport.getState()).toBe('open');

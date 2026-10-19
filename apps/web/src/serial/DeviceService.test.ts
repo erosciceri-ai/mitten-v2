@@ -1,4 +1,7 @@
+// @vitest-environment node
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { DeviceService } from './DeviceService';
+import type { DeviceServiceEvents } from './DeviceService';
 import {
   PROTOCOL_VERSION,
   FirmwareState,
@@ -57,13 +60,12 @@ const createMockTransport = () => {
 };
 
 describe('DeviceService', () => {
-  let service: any;
+  let service: DeviceService;
   let mockTransport: ReturnType<typeof createMockTransport>;
-  let handlers: any;
+  let handlers: { [K in keyof DeviceServiceEvents]: ReturnType<typeof vi.fn<DeviceServiceEvents[K]>> };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.useFakeTimers();
-    vi.resetModules();
 
     mockTransport = createMockTransport();
     handlers = {
@@ -80,16 +82,10 @@ describe('DeviceService', () => {
       onDeviceError: vi.fn(),
     };
 
-    // Mock SerialTransport before importing DeviceService
-    vi.doMock('../SerialTransport', () => ({
-      SerialTransport: vi.fn().mockImplementation(function (options: any) {
-        mockTransport._setHandlers(options);
-        return mockTransport;
-      }),
-    }));
-
-    const { DeviceService } = await import('../DeviceService');
-    service = new DeviceService(handlers);
+    service = new DeviceService(handlers, transportHandlers => {
+      mockTransport._setHandlers(transportHandlers);
+      return mockTransport;
+    });
   });
 
   afterEach(async () => {
@@ -448,17 +444,10 @@ describe('DeviceService', () => {
     it('should timeout on response', async () => {
       const capturePromise = service.startCapture();
       
-      // Attach catch handler before advancing timers
-      const errorPromise = capturePromise.then(
-        () => ({ rejected: false }),
-        (e: Error) => ({ rejected: true, message: e.message })
-      );
-      
+      // Attach the rejection assertion before advancing timers.
+      const rejection = expect(capturePromise).rejects.toThrow('timeout');
       await vi.advanceTimersByTimeAsync(16000);
-      const result = await errorPromise;
-      
-      expect(result.rejected).toBe(true);
-      expect(result.message).toContain('timeout');
+      await rejection;
     });
 
     it('should timeout on operation terminal event', async () => {

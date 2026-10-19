@@ -27,10 +27,12 @@ it('validates Piper output and propagates its timeout without publishing partial
   await writeFile(`${model}.json`, '{}');
   try {
     const validMp3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(200)]);
-    const successful = new PiperTTSProvider(process.execPath, model, 1000, async (_command, args) => {
+    const successful = new PiperTTSProvider(process.execPath, model, 1000, async (_command, args, options) => {
+      expect(args[args.indexOf('--length-scale') + 1]).toBe('1.25');
+      expect(options.stdin).toBe('¿Cómo estás?');
       await writeFile(args[args.indexOf('--output') + 1], validMp3);
-    });
-    await expect(successful.synthesize({ text: 'Hola' })).resolves.toMatchObject({ provider: 'piper', audio: validMp3 });
+    }, 1.25);
+    await expect(successful.synthesize({ text: '¿Cómo estás?' })).resolves.toMatchObject({ provider: 'piper', audio: validMp3 });
 
     const invalid = new PiperTTSProvider(process.execPath, model, 1000, async (_command, args) => {
       await writeFile(args[args.indexOf('--output') + 1], 'not mp3');
@@ -42,6 +44,12 @@ it('validates Piper output and propagates its timeout without publishing partial
     });
     await expect(timedOut.synthesize({ text: 'Hola' })).rejects.toMatchObject({ status: 504 });
   } finally { await rm(workspace, { recursive: true, force: true }); }
+});
+it('rejects invalid speaking speeds before starting the API', () => {
+  for (const lengthScale of [NaN, Infinity, 0.49, 2.01]) {
+    config.piperLengthScale = lengthScale;
+    expect(validateConfig).toThrow('PIPER_LENGTH_SCALE');
+  }
 });
 it('validates provider response before publishing bytes',async () => {
   config.ttsProvider='elevenlabs'; config.elevenLabsApiKey='test'; config.elevenLabsVoiceId='test';

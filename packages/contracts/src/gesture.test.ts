@@ -18,7 +18,7 @@
   validateGestureData,
   validateGestureMetadata,
   validateGesture,
-} from '../gesture';
+} from './gesture';
 
 describe('gesture format', () => {
   describe('constants', () => {
@@ -161,17 +161,23 @@ describe('gesture format', () => {
     it('should return false for invalid sample values (flex out of range)', () => {
       const invalid = {
         ...validGestureData,
-        samples: [[5000, 200, 300, 400, 500, 10.5, -5.5]],
+        samples: [[5000, 200, 300, 400, 500, 10.5, -5.5], validGestureData.samples[1]],
       };
+      expect(invalid.samples).toHaveLength(invalid.sampleCount);
       expect(isGestureData(invalid)).toBe(false);
+      invalid.samples[0][0] = 100;
+      expect(isGestureData(invalid)).toBe(true);
     });
 
     it('should return false for invalid sample values (MPU out of range)', () => {
       const invalid = {
         ...validGestureData,
-        samples: [[100, 200, 300, 400, 500, 200, -5.5]],
+        samples: [[100, 200, 300, 400, 500, 200, -5.5], validGestureData.samples[1]],
       };
+      expect(invalid.samples).toHaveLength(invalid.sampleCount);
       expect(isGestureData(invalid)).toBe(false);
+      invalid.samples[0][5] = 10.5;
+      expect(isGestureData(invalid)).toBe(true);
     });
 
     it('should return false for min > mean', () => {

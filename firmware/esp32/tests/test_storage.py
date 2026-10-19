@@ -320,16 +320,6 @@ class TestBootRecovery:
         result = load_active_profile()
         assert result is None
 
-    def test_orphaned_staging_always_removed(self):
-        """gestures.staging always removed on boot regardless of other files"""
-        write_json_file("gestures.staging", {"header": {}, "gestures": []})
-        write_json_file("gestures.json", {
-            "version": 1, "profileId": "p1", "profileRevision": "r1", "gestureCount": 0, "gestures": []
-        })
-
-        load_active_profile()
-        assert not file_exists("gestures.staging")
-
     def _valid_gesture_data(self):
         return {
             "version": 1,

@@ -27,6 +27,16 @@ la voz seleccionada figura con licencia MIT en el catálogo de Piper:
 Variables disponibles: `TTS_PROVIDER=piper`, `PIPER_EXECUTABLE`, `PIPER_MODEL` y
 `PIPER_TIMEOUT_MS`. Las rutas no se exponen en `/api/ready`.
 
+La velocidad de Piper se ajusta con `PIPER_LENGTH_SCALE` en `apps/api/.env`:
+`1` conserva la velocidad del modelo y `1.15` (valor predeterminado) alarga los
+fonemas para una cadencia más pausada sin modificar el tono. El rango permitido
+es de `0.5` a `2`. Reiniciá la API después de cambiarlo.
+
+El adaptador lee explícitamente UTF-8 para conservar tildes, ñ y signos en Windows.
+Los MP3 existentes no se corrigen automáticamente: regenerá el audio de cada gesto
+y, si usás DFPlayer, descargá de nuevo el paquete y reemplazá las pistas de la microSD.
+Estos cambios no garantizan una voz natural; evaluá la pronunciación con frases reales.
+
 ## Ejecutar la demo
 
 ```powershell

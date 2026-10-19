@@ -23,59 +23,6 @@ from config import (
 )
 
 
-class TestSyncState:
-    """Sync state constants and transitions."""
-
-    def test_syncing_state_exists(self):
-        """SYNCING state exists in firmware states"""
-        assert STATE_SYNCING == "SYNCING"
-
-    def test_sync_state_transitions_from_idle(self):
-        """From IDLE, sync.begin -> SYNCING"""
-        from statemachine.machine import FirmwareStateMachine
-        machine = FirmwareStateMachine()
-        machine.startup()  # INITIALIZING -> CALIBRATING -> IDLE
-        assert machine.current == STATE_IDLE
-
-        # sync.begin triggers transition to SYNCING
-        result = machine.transition(STATE_SYNCING, "sync.begin")
-        assert result is True
-        assert machine.current == STATE_SYNCING
-
-    def test_sync_state_transitions_commit_returns_idle(self):
-        """From SYNCING, sync.commit -> IDLE"""
-        from statemachine.machine import FirmwareStateMachine
-        machine = FirmwareStateMachine()
-        machine.startup()
-        machine.transition(STATE_SYNCING, "sync.begin")
-
-        result = machine.transition(STATE_IDLE, "sync.commit")
-        assert result is True
-        assert machine.current == STATE_IDLE
-
-    def test_sync_state_transitions_abort_returns_idle(self):
-        """From SYNCING, sync.abort -> IDLE"""
-        from statemachine.machine import FirmwareStateMachine
-        machine = FirmwareStateMachine()
-        machine.startup()
-        machine.transition(STATE_SYNCING, "sync.begin")
-
-        result = machine.transition(STATE_IDLE, "sync.abort")
-        assert result is True
-        assert machine.current == STATE_IDLE
-
-    def test_sync_state_transitions_failed_returns_idle(self):
-        """From SYNCING, sync.failed -> IDLE"""
-        from statemachine.machine import FirmwareStateMachine
-        machine = FirmwareStateMachine()
-        machine.startup()
-        machine.transition(STATE_SYNCING, "sync.begin")
-
-        result = machine.transition(STATE_IDLE, "sync.failed")
-        assert result is True
-        assert machine.current == STATE_IDLE
-
-
 class TestSyncTransactionManager:
     """Sync transaction manager integration with staging and storage."""
 

@@ -25,18 +25,23 @@ class TestCalibrationData:
         for raw in ([100]*5, [3000]*5, [1550]*5):
             assert cal.apply(raw + [0,0])[:5] == raw
 
-    def test_apply_mpu_offsets(self):
+    @pytest.mark.parametrize('offsets, raw_angles, expected', [
+        ((2.5, -1.5), (10.0, 20.0), (7.5, 21.5)),
+        ((2.0, -1.0), (10.0, 5.0), (8.0, 6.0)),
+    ])
+    def test_apply_mpu_offsets(self, offsets, raw_angles, expected):
         """apply() subtracts MPU offsets."""
         cal = CalibrationData()
-        cal.mpu_x_offset = 2.5
-        cal.mpu_y_offset = -1.5
+        cal.flex_min = [100]*5
+        cal.flex_max = [3000]*5
+        cal.mpu_x_offset, cal.mpu_y_offset = offsets
         cal.mpu_z_offset = 0.5
         
-        raw = [0]*5 + [10.0, 20.0]  # 5 flex + 2 MPU (x, y)
+        raw = [500]*5 + list(raw_angles)
         result = cal.apply(raw)
         assert len(result) == 7
-        assert abs(result[5] - 7.5) < 0.01
-        assert abs(result[6] - 21.5) < 0.01
+        assert result[:5] == raw[:5]
+        assert result[5:] == pytest.approx(expected, abs=0.01)
 
     def test_serialize_deserialize(self):
         """CalibrationData can be serialized and restored."""

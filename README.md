@@ -140,7 +140,8 @@ npm run test:e2e   # Recorrido completo de navegador con simulador y MP3 fixture
 
 SQLite, MP3 generados, perfiles del firmware, tokens, claves y archivos `.env` quedan fuera del
 repositorio. La cuenta puede exportar sus datos públicos desde la aplicación; el formulario de
-contacto abre el cliente de correo del visitante y MITTEN no almacena el mensaje.
+contacto permite abrir un borrador en Gmail o en la aplicación de correo del visitante.
+MITTEN no envía ni almacena el mensaje; el visitante lo revisa y envía desde su correo.
 
 ## Documentación
 

@@ -79,7 +79,7 @@ export function PrivacyPage() {
 
           <section>
             <h2>6. Cookies, analítica y terceros</h2>
-            <p>La implementación actual no utiliza cookies publicitarias ni herramientas de analítica de terceros. Además de la API de MITTEN, el único servicio externo previsto es Google Identity Services cuando el acceso con Google está configurado.</p>
+            <p>La implementación actual no utiliza cookies publicitarias ni herramientas de analítica de terceros. El acceso con Google utiliza Google Identity Services cuando está configurado. Si elegís Gmail en el formulario de contacto, el destinatario, el asunto y el mensaje se pasan a Gmail para preparar un borrador; MITTEN no lo envía ni lo almacena.</p>
           </section>
 
           <section>

@@ -46,9 +46,13 @@ def test_capture_can_finish_or_fail(finish_cause):
 def test_sync_can_commit_abort_or_fail(finish_cause):
     machine = FirmwareStateMachine()
     machine.startup()
-    machine.transition(STATE_SYNCING, "sync.begin")
+    assert machine.current == STATE_IDLE
+    assert STATE_SYNCING == "SYNCING"
+    assert machine.transition(STATE_SYNCING, "sync.begin") is True
+    assert machine.current == STATE_SYNCING
 
     assert machine.transition(STATE_IDLE, finish_cause) is True
+    assert machine.current == STATE_IDLE
 
 
 def test_invalid_transition_does_not_mutate_or_emit():

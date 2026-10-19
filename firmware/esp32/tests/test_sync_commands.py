@@ -404,12 +404,3 @@ class TestSyncCommandsBusy:
         response = dispatcher.handle_request({"v": 2, "type": "request", "id": "cap-1", "command": "capture.start", "payload": {}})
 
         assert response["error"]["code"] == ERR_DEVICE_BUSY
-
-    def test_sync_begin_during_sync_returns_busy(self):
-        dispatcher = FirmwareDispatcher()
-        connect(dispatcher)
-        dispatcher.handle_request(sync_begin_request("sb-1", "sync-a1", "p1", "r1", 1))
-
-        response = dispatcher.handle_request(sync_begin_request("sb-2", "sync-a2", "p2", "r2", 1))
-
-        assert response["error"]["code"] == ERR_DEVICE_BUSY

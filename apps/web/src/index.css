@@ -533,7 +533,11 @@
 .signal-console__waves { z-index: 0; opacity: .13; }
 .signal-console > :not(.signal-console__waves) { position: relative; z-index: 1; }
 
-@media (min-width: 768px) {
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-shell > footer { margin-bottom: 4.5rem; }
+}
+
+@media (min-width: 1024px) {
   .app-main { padding-bottom: 3rem; }
 }
 

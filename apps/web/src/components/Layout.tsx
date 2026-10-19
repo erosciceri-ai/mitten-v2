@@ -34,7 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between gap-4 px-3 sm:px-5">
           <BrandMark to="/app" />
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Navegación principal">
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Navegación principal">
             {navItems.map(({ path, label, icon: Icon }) => {
               const current = isCurrentPath(location.pathname, path);
               return (
@@ -68,7 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1">{children}</div>
 
-      <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-50 border-t border-border px-3 pt-2 md:hidden" aria-label="Navegación principal">
+      <nav className="app-mobile-nav fixed inset-x-0 bottom-0 z-50 border-t border-border px-3 pt-2 lg:hidden" aria-label="Navegación principal">
         <div className="mx-auto flex max-w-md items-center justify-around gap-1">
           {navItems.map(({ path, label, icon: Icon }) => {
             const current = isCurrentPath(location.pathname, path);

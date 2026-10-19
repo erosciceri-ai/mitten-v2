@@ -43,8 +43,7 @@ import {
   PROTOCOL_EVENTS,
   isProtocolCommand,
   isProtocolEvent,
-  ActiveSyncInfo,
-} from '../types';
+} from './types';
 
 describe('types', () => {
   describe('constants', () => {
@@ -106,18 +105,6 @@ describe('types', () => {
       expect(isProtocolEvent('future.event')).toBe(false);
     });
 
-    it('should use receivedCount in active synchronization status', () => {
-      const activeSync: ActiveSyncInfo = {
-        syncId: 'sync-1',
-        profileId: 'profile-1',
-        profileRevision: 'rev-1',
-        expectedGestureCount: 2,
-        receivedCount: 1,
-        nextIndex: 1,
-      };
-
-      expect(activeSync.receivedCount).toBe(1);
-    });
   });
 
   describe('isValidFirmwareState', () => {

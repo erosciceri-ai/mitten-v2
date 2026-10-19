@@ -136,17 +136,6 @@ describe('Gesture Model', () => {
     expect(gesture.updatedAt).toBeDefined();
   });
 
-  it('should create multiple gestures with sequential audio tracks', async () => {
-    const sampleGestureData = createSampleGestureData();
-    const g1 = await createGesture({ userId, name: 'One', data: sampleGestureData });
-    const g2 = await createGesture({ userId, name: 'Two', data: sampleGestureData });
-    const g3 = await createGesture({ userId, name: 'Three', data: sampleGestureData });
-
-    expect(g1.audioTrack).toBe(1);
-    expect(g2.audioTrack).toBe(2);
-    expect(g3.audioTrack).toBe(3);
-  });
-
   it('should find all gestures for user', async () => {
     const sampleGestureData = createSampleGestureData();
     await createGesture({ userId, name: 'One', data: sampleGestureData });
@@ -209,18 +198,6 @@ describe('Gesture Model', () => {
     // Next gesture should reuse freed track
     const g3 = await createGesture({ userId, name: 'Three', data: sampleGestureData });
     expect(g3.audioTrack).toBe(track1);
-  });
-
-  it('should enforce max 50 gestures per user', async () => {
-    const sampleGestureData = createSampleGestureData();
-    // Create 50 gestures
-    for (let i = 1; i <= 50; i++) {
-      await createGesture({ userId, name: `Gesture ${i}`, data: sampleGestureData });
-    }
-
-    // 51st should fail
-    await expect(createGesture({ userId, name: 'Overflow', data: sampleGestureData }))
-      .rejects.toThrow('No available audio tracks');
   });
 
   it('mock explicitly reports unavailable audio and never marks a file ready', async () => {

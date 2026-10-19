@@ -47,6 +47,41 @@ npm audit --omit=dev
 
 Los cambios en `packages/contracts` requieren reconstruir el paquete antes de probar consumidores que usen `dist/`.
 
+### Ejecución focalizada
+
+Durante un cambio, ejecutá primero el archivo o subsistema afectado. La selección local no reemplaza la validación completa antes de integrar.
+
+```bash
+# Lógica serie: los tres archivos sin DOM usan Node
+npm test --workspace=apps/web -- src/serial/RequestManager.test.ts src/serial/DeviceService.test.ts src/serial/DemoTransport.test.ts
+
+# Integración de persistencia y asignación de pistas
+npm test --workspace=apps/api -- src/models/persistence.test.ts
+
+# Contratos: reconstruir antes de probar API/simulador que consumen dist
+npm test --workspace=packages/contracts
+npm run build --workspace=packages/contracts
+
+# Firmware: seleccionar un archivo, o toda la carpeta para la suite completa
+python -B -m pytest firmware/esp32/tests/test_sync_commands.py -q -p no:cacheprovider
+
+# Navegador: requiere el Chromium correspondiente a Playwright instalado
+npm run test:e2e --workspace=apps/web -- visual-accessibility.spec.ts
+```
+
+La [revisión de la suite](testing-audit.md) distingue pruebas eliminadas, consolidadas, corregidas y mantenidas, con sus motivos. `npm test` conserva todas las suites JavaScript configuradas; firmware y navegador se ejecutan por separado.
+
+## Organización de archivos de prueba
+
+- En TypeScript, coloca las pruebas unitarias junto al módulo que prueban, con sufijo
+  `.test.ts` o `.test.tsx`. Por ejemplo: `serial/SerialTransport.ts` y
+  `serial/SerialTransport.test.ts`.
+- Reserva `src/test/` para configuración y utilidades compartidas de pruebas.
+- Los recorridos de navegador viven en `apps/web/e2e/`; las pruebas del firmware,
+  en `firmware/esp32/tests/`.
+- No separes módulos en nuevas carpetas sólo por estética: agrupa por una responsabilidad
+  concreta. Los archivos `.gitkeep` sólo son necesarios mientras una carpeta esté vacía.
+
 ## Convenciones de cambios
 
 - Mantén los cambios pequeños y enfocados.

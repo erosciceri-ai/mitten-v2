@@ -83,7 +83,8 @@ class ElevenLabsTTSProvider implements TTSProvider {
 export class PiperTTSProvider implements TTSProvider {
   readonly name = 'piper';
   constructor(private readonly executable = config.piperExecutable, private readonly model = config.piperModel,
-    private readonly timeoutMs = config.piperTimeoutMs, private readonly runProcess: ProcessExecutor = executeProcess) {}
+    private readonly timeoutMs = config.piperTimeoutMs, private readonly runProcess: ProcessExecutor = executeProcess,
+    private readonly lengthScale = config.piperLengthScale) {}
 
   async readiness(): Promise<TTSReadiness> {
     try { await this.validatePaths(); return { provider: this.name, available: true }; }
@@ -95,7 +96,7 @@ export class PiperTTSProvider implements TTSProvider {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), 'mitten-piper-'));
     const output = join(temporaryDirectory, 'speech.mp3');
     try {
-      await this.runProcess(this.executable, [helperPath, '--model', this.model, '--output', output], { stdin: text, timeoutMs: this.timeoutMs });
+      await this.runProcess(this.executable, [helperPath, '--model', this.model, '--output', output, '--length-scale', String(this.lengthScale)], { stdin: text, timeoutMs: this.timeoutMs });
       const outputStat = await stat(output).catch(() => null);
       if (!outputStat?.isFile()) throw new AppError('Piper did not create an MP3 file', 502);
       const audio = await readFile(output);

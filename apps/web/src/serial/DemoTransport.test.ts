@@ -1,9 +1,10 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { createHandshakeRequest, createStatusRequest, PROTOCOL_VERSION } from '@mitten/contracts';
-import { DemoTransport } from '../DemoTransport';
+import { DemoTransport } from './DemoTransport';
 
 describe('DemoTransport', () => {
-  it('uses the official dispatcher and preserves the committed profile after restart', async () => {
+  it('uses the official dispatcher and accepts handshake and status after restart', async () => {
     const onData = vi.fn();
     const transport = new DemoTransport({ onData, onError: vi.fn(), onStateChange: vi.fn() });
     await transport.connect();

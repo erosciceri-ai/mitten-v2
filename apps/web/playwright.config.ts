@@ -10,7 +10,7 @@ export default defineConfig({
     url: 'http://127.0.0.1:5175/api/ready',
     reuseExistingServer: false,
     timeout: 40_000,
-    env: { NODE_ENV: 'test', TTS_PROVIDER: 'fixture', PORT: '3101', WEB_PORT: '5175' },
+    env: { NODE_ENV: 'test', TTS_PROVIDER: 'fixture', PORT: '3101', WEB_PORT: '5175', VITE_CONTACT_EMAIL: 'equipo@example.com' },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

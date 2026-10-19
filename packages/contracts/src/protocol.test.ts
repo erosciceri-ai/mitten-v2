@@ -44,7 +44,7 @@ import {
   CapturePhase,
   CaptureProgressData,
   BOOTSTRAP_MAX_MESSAGE_BYTES,
-} from '../index';
+} from './index';
 
 describe('protocol', () => {
   describe('constants', () => {
@@ -234,7 +234,7 @@ describe('protocol', () => {
     });
 
     it('should preserve a UTF-8 character split between chunks', async () => {
-      const parser = new (await import('../protocol')).NdjsonParser();
+      const parser = new (await import('./protocol')).NdjsonParser();
       const frame = new TextEncoder().encode('{"v":2,"type":"event","event":"diagnostic.log","data":{"message":"señal"}}\n');
       const character = new TextEncoder().encode('ñ');
 
