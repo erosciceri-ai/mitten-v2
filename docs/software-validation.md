@@ -40,6 +40,24 @@ también finalizó correctamente y la prueba integral quedó incluida en la suit
   GPIO, UART, I²C, dirección MPU, atenuación ADC y offsets medidos. No se infiere
   el cableado de V1. Elegir transporte UART/USB según la placa y evitar compartir
   el UART del protocolo con REPL o DFPlayer.
+  Para la puesta en marcha sin audio, la plantilla usa `audio_enabled: False`:
+  no requiere `dfplayer_uart`, no inicializa un reproductor y conserva captura,
+  sincronización y eventos `recognition.detected`. Estos eventos no demuestran
+  reproducción. Las configuraciones anteriores que omiten `audio_enabled`
+  conservan la ruta DFPlayer; `True` exige su UART. Esta opción no implementa
+  MAX98357A, microSD SPI ni transferencia de audio por USB. El transporte USB,
+  los pines y los offsets físicos siguen requiriendo validación en placa.
+  La plantilla selecciona `protocol_transport: 'stdio'` para ESP32_GENERIC:
+  utiliza `sys.stdin.buffer`, `sys.stdout.buffer` y `select.poll(0)`, sin
+  reconfigurar UART0. Reserva GPIO1/GPIO3 y no requiere `protocol_uart`.
+  El modo anterior sigue siendo el predeterminado si se omite el selector
+  (`'uart'`), con su configuración explícita. Cerrar la sesión serie de Thonny
+  antes de conectar la web: sólo un programa debe ser propietario del puerto.
+  No añadir `print` de diagnóstico al canal NDJSON. Ctrl+C sigue disponible
+  para recuperación; las pruebas de escritorio no validan reinicios, banners
+  ni el comportamiento del USB físico.
+  Referencias: [consola ESP32](https://docs.micropython.org/en/v1.26.0/esp32/quickref.html#general-board-control)
+  y [poll](https://docs.micropython.org/en/v1.26.0/library/select.html).
 - Validar en el ESP32 real: compatibilidad de la versión MicroPython, lecturas y
   orientación del MPU, calibración física, captura, memoria con el perfil máximo,
   UART/DFPlayer/microSD y recuperación LittleFS ante cortes eléctricos.

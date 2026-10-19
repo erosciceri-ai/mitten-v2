@@ -46,7 +46,8 @@ _FUNCTIONAL_COMMANDS = ("capture.start", "sync.begin", "sync.gesture", "sync.com
 class FirmwareDispatcher:
     """Owns protocol session state and dispatches one request at a time."""
 
-    def __init__(self, emit=None, sensor_manager=None, dfplayer=None):
+    def __init__(self, emit=None, sensor_manager=None, dfplayer=None, diagnostic_only=False):
+        self.diagnostic_only = diagnostic_only
         self._emit_callback = emit
         self._handling_request = False
         self._events = []
@@ -63,6 +64,15 @@ class FirmwareDispatcher:
         self.current_error = None
         # IDs exist only while a request/async operation is active.
         self._active_request_ids = set()
+
+        if diagnostic_only:
+            # Do not even construct storage services: boot recovery may change files.
+            self.sensor_manager = None
+            self.sync_manager = None
+            self.capture_manager = None
+            self.recognizer = None
+            self.dfplayer = None
+            return
 
         # Sync transaction manager
         self.sync_manager = SyncTransactionManager(
@@ -89,6 +99,10 @@ class FirmwareDispatcher:
         return len(self._active_request_ids)
 
     def startup(self):
+        if self.diagnostic_only:
+            self._emit(build_state_event(STATE_INITIALIZING))
+            self.enter_error("SENSOR_ERROR", "USB-only diagnostic: sensors intentionally disabled")
+            return False
         try:
             return self.state.startup(self._prepare_sensors)
         except Exception as error:
@@ -241,6 +255,8 @@ class FirmwareDispatcher:
         )
 
     def _handle_status(self, request_id):
+        if self.diagnostic_only:
+            return build_status_response(request_id, self.state.current, error=self.current_error)
         # Update active_profile and active_sync from sync manager
         if self.sync_manager.profile_manager.current:
             self.active_profile = {
@@ -397,6 +413,8 @@ class FirmwareDispatcher:
         })
 
     def update(self, now=None):
+        if self.diagnostic_only:
+            return
         now = ticks_ms() if now is None else now
         if self.state.current == STATE_SYNCING:
             self.sync_manager.check_timeout(now)

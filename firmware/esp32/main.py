@@ -44,6 +44,50 @@ class UartStreamTransport(StreamTransport):
         return sent
 
 
+class StdioStreamTransport(StreamTransport):
+    """Use the running program's binary console without reconfiguring UART0."""
+
+    def __init__(self, input_stream=None, output_stream=None, select_module=None):
+        if input_stream is None or output_stream is None:
+            import sys
+            input_stream = sys.stdin.buffer if input_stream is None else input_stream
+            output_stream = sys.stdout.buffer if output_stream is None else output_stream
+        if select_module is None:
+            import select as select_module
+        self._input = input_stream
+        self._output = output_stream
+        self._select = select_module
+        self._poll = select_module.poll()
+        self._poll.register(input_stream, select_module.POLLIN)
+
+    def read(self):
+        data = bytearray()
+        # Poll before every single-byte read: a partial frame must not block timers.
+        for _ in range(256):
+            events = self._poll.poll(0)
+            if not events:
+                break
+            flags = events[0][1]
+            if flags & (self._select.POLLERR | self._select.POLLHUP):
+                raise OSError("Protocol console disconnected")
+            if not flags & self._select.POLLIN:
+                break
+            chunk = self._input.read(1)
+            if not chunk:
+                break
+            data.extend(chunk)
+        return bytes(data) if data else None
+
+    def write(self, data):
+        sent = 0
+        while sent < len(data):
+            count = self._output.write(data[sent:])
+            if not count or count < 0 or count > len(data) - sent:
+                raise OSError("Protocol console write failed")
+            sent += count
+        return sent
+
+
 async def _yield_ms(milliseconds):
     if hasattr(asyncio, "sleep_ms"):
         await asyncio.sleep_ms(milliseconds)
@@ -51,12 +95,14 @@ async def _yield_ms(milliseconds):
         await asyncio.sleep(milliseconds / 1000.0)
 
 
-async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, dfplayer=None):
+async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, dfplayer=None,
+                    diagnostic_only=False):
     """Own the byte transport; dispatcher owns the single runtime service graph."""
     parser = NdjsonParser()
     def emit(envelope):
         transport.write(serialize_envelope(envelope))
-    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, dfplayer=dfplayer)
+    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, dfplayer=dfplayer,
+                                    diagnostic_only=diagnostic_only)
     dispatcher.startup()
     pending_since = None
     iterations = 0

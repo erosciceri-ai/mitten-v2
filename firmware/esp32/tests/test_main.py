@@ -2,8 +2,78 @@ import asyncio
 import importlib
 import json
 import sys
+import io
+import pytest
 
 from main import main_loop
+
+
+class ConsoleSelect:
+    POLLIN = 1
+    POLLERR = 8
+    POLLHUP = 16
+
+    class poll:
+        def register(self, stream, events):
+            self.stream = stream
+            assert events == ConsoleSelect.POLLIN
+
+        def poll(self, timeout):
+            assert timeout == 0
+            if self.stream.tell() < len(self.stream.getvalue()):
+                return [(self.stream, ConsoleSelect.POLLIN)]
+            return []
+
+
+def console_transport(data=b'', output=None):
+    from main import StdioStreamTransport
+    source = io.BytesIO(data)
+    target = io.BytesIO() if output is None else output
+    return StdioStreamTransport(source, target, ConsoleSelect), target
+
+
+def test_console_transport_preserves_bytes_and_bounds_nonblocking_reads():
+    wire = ('ñ' * 150 + '\n').encode('utf-8')
+    transport, target = console_transport(wire)
+    first = transport.read()
+    assert len(first) == 256
+    assert first + transport.read() == wire
+    assert transport.read() is None
+    assert transport.write(wire) == len(wire)
+    assert target.getvalue() == wire
+
+
+@pytest.mark.parametrize('count', [2, 0, None])
+def test_console_transport_handles_partial_and_stalled_writes(count):
+    class Writer:
+        def __init__(self): self.data = bytearray()
+        def write(self, data):
+            if count:
+                self.data.extend(data[:count])
+                return min(count, len(data))
+            return count
+    writer = Writer()
+    transport, _ = console_transport(output=writer)
+    if count:
+        assert transport.write(b'{"v":2}\n') == 8
+        assert writer.data == b'{"v":2}\n'
+    else:
+        with pytest.raises(OSError, match='console write'):
+            transport.write(b'x')
+
+
+def test_console_transport_runs_v2_handshake_and_status():
+    requests = [
+        {'v':2, 'type':'request', 'id':'hs', 'command':'device.handshake',
+         'payload':{'client':'MITTEN_WEB', 'supportedProtocolVersions':[2]}},
+        {'v':2, 'type':'request', 'id':'status', 'command':'device.status', 'payload':{}},
+    ]
+    transport, target = console_transport(b''.join(frame(item) for item in requests))
+    asyncio.run(main_loop(transport, max_iterations=4, sleep_ms=0))
+    messages = [json.loads(line) for line in target.getvalue().splitlines()]
+    responses = {m['id']:m for m in messages if m['type']=='response'}
+    assert responses['hs']['result']['device'] == 'MITTEN'
+    assert responses['status']['result']['state'] == 'IDLE'
 
 
 class MockStreamTransport:
