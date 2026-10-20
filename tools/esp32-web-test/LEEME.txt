@@ -1,0 +1,62 @@
+PRUEBA WEB CON SENSORES REALES — ESP32 DevKit V1 / MicroPython
+
+Este paquete deriva de mitten_diag.zip que adjuntaste. No es una actualizacion
+publicada del repositorio. Corrige el arranque y elimina la carpeta duplicada.
+Usa los drivers y el protocolo del archivo adjunto, con captura real habilitada.
+No requiere DFPlayer. No sirve para Arduino: requiere MicroPython.
+
+1. RESPALDAR
+Desde Thonny, guardar en tu PC el main.py y los demas archivos de la placa.
+No formatear ni reflashear para esta prueba. El paquete no fue probado en tu
+hardware; solo se validaron sintaxis y arranque con perifericos simulados.
+
+2. COPIAR A LA PLACA
+Detener el programa actual en Thonny (Ctrl+C). Copiar:
+  main.py                 -> /main.py
+  carpeta mitten_web      -> /mitten_web (con todo su contenido)
+No copiar otra carpeta mitten_web dentro de /mitten_web.
+La carpeta mitten_diag anterior puede permanecer; el nuevo arranque no la usa.
+No ejecutar el lanzador como archivo de PC: debe arrancar en la placa.
+
+3. ARRANCAR
+Mantener el MPU inmovil en la postura que quieras usar como referencia.
+Reiniciar la placa. El primer segundo mide offsets temporales del MPU.
+La referencia se vuelve a medir en cada reinicio: mantener siempre la misma
+postura si vas a comparar gestos guardados entre sesiones. Para uso definitivo
+hay que guardar una calibracion de montaje estable; esta es una prueba.
+Si hay un error, revisarlo en Thonny antes de conectar la web.
+Luego cerrar/desconectar Thonny para liberar el puerto COM.
+
+4. ABRIR LA APLICACION EN TU COMPUTADORA
+Desde tu copia local de mitten-v2, con dependencias y .env configurados:
+  npm run dev
+Abrir en Chrome o Edge de escritorio la direccion local que indique el comando.
+El navegador debe correr en la computadora que tiene el ESP32 conectado por USB.
+El servidor en la nube no puede abrir tu puerto COM.
+Entrar/registrarse. Elegir dispositivo real/hardware, no modo demostracion.
+Pulsar Conectar MITTEN y seleccionar el puerto USB del ESP32.
+Esperar estado IDLE. Si la apertura del puerto reinicia la placa, mantener
+el MPU inmovil de nuevo durante la referencia inicial.
+
+5. CAPTURAR Y COMPARAR
+Crear un gesto -> Iniciar captura. Mantener una postura durante la grabacion.
+Guardar con un nombre y abrir su detalle:
+  Detalles tecnicos de la captura -> Estadisticas por sensor.
+Comparar flex1..5 y mpuX/mpuY, sus minimos, maximos y medias.
+Repetir con otra postura: doblar un flex por separado o inclinar solo el MPU.
+Orden: flex1 GPIO32, flex2 GPIO33, flex3 GPIO34, flex4 GPIO35, flex5 GPIO25.
+Los flex son ADC raw 0..4095; no se convierten a grados de flexion.
+La web actual muestra los datos de capturas, no un monitor continuo en vivo.
+No es necesario sincronizar perfiles para comprobar estas capturas.
+El proveedor TTS mock puede mostrar audio no disponible; es independiente
+de que se hayan capturado los sensores. Este paquete no reproduce sonido.
+
+CUIDADOS Y LIMITES
+Wi-Fi queda desactivado por el uso de ADC2/GPIO25. Divisores flex y lineas I2C
+deben respetar niveles de 3,3 V; no aplicar 5 V a los GPIO. Se usa ATTN_11DB;
+si hay saturacion, revisar divisor y rango util del ADC de tu placa.
+Se detecta automaticamente un MPU6050 en 0x68 o 0x69.
+Una conexion exitosa no valida por si sola las lecturas: comparar capturas.
+Si falla, guardar el error exacto y el estado mostrado por la web.
+Para volver al programa anterior: detener con Ctrl+C y restaurar main.py
+desde tu respaldo. No borrar perfiles o datos existentes.
