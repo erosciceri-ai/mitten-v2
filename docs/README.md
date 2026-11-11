@@ -39,7 +39,7 @@ El siguiente se creará cuando sea necesario:
 ## Decisiones ya cerradas (no requieren nuevos documentos)
 
 - Firmware: **MicroPython** en ESP32.
-- Backend: **Node.js + Express + TypeScript + SQLite**.
+- Backend: **Node.js + Express + TypeScript** con SQLite local o PostgreSQL. Ver [persistencia de Fase 3](persistence.md).
 - Frontend: **React + Vite + TypeScript**.
 - Comunicación: **Web Serial API** (único propietario del puerto).
 - Sin `monitor.py`, sin bridge local, sin Wi-Fi directo ESP32↔Backend.

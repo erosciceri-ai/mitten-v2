@@ -320,9 +320,9 @@ MITTEN V2 comprende:
   - **Node.js**
   - **Express**
   - **TypeScript**
-  - **SQLite**
-- **REQ-BAC-009:** SQLite se considera suficiente para el alcance actual del proyecto.
-- **REQ-BAC-010:** No introducir PostgreSQL, MongoDB, Redis, microservicios o infraestructura cloud compleja sin una necesidad futura demostrada.
+  - **SQLite local y PostgreSQL mediante configuración explícita**
+- **REQ-BAC-009:** SQLite debe seguir disponible para desarrollo local.
+- **REQ-BAC-010:** PostgreSQL debe conservar los contratos de la API y admitir una migración verificada desde SQLite.
 
 ## 16. Audio y DFPlayer Mini
 
@@ -584,7 +584,7 @@ Las siguientes decisiones permanecen abiertas y pueden resolverse en fases poste
 No vuelven a considerarse decisiones pendientes:
 
 - firmware en MicroPython;
-- backend con Node.js, Express, TypeScript y SQLite;
+- backend con Node.js, Express y TypeScript, con SQLite local o PostgreSQL;
 - frontend con React, Vite y TypeScript;
 - Web Serial como único propietario del puerto serie;
 - eliminación de `monitor.py` y del bridge local;

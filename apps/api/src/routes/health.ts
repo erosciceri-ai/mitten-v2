@@ -25,7 +25,7 @@ router.get('/ready', asyncHandler(async (_req, res) => {
   }
   res.json({
     status: available ? 'ready' : 'degraded',
-    services: { api: 'ok', sqlite: 'ok', tts: { provider, available } },
+    services: { api: 'ok', [config.dbProvider]: 'ok', tts: { provider, available } },
     timestamp: new Date().toISOString(),
   });
 }));

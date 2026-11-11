@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../middleware/errorHandler.js';
 import { assertTransportableGesture } from '../utils/schemas.js';
-import { getDatabase, runInTransaction } from '../db/index.js';
+import { getDatabase, runInTransaction, type DatabaseConnection } from '../db/index.js';
 import type { Gesture, GestureData } from '@mitten/contracts';
 import { generateTTS, getAudioFilePath } from '../services/tts.js';
 
@@ -50,8 +50,9 @@ export async function findAllGestures(userId: number): Promise<GestureWithMeta[]
   return rows.map(rowToGesture);
 }
 
-export async function findGestureById(userId: number, id: number): Promise<GestureWithMeta | null> {
-  const db = await getDatabase();
+export async function findGestureById(userId: number, id: number, connection?: DatabaseConnection): Promise<GestureWithMeta | null> {
+  if (!Number.isInteger(id) || id < 1 || id > 2147483647) return null;
+  const db = connection ?? await getDatabase();
   const row = await db.get('SELECT * FROM gestures WHERE user_id = ? AND id = ?', userId, id) as GestureRow | null;
   return row ? rowToGesture(row) : null;
 }
@@ -62,8 +63,8 @@ export async function findGestureByAudioTrack(userId: number, audioTrack: number
   return row ? rowToGesture(row) : null;
 }
 
-export async function getAvailableAudioTrack(userId: number): Promise<number | null> {
-  const db = await getDatabase();
+export async function getAvailableAudioTrack(userId: number, connection?: DatabaseConnection): Promise<number | null> {
+  const db = connection ?? await getDatabase();
   const row = await db.get(
     'SELECT track_number FROM audio_tracks WHERE user_id = ? AND gesture_id IS NULL ORDER BY track_number LIMIT 1',
     userId
@@ -73,49 +74,55 @@ export async function getAvailableAudioTrack(userId: number): Promise<number | n
 
 export async function createGesture(input: CreateGestureInput): Promise<GestureWithMeta> {
   return runInTransaction(async db => {
-  const audioTrack = await getAvailableAudioTrack(input.userId);
+    await db.lockUser(input.userId);
+    const audioTrack = await getAvailableAudioTrack(input.userId, db);
 
-  if (!audioTrack) {
-    throw new Error('No available audio tracks (max 50 gestures per user)');
-  }
+    if (!audioTrack) {
+      throw new Error('No available audio tracks (max 50 gestures per user)');
+    }
 
-  assertTransportableGesture({ id: 2147483647, name: input.name, audioTrack, data: input.data });
-  const dataJson = JSON.stringify(input.data);
+    assertTransportableGesture({ id: 2147483647, name: input.name, audioTrack, data: input.data });
+    const dataJson = JSON.stringify(input.data);
 
-  const inserted = await db.run(
-    'INSERT INTO gestures (user_id, name, audio_track, data) VALUES (?, ?, ?, ?)',
-    input.userId, input.name, audioTrack, dataJson
-  );
-  const gestureId = inserted.lastID!;
+    const inserted = await db.get<{ id: number }>(
+      'INSERT INTO gestures (user_id, name, audio_track, data) VALUES (?, ?, ?, ?) RETURNING id',
+      input.userId, input.name, audioTrack, dataJson
+    );
+    const gestureId = inserted!.id;
 
-  await db.run(
-    'UPDATE audio_tracks SET gesture_id = ? WHERE user_id = ? AND track_number = ?',
-    gestureId, input.userId, audioTrack
-  );
+    const assigned = await db.run(
+      'UPDATE audio_tracks SET gesture_id = ? WHERE user_id = ? AND track_number = ? AND gesture_id IS NULL',
+      gestureId, input.userId, audioTrack
+    );
+    if (assigned.changes !== 1) throw new Error('Failed to reserve the selected track');
 
-  const result = await findGestureById(input.userId, gestureId);
-  if (!result) {
-    throw new Error('Failed to create gesture');
-  }
-  return result;
+    const result = await findGestureById(input.userId, gestureId, db);
+    if (!result) {
+      throw new Error('Failed to create gesture');
+    }
+    return result;
   });
 }
 
 export async function updateGesture(userId: number, id: number, input: UpdateGestureInput): Promise<GestureWithMeta | null> {
+  if (!Number.isInteger(id) || id < 1 || id > 2147483647) return null;
   return runInTransaction(async db => {
-    const existing = await findGestureById(userId, id);
+    await db.lockUser(userId);
+    const existing = await findGestureById(userId, id, db);
     if (!existing) return null;
     const updated = { ...existing, name: input.name ?? existing.name, data: input.data ?? existing.data };
     assertTransportableGesture(updated);
     await db.run('UPDATE gestures SET name=?, data=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?',
       updated.name, JSON.stringify(updated.data), userId, id);
     if (updated.name !== existing.name) await db.run('UPDATE audio_tracks SET file_path=NULL, generated_at=NULL WHERE user_id=? AND track_number=?', userId, existing.audioTrack);
-    return findGestureById(userId, id);
+    return findGestureById(userId, id, db);
   });
 }
 
 export async function deleteGesture(userId: number, id: number): Promise<boolean> {
+  if (!Number.isInteger(id) || id < 1 || id > 2147483647) return false;
   return runInTransaction(async db => {
+    await db.lockUser(userId);
     await db.run('UPDATE audio_tracks SET gesture_id=NULL, file_path=NULL, generated_at=NULL WHERE user_id=? AND gesture_id=?', userId, id);
     const result = await db.run('DELETE FROM gestures WHERE user_id=? AND id=?', userId, id);
     return (result.changes ?? 0) > 0;
@@ -147,7 +154,8 @@ export async function generateGestureAudio(userId: number, id: number): Promise<
   try {
     await writeFile(temporary, result.audio, { flag: 'wx' });
     await runInTransaction(async db => {
-      const current = await findGestureById(userId, id);
+      await db.lockUser(userId);
+      const current = await findGestureById(userId, id, db);
       if (!current || current.name !== gesture.name || current.audioTrack !== gesture.audioTrack) {
         throw new AppError('Gesture changed while audio was being generated; retry', 409);
       }

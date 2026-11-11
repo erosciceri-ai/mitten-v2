@@ -201,7 +201,7 @@ La representación concreta en SQLite, los nombres de columnas y cualquier metad
 - conservación de metadatos;
 - posibilidad de reconstruir el gesto para sincronización.
 
-SQLite está confirmado como tecnología de persistencia para MITTEN V2; el esquema concreto de tablas, columnas y representación interna de `data` es decisión de implementación del backend y no forma parte de este contrato.
+El backend admite SQLite local y PostgreSQL. El esquema de tablas, columnas y representación interna de `data` pertenece a la implementación del backend.
 
 ### 7.2. Frontend → Backend (HTTP)
 

@@ -313,7 +313,7 @@ La API no debe:
 
 # 9. Persistencia
 
-La persistencia pertenece al backend.
+La persistencia pertenece al backend. La API selecciona SQLite local o PostgreSQL mediante configuración explícita. Ver el [esquema y los procedimientos operativos](persistence.md).
 
 Como mínimo deben existir conceptos equivalentes a:
 

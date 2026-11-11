@@ -17,6 +17,10 @@ export const config = {
   trustedProxy: (process.env.TRUSTED_PROXY || '').split(',').map(value => value.trim()).filter(Boolean),
   jwtSecret: isTest ? randomBytes(32).toString('hex') : process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  dbProvider: isTest ? 'sqlite' : process.env.DB_PROVIDER ?? 'sqlite',
+  databaseUrl: isTest ? '' : process.env.DATABASE_URL ?? '',
+  dbTls: isTest ? 'verify-full' : process.env.DB_TLS ?? 'verify-full',
+  dbPoolMax: isTest ? 5 : Number(process.env.DB_POOL_MAX ?? 5),
   // Tests must never open development data, even when DB_PATH is inherited.
   dbPath: isTest ? ':memory:' : resolve(apiRoot, process.env.DB_PATH || 'data/mitten.db'),
   audioDir: isTest ? mkdtempSync(resolve(tmpdir(), 'mitten-test-audio-')) : resolve(apiRoot, process.env.AUDIO_DIR || 'data/audio'),

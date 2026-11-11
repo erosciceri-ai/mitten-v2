@@ -37,7 +37,7 @@ El [ejemplo de nginx](deployment/mitten.nginx.conf) sirve React Router y reenví
 | `GOOGLE_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID` | Opcionales. Usar el mismo Client ID web y registrar el origen HTTPS de la web en Google. |
 | `VITE_API_URL`, `VITE_CONTACT_EMAIL` | Opcionales y públicos en el build. Mantener `/api` en el mismo origen para el ejemplo. Si la API tiene otro origen, usar su URL HTTPS terminada en `/api` y permitir su origen exacto en `connect-src`. |
 
-`/api/health` devuelve únicamente el estado del proceso. `/api/ready` comprueba SQLite y la configuración de TTS. En producción devuelve `503` cuando SQLite falla o TTS está degradado, con un estado genérico. El ejemplo de nginx limita readiness a loopback. Para el chequeo periódico de vida de un proveedor gestionado usar `/api/health` y consultar readiness aparte. La disponibilidad de TTS en readiness comprueba configuración local y puede requerir una síntesis de prueba para verificar el proveedor de punta a punta.
+`/api/health` devuelve únicamente el estado del proceso. `/api/ready` comprueba el proveedor de base seleccionado y la configuración de TTS. En producción devuelve `503` cuando la base falla o TTS está degradado, con un estado genérico. El ejemplo de nginx limita readiness a loopback. Para el chequeo periódico de vida de un proveedor gestionado usar `/api/health` y consultar readiness aparte. La disponibilidad de TTS en readiness comprueba configuración local y puede requerir una síntesis de prueba para verificar el proveedor de punta a punta.
 
 El frontend conserva el Bearer en `localStorage` y reintenta la validación de sesión ante fallos temporales. El cierre de sesión borra la copia local. Como evolución opcional, evaluar una sesión revocable con cookie `HttpOnly; Secure; SameSite` y controles CSRF. Esa migración requiere decidir topología de orígenes, estrategia de revocación y transición para sesiones activas. La CSP de ejemplo permite el script y el iframe oficiales de Google Identity Services, audio con URL `blob:` y estilos en línea usados por React. Confirmar Google y Web Serial en el origen HTTPS elegido.
 
@@ -56,8 +56,6 @@ El frontend conserva el Bearer en `localStorage` y reintenta la validación de s
 
 Las cuotas en memoria se reinician con el proceso y cada instancia lleva su propia cuenta. Las redes escolares con NAT comparten cuota por IP. Si se necesitan varias instancias o una cuota persistente, hace falta un limitador compartido o controles del ingreso. El correo como clave de login también permite que terceros agoten temporalmente la cuota de una cuenta. El registro existente devuelve `409` para correos ya registrados y revela su existencia.
 
-### Render Free y Fase 3
+### Persistencia de Fase 3
 
-Render Free conserva el disco solo mientras vive la instancia. SQLite y los MP3 locales se pueden perder por suspensión, reinicio o despliegue. Esa configuración sirve para demostraciones desechables con datos sintéticos. El despliegue con datos reales requiere persistencia tanto para la base como para los archivos de audio.
-
-Para la migración a PostgreSQL, definir esquema, restricciones y transacciones para propiedad por usuario y asignación first-fit de pistas. Verificar una importación repetible con IDs, hashes, identidades Google, gestos y metadatos de audio conservados; ajustar secuencias y contrastar recuentos y muestras. El destino persistente de los MP3, el respaldo/restauración, el corte de escrituras y la reversión forman parte del mismo plan. Revalidar concurrencia, aislamiento entre cuentas y cuotas cuando cambie la cantidad de instancias.
+Consultar el [procedimiento de PostgreSQL](persistence.md) para configurar el proveedor, respaldar, restaurar y ensayar la importación desde SQLite. Mantener la API fuera de acceso público mientras los MP3 dependan de almacenamiento efímero.
