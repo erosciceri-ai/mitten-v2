@@ -24,6 +24,12 @@ export const config = {
   // Tests must never open development data, even when DB_PATH is inherited.
   dbPath: isTest ? ':memory:' : resolve(apiRoot, process.env.DB_PATH || 'data/mitten.db'),
   audioDir: isTest ? mkdtempSync(resolve(tmpdir(), 'mitten-test-audio-')) : resolve(apiRoot, process.env.AUDIO_DIR || 'data/audio'),
+  audioStorageProvider: isTest ? 'local' : process.env.AUDIO_STORAGE_PROVIDER ?? 'local',
+  audioS3Endpoint: isTest ? '' : process.env.AUDIO_S3_ENDPOINT ?? '',
+  audioS3Region: isTest ? '' : process.env.AUDIO_S3_REGION ?? '',
+  audioS3Bucket: isTest ? '' : process.env.AUDIO_S3_BUCKET ?? '',
+  audioS3AccessKeyId: isTest ? '' : process.env.AUDIO_S3_ACCESS_KEY_ID ?? '',
+  audioS3SecretAccessKey: isTest ? '' : process.env.AUDIO_S3_SECRET_ACCESS_KEY ?? '',
   ttsProvider: isTest ? process.env.TTS_PROVIDER || 'mock' : process.env.TTS_PROVIDER || 'mock',
   piperExecutable: isTest ? '' : process.env.PIPER_EXECUTABLE || '',
   piperModel: isTest ? '' : process.env.PIPER_MODEL || '',

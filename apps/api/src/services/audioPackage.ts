@@ -1,8 +1,8 @@
-import { open } from 'node:fs/promises';
 import { AppError } from '../middleware/errorHandler.js';
 
 import JSZip from 'jszip';
-import { findAllGestures, getGestureAudioFile } from '../models/Gesture.js';
+import { findAudioRow, readGestureAudio } from './gestureAudio.js';
+import { findAllGestures } from '../models/Gesture.js';
 
 const MAX_ZIP_INPUT_BYTES = 24 * 1024 * 1024;
 
@@ -11,31 +11,25 @@ export type AudioPackageResult = { ok: true; archive: Buffer } | { ok: false; mi
 
 export async function createAudioPackage(userId: number): Promise<AudioPackageResult> {
   const gestures = await findAllGestures(userId);
-  const entries = await Promise.all(gestures.map(async gesture => ({ gesture, path: await getGestureAudioFile(userId, gesture.id) })));
-  const missingTracks = entries.filter(entry => !entry.path).map(({ gesture }) => ({
-    gestureId: gesture.id, name: gesture.name, audioTrack: gesture.audioTrack,
-    file: `mp3/${String(gesture.audioTrack).padStart(4, '0')}.mp3`,
-  }));
-  if (missingTracks.length) return { ok: false, missingTracks };
-
   const zip = new JSZip();
   let remaining = MAX_ZIP_INPUT_BYTES;
-  for (const { gesture, path } of entries) {
-    const file = await open(path!, 'r');
-    try {
-      const { size } = await file.stat();
-      if (size > remaining) throw new AppError('Audio package exceeds the export size limit', 413);
-      const audio = Buffer.alloc(size);
-      let offset = 0;
-      while (offset < size) {
-        const { bytesRead } = await file.read(audio, offset, size - offset, offset);
-        if (!bytesRead) throw new AppError('Audio file changed during export; retry', 409);
-        offset += bytesRead;
-      }
-      remaining -= size;
-      zip.file(`mp3/${String(gesture.audioTrack).padStart(4, '0')}.mp3`, audio);
-    } finally { await file.close(); }
+  const missingTracks: MissingAudioTrack[] = [];
+  for (const gesture of gestures) {
+    const file = 'mp3/' + String(gesture.audioTrack).padStart(4, '0') + '.mp3';
+    const row = await findAudioRow(userId, gesture.id);
+    if (row && (row.name !== gesture.name || row.track_number !== gesture.audioTrack)) {
+      throw new AppError('Gesture changed during export; retry', 409);
+    }
+    const audio = row ? await readGestureAudio(row) : null;
+    if (!audio) {
+      missingTracks.push({ gestureId: gesture.id, name: gesture.name, audioTrack: gesture.audioTrack, file });
+      continue;
+    }
+    remaining -= audio.length;
+    if (remaining < 0) throw new AppError('Audio package exceeds the export size limit', 413);
+    zip.file(file, audio);
   }
+  if (missingTracks.length) return { ok: false, missingTracks };
   zip.file('manifest.json', JSON.stringify({
     format: 'mitten-microsd-package', version: 1, generatedAt: new Date().toISOString(),
     tracks: gestures.map(gesture => ({ gestureId: gesture.id, name: gesture.name, audioTrack: gesture.audioTrack, file: `mp3/${String(gesture.audioTrack).padStart(4, '0')}.mp3` })),

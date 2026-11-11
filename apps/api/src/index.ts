@@ -1,3 +1,4 @@
+import { getAudioStorage } from './services/audioStorage.js';
 import express from 'express';
 import cors from 'cors';
 import { pathToFileURL } from 'node:url';
@@ -40,7 +41,7 @@ app.use((req, res, next) => {
 app.use(cors({
   origin: (origin, callback) => callback(null, origin === config.corsOrigin),
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'Range'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'Range', 'If-Range', 'Idempotency-Key'],
   exposedHeaders: ['Retry-After', 'RateLimit', 'RateLimit-Policy', 'Content-Disposition'],
   maxAge: 600,
 }));
@@ -66,7 +67,7 @@ export function isEntrypoint(moduleUrl: string, entry = process.argv[1]): boolea
 
 if (isEntrypoint(import.meta.url)) {
   validateConfig();
-  try { await getDatabase(); }
+  try { getAudioStorage(); await getDatabase(); }
   catch {
     console.error('MITTEN API could not initialize storage');
     process.exit(1);

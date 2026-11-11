@@ -36,7 +36,10 @@ export async function importSQLite(filename: string, pool: Pool, apply = false) 
   try {
     await source.exec('BEGIN');
     const version = await source.get('PRAGMA user_version');
-    if (version.user_version !== 2) throw new ImportError('Source must be a backup at SQLite schema version 2');
+    if (![2, 3].includes(version.user_version)) throw new ImportError('Source must be a backup at SQLite schema version 2 or 3');
+    if (version.user_version === 3 && (await source.get('SELECT 1 FROM audio_objects LIMIT 1'))) {
+      throw new ImportError('Source has versioned audio objects; use a coordinated database and object backup');
+    }
     const integrity = await source.get('PRAGMA integrity_check');
     if (integrity.integrity_check !== 'ok' || (await source.all('PRAGMA foreign_key_check')).length) {
       throw new ImportError('SQLite integrity or foreign key check failed');
@@ -55,9 +58,10 @@ export async function importSQLite(filename: string, pool: Pool, apply = false) 
     await postgresTransaction(pool, async client => {
       await client.query('LOCK TABLE mitten_schema_migrations IN SHARE MODE');
       const { rows: versions } = await client.query('SELECT version FROM mitten_schema_migrations');
-      if (versions.length !== 1 || versions[0].version !== 1) throw new ImportError('Destination must have PostgreSQL migration 001');
+      if (versions.length !== 2 || versions.some(({ version }) => ![1, 2].includes(version))) throw new ImportError('Destination must have PostgreSQL migrations 001 and 002');
       // Hold writers until verification and commit (or rollback in a dry run).
-      await client.query(`LOCK TABLE ${tables.map(([table]) => table).join(', ')} IN ACCESS EXCLUSIVE MODE`);
+      await client.query(`LOCK TABLE ${tables.map(([table]) => table).join(', ')}, audio_objects IN ACCESS EXCLUSIVE MODE`);
+      if ((await client.query('SELECT 1 FROM audio_objects LIMIT 1')).rowCount) throw new ImportError('Destination audio_objects is not empty');
       for (const [table, , identity] of tables) {
         if ((await client.query(`SELECT 1 FROM ${table} LIMIT 1`)).rowCount) {
           throw new ImportError(`Destination table ${table} is not empty`);

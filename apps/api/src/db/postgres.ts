@@ -73,7 +73,7 @@ export async function postgresTransaction<T>(
   }
 }
 
-const migrations = ['001-initial.sql'] as const;
+const migrations = ['001-initial.sql', '002-audio-storage.sql'] as const;
 
 export async function migratePostgres(pool: pg.Pool): Promise<void> {
   await postgresTransaction(pool, async client => {

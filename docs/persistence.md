@@ -1,6 +1,6 @@
 # Persistencia de MITTEN V2 · Fase 3
 
-SQLite sigue siendo el proveedor predeterminado para desarrollo local. PostgreSQL se selecciona con `DB_PROVIDER=postgres`. Ambos ejecutan las mismas operaciones de repositorio y conservan el contrato HTTP. Los MP3 siguen en `AUDIO_DIR`. Mantener la API fuera de acceso público mientras el directorio de audio dependa de almacenamiento efímero.
+SQLite sigue siendo el proveedor predeterminado para desarrollo local. PostgreSQL se selecciona con `DB_PROVIDER=postgres`. Ambos ejecutan las mismas operaciones de repositorio y conservan el contrato HTTP. El audio local usa `AUDIO_DIR` y el audio remoto usa el proveedor S3 configurado. Ver [Persistencia de MP3](audio-storage.md).
 
 ## Configuración y esquema
 
@@ -49,7 +49,7 @@ Verificar las seis tablas, el historial de migraciones, las asociaciones, los co
 
 ## Ensayo de importación y corte
 
-1. Crear un respaldo SQLite consistente con `PRAGMA user_version=2`. Si el origen es anterior, actualizar primero una copia aislada con las migraciones de SQLite y generar el respaldo desde esa copia.
+1. Crear un respaldo SQLite consistente en esquema v2, o en v3 si todavía no contiene objetos de audio versionados. Si el origen es anterior, actualizar primero una copia aislada con las migraciones de SQLite y generar el respaldo desde esa copia.
 2. Preparar PostgreSQL en una base dedicada y vacía, establecer `DB_PROVIDER=postgres`, y ejecutar `npm run db:migrate -w apps/api`.
 3. Ejecutar `npm run db:import-sqlite -w apps/api -- /ruta/mitten.sqlite`. El modo predeterminado abre SQLite en solo lectura, comprueba integridad y asignaciones, inserta y compara todas las filas en una transacción PostgreSQL, ajusta y verifica los próximos IDs, y revierte la transacción. Los próximos IDs tienen en cuenta los IDs borrados registrados en `sqlite_sequence`. El reporte contiene conteos e IDs de secuencia.
 4. Para un corte autorizado, bloquear escrituras y generación de audio, tomar un respaldo final de SQLite y conservar la copia de audio coherente con ese punto. Repetir el ensayo contra el destino vacío y, después de revisar el reporte, pasar explícitamente `--apply` al mismo comando. La herramienta exige tablas de aplicación vacías y secuencias sin usar. Usa bloqueos exclusivos durante el ensayo y la importación, así que ejecutarla con el destino fuera de servicio.
@@ -71,6 +71,4 @@ npm test -w apps/api -- src/db/postgres.integration.test.ts
 
 ## Fase 4 · Audio persistente
 
-Introducir una interfaz de almacenamiento privado con operaciones para guardar un MP3, abrir un stream con rango opcional, consultar metadatos y eliminar un objeto. Usar claves por usuario, gesto y generación, con una referencia opaca en la base. Guardar el objeto primero y actualizar la referencia mediante una transacción que verifique que el gesto sigue vigente. Hacer los reintentos idempotentes y limpiar objetos huérfanos o reemplazados de forma diferida.
-
-La autorización de lectura y exportación sigue en la API. Mantener `audioTrack` y la salida `/mp3/0001.mp3` para el ZIP de microSD. Definir migración y verificación de los MP3 existentes por tamaño y checksum, tratamiento de archivos faltantes, política de eliminación, respaldo y restauración coordinados con PostgreSQL. Validar descargas, rangos HTTP y exportación ZIP después de reiniciar el proceso y desde otra instancia antes de aprobar acceso público.
+La implementación y las instrucciones para migrar, respaldar y restaurar los objetos junto con la base están en [Persistencia de MP3](audio-storage.md).

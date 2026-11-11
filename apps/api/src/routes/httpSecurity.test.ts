@@ -63,7 +63,7 @@ it('enforces production HTTPS and only trusts forwarding information from config
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('access-control-allow-origin')).toBe(config.corsOrigin);
     expect(preflight.headers.get('access-control-allow-methods')?.split(',')).toEqual(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS']);
-    expect(preflight.headers.get('access-control-allow-headers')).toBe('Authorization,Content-Type,Range');
+    expect(preflight.headers.get('access-control-allow-headers')).toBe('Authorization,Content-Type,Range,If-Range,Idempotency-Key');
     expect(preflight.headers.has('access-control-allow-credentials')).toBe(false);
     expect(preflight.headers.get('vary')).toContain('Origin');
 

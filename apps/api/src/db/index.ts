@@ -94,7 +94,7 @@ export async function initializeDatabase(db: Database): Promise<void> { await ru
 export async function runMigrations(db: Database): Promise<void> {
   const version = await db.get<{ user_version: number }>('PRAGMA user_version');
   let currentVersion = version?.user_version ?? 0;
-  if (currentVersion > 2) throw new Error('Database schema is newer than this API');
+  if (currentVersion > 3) throw new Error('Database schema is newer than this API');
 
   if (currentVersion < 1) {
     const sql = schema();
@@ -172,5 +172,17 @@ export async function runMigrations(db: Database): Promise<void> {
       await db.exec('PRAGMA user_version=2; COMMIT;');
     } catch (error) { await db.exec('ROLLBACK'); throw error; }
     finally { await db.exec('PRAGMA foreign_keys=ON;'); }
+  }
+
+  if (currentVersion < 3) {
+    await db.exec('BEGIN IMMEDIATE');
+    try {
+      const version = await db.get<{ user_version: number }>('PRAGMA user_version');
+      if (version!.user_version < 3) {
+        await db.exec(readFileSync(new URL('postgres/002-audio-storage.sql', import.meta.url), 'utf8'));
+        await db.exec('PRAGMA user_version=3');
+      }
+      await db.exec('COMMIT');
+    } catch (error) { await db.exec('ROLLBACK'); throw error; }
   }
 }

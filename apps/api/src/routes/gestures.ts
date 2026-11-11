@@ -1,3 +1,4 @@
+import { audioChecksum } from '../services/audioStorage.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Router, Request, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
@@ -12,7 +13,7 @@ import {
   getGestureCount,
   generateGestureAudio,
   getGestureAudioInfo,
-  getGestureAudioFile,
+  getGestureAudio,
 } from '../models/Gesture.js';
 import { accountKey, jsonBody, limitConcurrent, limitRequests } from '../middleware/httpSecurity.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -91,8 +92,13 @@ router.post('/:id/audio', limitRequests(10, 60_000, accountKey), limitRequests(6
     throw new AppError('Gesture not found', 404);
   }
 
+  const requestKey = req.get('Idempotency-Key');
+  if (requestKey !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(requestKey)) {
+    throw new AppError('Invalid Idempotency-Key', 400);
+  }
+
   try {
-    const result = await generateAudio(() => generateGestureAudio(userId, id));
+    const result = await generateAudio(() => generateGestureAudio(userId, id, requestKey));
     res.json({
       message: 'Audio generated successfully',
       trackNumber: result.trackNumber,
@@ -119,10 +125,27 @@ router.get('/:id/audio', validateParams(gestureIdParamSchema), asyncHandler(asyn
 }));
 
 router.get('/:id/audio/file', validateParams(gestureIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const file = await getGestureAudioFile(req.user!.userId, Number(req.params.id));
+  const file = await getGestureAudio(req.user!.userId, Number(req.params.id));
   if (!file) throw new AppError('Audio not found', 404);
   res.setHeader('Cache-Control', 'private, no-store');
-  await new Promise<void>((resolve, reject) => res.sendFile(file, error => error ? reject(error) : resolve()));
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.type('audio/mpeg');
+  const etag = '"' + audioChecksum(file) + '"';
+  res.setHeader('ETag', etag);
+  const ifRange = req.get('If-Range');
+  const range = !ifRange || ifRange === etag ? req.range(file.length, { combine: true }) : undefined;
+  if (range === -1) {
+    res.setHeader('Content-Range', 'bytes */' + file.length);
+    res.status(416).end();
+    return;
+  }
+  if (Array.isArray(range) && range.type === 'bytes' && range.length === 1) {
+    const [{ start, end }] = range;
+    res.setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + file.length);
+    res.status(206).send(file.subarray(start, end + 1));
+    return;
+  }
+  res.send(file);
 }));
 
 export default router;

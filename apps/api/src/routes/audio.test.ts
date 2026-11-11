@@ -1,12 +1,11 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { once } from 'node:events';
-import { readFile } from 'node:fs/promises';
 import app from '../index.js';
 import { createUser } from '../models/User.js';
-import { createGesture, generateGestureAudio, updateGesture, deleteGesture, getGestureAudioInfo, findAllGestures } from '../models/Gesture.js';
+import { createGesture, getGestureAudio, generateGestureAudio, updateGesture, deleteGesture, getGestureAudioInfo, findAllGestures } from '../models/Gesture.js';
 import { generateToken } from '../utils/jwt.js';
 import { gestureData } from '../test/gesture.js';
-import { generateTTS, getAudioFilePath } from '../services/tts.js';
+import { generateTTS } from '../services/tts.js';
 import JSZip from 'jszip';
 
 vi.mock('../services/tts.js', async importOriginal => ({
@@ -40,7 +39,7 @@ it('isolates identical track numbers, requires ownership and supports regenerati
   expect((await fetch(base+path)).status).toBe(401);
   expect((await fetch(base+path,{headers:b.headers})).status).toBe(404);
   expect(await (await fetch(base+path,{headers:a.headers})).text()).toBe('Uno');
-  expect(await readFile(getAudioFilePath(b.user.id,1),'utf8')).toBe('Dos');
+  expect((await getGestureAudio(b.user.id,gb.id))?.toString()).toBe('Dos');
   expect((await fetch(base+'/audio/0001.mp3')).status).toBe(404);
   await updateGesture(a.user.id,ga.id,{name:'Nuevo'});
   expect((await fetch(base+path,{headers:a.headers})).status).toBe(404);
