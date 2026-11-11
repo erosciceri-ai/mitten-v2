@@ -9,7 +9,7 @@ export function validateBody<T>(schema: ZodSchema<T>) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const fields = error.errors.map(e => ({
+        const fields = error.issues.map(e => ({
           field: e.path.join('.'),
           message: e.message,
         }));
@@ -32,7 +32,7 @@ export function validateParams<T>(schema: ZodSchema<T>) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const fields = error.errors.map(e => ({
+        const fields = error.issues.map(e => ({
           field: e.path.join('.'),
           message: e.message,
         }));

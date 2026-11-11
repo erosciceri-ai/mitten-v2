@@ -2,7 +2,11 @@ import { expect, test } from '@playwright/test';
 
 test('registro, captura, audio, sincronización, reinicio y reconocimiento simulados', async ({ page }) => {
   const email = `demo-${Date.now()}@example.com`;
-  await page.goto('/register');
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Abrir la aplicación' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole('link', { name: 'Registrate' }).click();
+  await expect(page).toHaveURL(/\/register$/);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-password-123');
   await page.getByLabel('Confirmar contraseña', { exact: true }).fill('demo-password-123');
@@ -34,4 +38,13 @@ test('registro, captura, audio, sincronización, reinicio y reconocimiento simul
   await page.getByRole('button', { name: 'Reiniciar dispositivo simulado' }).click();
   await page.getByRole('button', { name: 'Simular reconocimiento' }).click();
   await expect(page.getByText(/Reconocimiento simulado: gesto/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-password-123');
+  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await page.goto('/gestures');
+  await expect(page.getByText('Necesito agua', { exact: true })).toBeVisible();
 });

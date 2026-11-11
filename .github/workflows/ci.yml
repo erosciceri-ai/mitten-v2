@@ -20,7 +20,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.17.0'
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Set up Python
@@ -31,6 +31,9 @@ jobs:
       - name: Install Node.js dependencies
         run: npm ci
 
+      - name: Audit production Node.js dependencies
+        run: npm audit --omit=dev
+
       - name: Install firmware test dependency
         run: python -m pip install pytest
 
@@ -40,7 +43,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Test software demo journey
+      - name: Test browser journeys
         run: npm run test:e2e
 
       - name: Build Node.js workspaces
@@ -48,3 +51,13 @@ jobs:
 
       - name: Test MicroPython-compatible firmware core
         run: python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider
+
+      - name: Upload verified application builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: mitten-build-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            apps/web/dist/
+            apps/api/dist/
+            packages/contracts/dist/

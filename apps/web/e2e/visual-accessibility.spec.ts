@@ -44,8 +44,10 @@ test('las superficies privadas responden sin overflow horizontal', async ({ page
 
   for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ['/app', '/gestures', '/learn', '/sync', '/account']) {
+    for (const route of ['/app', '/gestures', '/gestures/new', '/sync', '/account']) {
       await page.goto(route);
+      await expect(page.locator('main h1')).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${route}$`));
       const dimensions = await page.evaluate(() => ({
         clientWidth: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,

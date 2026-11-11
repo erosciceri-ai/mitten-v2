@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { isIP } from 'node:net';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 dotenv.config({ path: resolve(apiRoot, '.env') });
@@ -13,6 +14,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || '127.0.0.1',
+  trustedProxy: (process.env.TRUSTED_PROXY || '').split(',').map(value => value.trim()).filter(Boolean),
   jwtSecret: isTest ? randomBytes(32).toString('hex') : process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   // Tests must never open development data, even when DB_PATH is inherited.
@@ -33,6 +35,40 @@ export function validateConfig(): void {
   if (!providers.includes(config.ttsProvider)) throw new Error('Unsupported TTS_PROVIDER; use mock, elevenlabs or piper');
   if (config.jwtSecret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters long');
   if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65535) throw new Error('Invalid PORT');
-  if (config.corsOrigin === '*') throw new Error('An explicit frontend origin is required');
+  validateHttpConfig();
+  jwtLifetimeSeconds(config.jwtExpiresIn);
   if (!Number.isSafeInteger(config.piperTimeoutMs) || config.piperTimeoutMs < 1000 || config.piperTimeoutMs > 300000) throw new Error('PIPER_TIMEOUT_MS must be between 1000 and 300000');
+}
+
+export function jwtLifetimeSeconds(value: string): number {
+  const match = /^([1-9][0-9]*)([smhdw]?)$/.exec(value);
+  const multipliers: Record<string, number> = { '': 1, s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
+  const seconds = match ? Number(match[1]) * multipliers[match[2]] : NaN;
+  if (!Number.isSafeInteger(seconds) || seconds < 60 || seconds > 30 * 86400) {
+    throw new Error('JWT_EXPIRES_IN must be between 60 seconds and 30 days');
+  }
+  return seconds;
+}
+
+function validateHttpConfig(): void {
+  const origin = parseOrigin(config.corsOrigin);
+  const production = config.nodeEnv === 'production';
+  if (!origin || origin.origin !== config.corsOrigin ||
+      !(origin.protocol === 'https:' || (!production && origin.protocol === 'http:'))) {
+    throw new Error('FRONTEND_URL must be an explicit origin and use HTTPS in production');
+  }
+  for (const entry of config.trustedProxy) {
+    const [address, prefix, extra] = entry.split('/');
+    const version = isIP(address);
+    const maxBits = version === 4 ? 32 : 128;
+    const bits = prefix === undefined ? maxBits : Number(prefix);
+    if (!version || extra !== undefined || (prefix !== undefined && !/^\d+$/.test(prefix)) ||
+        !Number.isInteger(bits) || bits < 1 || bits > maxBits) {
+      throw new Error('TRUSTED_PROXY must contain explicit proxy IP addresses or CIDRs');
+    }
+  }
+}
+
+function parseOrigin(value: string): URL | undefined {
+  try { return new URL(value); } catch { return undefined; }
 }

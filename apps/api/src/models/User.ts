@@ -92,6 +92,10 @@ export function toPublicUser(user: Pick<User, 'id' | 'email' | 'google_sub'>): U
   return { id: user.id, email: user.email, googleLinked: Boolean(user.google_sub) };
 }
 
-export function verifyPassword(user: User, password: string): boolean {
-  return user.password_hash ? bcrypt.compareSync(password, user.password_hash) : false;
+// A fixed, non-secret bcrypt hash equalizes work for absent and Google-only accounts.
+const DUMMY_HASH = '$2a$10$' + '.'.repeat(53);
+
+export async function verifyPassword(user: User | null, password: string): Promise<boolean> {
+  const matches = await bcrypt.compare(password, user?.password_hash ?? DUMMY_HASH);
+  return Boolean(user?.password_hash && matches);
 }

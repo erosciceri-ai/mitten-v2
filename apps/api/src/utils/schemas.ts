@@ -4,13 +4,14 @@ import { AppError } from '../middleware/errorHandler.js';
 
 // Auth schemas
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
 });
 
 export const registerSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  email: z.email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters')
+    .refine(value => Buffer.byteLength(value) <= 72, 'Password must be at most 72 UTF-8 bytes'),
 });
 
 export const googleCredentialSchema = z.object({

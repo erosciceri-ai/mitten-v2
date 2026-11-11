@@ -692,6 +692,11 @@ body { background: var(--mitten-navy); }
 .app-field:disabled { cursor: not-allowed; opacity: .58; }
 .app-field-search { padding-left: 2.75rem; }
 
+@media (width < 1024px) {
+  .app-header .brand-mark--navigation .brand-mark__asset { display: none; }
+  .app-header .brand-mark--navigation .brand-mark__mobile-asset { display: block; }
+}
+
 @media (max-width: 620px) {
   .brand-mark--navigation .brand-mark__asset { display: none; }
   .brand-mark--navigation .brand-mark__mobile-asset { display: block; }

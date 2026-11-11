@@ -1,6 +1,8 @@
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Router, Request, Response } from 'express';
+import { createHash } from 'node:crypto';
+import { accountKey, jsonBody, limitConcurrent, limitRequests } from '../middleware/httpSecurity.js';
 import { validateBody } from '../middleware/validation.js';
 import { googleCredentialSchema, loginSchema, registerSchema } from '../utils/schemas.js';
 import {
@@ -19,12 +21,19 @@ import { verifyGoogleCredential } from '../services/googleIdentity.js';
 import { exportAccountData } from '../services/accountExport.js';
 
 const router = Router();
+const authWork = limitConcurrent(8);
+const authByInstance = limitRequests(180, 60_000, () => 'instance');
+const registrationByIp = limitRequests(12, 60 * 60_000);
+const loginByIp = limitRequests(60, 15 * 60_000);
+const loginByAccount = limitRequests(20, 15 * 60_000, req =>
+  createHash('sha256').update(req.body.email.toLowerCase()).digest('hex'));
+const googleByIp = limitRequests(30, 15 * 60_000);
 
-router.post('/login', validateBody(loginSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/login', loginByIp, authByInstance, ...jsonBody('4kb'), validateBody(loginSchema), loginByAccount, asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   const user = await findUserByEmail(email);
-  if (!user || !verifyPassword(user, password)) {
+  if (!(await authWork(() => verifyPassword(user, password))) || !user) {
     throw new AppError('Invalid credentials', 401);
   }
 
@@ -36,7 +45,7 @@ router.post('/login', validateBody(loginSchema), asyncHandler(async (req: Reques
   });
 }));
 
-router.post('/register', validateBody(registerSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/register', registrationByIp, authByInstance, ...jsonBody('4kb'), validateBody(registerSchema), asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   const existing = await findUserByEmail(email);
@@ -44,7 +53,7 @@ router.post('/register', validateBody(registerSchema), asyncHandler(async (req: 
     throw new AppError('Email already registered', 409);
   }
 
-  const user = await createUser({ email, password });
+  const user = await authWork(() => createUser({ email, password }));
   const token = generateToken({ userId: user.id, email: user.email });
 
   res.status(201).json({
@@ -53,8 +62,8 @@ router.post('/register', validateBody(registerSchema), asyncHandler(async (req: 
   });
 }));
 
-router.post('/google', validateBody(googleCredentialSchema), asyncHandler(async (req: Request, res: Response) => {
-  const identity = await verifyGoogleCredential(req.body.credential);
+router.post('/google', googleByIp, authByInstance, ...jsonBody('8kb'), validateBody(googleCredentialSchema), asyncHandler(async (req: Request, res: Response) => {
+  const identity = await authWork(() => verifyGoogleCredential(req.body.credential));
   let user = await findUserByGoogleSub(identity.subject);
 
   if (!user) {
@@ -71,8 +80,8 @@ router.post('/google', validateBody(googleCredentialSchema), asyncHandler(async 
   res.json({ user: toPublicUser(user), token });
 }));
 
-router.post('/google/link', authMiddleware, validateBody(googleCredentialSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const identity = await verifyGoogleCredential(req.body.credential);
+router.post('/google/link', googleByIp, authByInstance, authMiddleware, ...jsonBody('8kb'), validateBody(googleCredentialSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const identity = await authWork(() => verifyGoogleCredential(req.body.credential));
   if (identity.email.toLocaleLowerCase() !== req.user!.email.toLocaleLowerCase()) {
     throw new AppError('Google account email must match your MITTEN account', 409);
   }
@@ -100,7 +109,7 @@ router.get('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest,
   res.json(toPublicUser(user));
 }));
 
-router.get('/export', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/export', authMiddleware, limitRequests(10, 60_000, accountKey), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const accountExport = await exportAccountData(req.user!.userId);
   if (!accountExport) throw new AppError('User not found', 404);
   res.set('Cache-Control', 'no-store').json(accountExport);

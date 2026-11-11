@@ -14,12 +14,14 @@ import {
   getGestureAudioInfo,
   getGestureAudioFile,
 } from '../models/Gesture.js';
+import { accountKey, jsonBody, limitConcurrent, limitRequests } from '../middleware/httpSecurity.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const router = Router();
+const generateAudio = limitConcurrent(2);
 
 // All gesture routes require authentication
-router.use(authMiddleware);
+router.use(authMiddleware, limitRequests(180, 60_000, accountKey));
 
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
@@ -39,7 +41,7 @@ router.get('/:id', validateParams(gestureIdParamSchema), asyncHandler(async (req
   res.json(gesture);
 }));
 
-router.post('/', validateBody(createGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', ...jsonBody('32kb'), validateBody(createGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const { name, data } = req.body;
 
@@ -54,7 +56,7 @@ router.post('/', validateBody(createGestureSchema), asyncHandler(async (req: Aut
   }
 }));
 
-router.put('/:id', validateParams(gestureIdParamSchema), validateBody(updateGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', validateParams(gestureIdParamSchema), ...jsonBody('32kb'), validateBody(updateGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const id = parseInt(req.params.id, 10);
   const { name, data } = req.body;
@@ -80,7 +82,7 @@ router.delete('/:id', validateParams(gestureIdParamSchema), asyncHandler(async (
 }));
 
 // Audio generation endpoints
-router.post('/:id/audio', validateParams(gestureIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/audio', limitRequests(10, 60_000, accountKey), limitRequests(60, 60_000), ...jsonBody('1kb', false), validateParams(gestureIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const id = parseInt(req.params.id, 10);
 
@@ -90,7 +92,7 @@ router.post('/:id/audio', validateParams(gestureIdParamSchema), asyncHandler(asy
   }
 
   try {
-    const result = await generateGestureAudio(userId, id);
+    const result = await generateAudio(() => generateGestureAudio(userId, id));
     res.json({
       message: 'Audio generated successfully',
       trackNumber: result.trackNumber,

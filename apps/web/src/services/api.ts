@@ -103,7 +103,9 @@ export async function linkGoogleAccount(credential: string): Promise<{ user: Use
 }
 
 export async function getCurrentUser(): Promise<User> {
-  return request<User>('/auth/me');
+  const user = await request<User>('/auth/me', { signal: AbortSignal.timeout(10_000) });
+  if (!Number.isSafeInteger(user?.id) || typeof user.email !== 'string') throw new ApiUnavailableError();
+  return user;
 }
 
 export async function exportAccountData(): Promise<AccountExport> {
@@ -158,7 +160,7 @@ export async function downloadAudioPackage(): Promise<Blob> {
   return request<Blob>('/audio/package', {}, true);
 }
 
-export async function getReadiness(): Promise<{ status: 'ready' | 'degraded'; services: { api: string; sqlite: string; tts: { provider: string; available: boolean; message?: string } } }> {
+export async function getReadiness(): Promise<{ status: 'ready' | 'degraded'; services?: { api: string; sqlite: string; tts: { provider: string; available: boolean } } }> {
   return request('/ready');
 }
 
