@@ -16,10 +16,11 @@ import {
   getGestureAudio,
 } from '../models/Gesture.js';
 import { accountKey, jsonBody, limitConcurrent, limitRequests } from '../middleware/httpSecurity.js';
+import { config } from '../config/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const router = Router();
-const generateAudio = limitConcurrent(2);
+const generateAudio = limitConcurrent(config.ttsConcurrency);
 
 // All gesture routes require authentication
 router.use(authMiddleware, limitRequests(180, 60_000, accountKey));

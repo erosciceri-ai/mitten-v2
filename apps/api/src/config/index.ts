@@ -33,6 +33,7 @@ export const config = {
   ttsProvider: isTest ? process.env.TTS_PROVIDER || 'mock' : process.env.TTS_PROVIDER || 'mock',
   piperExecutable: isTest ? '' : process.env.PIPER_EXECUTABLE || '',
   piperModel: isTest ? '' : process.env.PIPER_MODEL || '',
+  ttsConcurrency: Number(process.env.TTS_CONCURRENCY ?? 2),
   piperTimeoutMs: Number(process.env.PIPER_TIMEOUT_MS || 60000),
   elevenLabsApiKey: isTest ? '' : process.env.ELEVENLABS_API_KEY || '',
   elevenLabsVoiceId: isTest ? '' : process.env.ELEVENLABS_VOICE_ID || '',
@@ -46,6 +47,15 @@ export function validateConfig(): void {
   if (config.jwtSecret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters long');
   if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65535) throw new Error('Invalid PORT');
   validateHttpConfig();
+  if (!Number.isInteger(config.ttsConcurrency) || config.ttsConcurrency < 1 || config.ttsConcurrency > 2) {
+    throw new Error('TTS_CONCURRENCY must be 1 or 2');
+  }
+  if (process.env.RENDER === 'true' && (config.nodeEnv !== 'production' ||
+      config.dbProvider !== 'postgres' || config.audioStorageProvider !== 's3' ||
+      config.dbTls !== 'verify-full' || config.trustedProxy.length === 0 ||
+      config.ttsProvider === 'mock')) {
+    throw new Error('Render requires production, PostgreSQL with verified TLS, S3, a trusted proxy and real TTS');
+  }
   jwtLifetimeSeconds(config.jwtExpiresIn);
   if (!Number.isSafeInteger(config.piperTimeoutMs) || config.piperTimeoutMs < 1000 || config.piperTimeoutMs > 300000) throw new Error('PIPER_TIMEOUT_MS must be between 1000 and 300000');
 }

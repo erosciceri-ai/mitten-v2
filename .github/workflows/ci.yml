@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase5a/production-prep]
   pull_request:
 
 permissions:
@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -61,3 +63,56 @@ jobs:
             apps/web/dist/
             apps/api/dist/
             packages/contracts/dist/
+
+      - name: Validate Cloudflare Pages build
+        if: github.ref == 'refs/heads/phase5a/production-prep'
+        env:
+          VITE_API_URL: https://mitten-api-staging.example.com/api
+        run: |
+          npm run build:pages
+          test -f apps/web/dist/_headers
+          test ! -e apps/web/dist/404.html
+
+  render-free:
+    if: github.ref == 'refs/heads/phase5a/production-prep'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Run Express and Piper under Render Free limits
+        run: bash tools/bench-render-free.sh
+
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/phase5a/production-prep' && vars.MITTEN_STAGING_DEPLOY_ENABLED == 'true'
+    needs: [validate, render-free]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: mitten-staging
+    concurrency: mitten-staging-deploy
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      PAGES_DEPLOY_HOOK_URL: ${{ secrets.PAGES_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Request staging deploys from the Git integrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$RENDER_DEPLOY_HOOK_URL" && -n "$PAGES_DEPLOY_HOOK_URL" ]]
+          assert_branch_tip() {
+            local tip
+            tip=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)
+            [[ "$tip" == "$GITHUB_SHA" ]] || { echo 'Staging branch advanced; deploy its validated run instead.'; exit 1; }
+          }
+          assert_branch_tip
+          curl --fail --silent --show-error --max-time 30 --output /dev/null \
+            --request POST "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}"
+          assert_branch_tip
+          curl --fail --silent --show-error --max-time 30 --output /dev/null \
+            --request POST "$PAGES_DEPLOY_HOOK_URL"
+          echo "Deploys requested for $GITHUB_SHA. Verify the source SHA and readiness in both dashboards."

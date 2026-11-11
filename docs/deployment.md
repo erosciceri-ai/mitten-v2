@@ -59,3 +59,7 @@ Las cuotas en memoria se reinician con el proceso y cada instancia lleva su prop
 ### Persistencia de Fase 3
 
 Consultar el [procedimiento de PostgreSQL](persistence.md) para configurar el proveedor, respaldar, restaurar y ensayar la importación desde SQLite. Mantener la API fuera de acceso público mientras los MP3 dependan de almacenamiento efímero.
+
+### Cloudflare Pages, Render y Neon
+
+Consultar la [guía de Fases 5A y 5B](deployment/phase5.md) para el despliegue gestionado y su validación.
