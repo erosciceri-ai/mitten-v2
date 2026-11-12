@@ -2,6 +2,12 @@ import pg, { type PoolClient } from 'pg';
 import { readFileSync } from 'node:fs';
 import type { DatabaseConnection } from './index.js';
 
+export class PostgresStartupError extends Error {
+  constructor(readonly code: 'POSTGRES_CONFIG' | 'POSTGRES_CONNECT' | 'POSTGRES_MIGRATION', cause: unknown) {
+    super(code, { cause });
+  }
+}
+
 export function openPostgres(connectionString: string, tls: string, max: number, production: boolean) {
   let url: URL;
   try { url = new URL(connectionString); }
@@ -51,7 +57,12 @@ export function postgresConnection(client: Pick<PoolClient, 'query'>): DatabaseC
 export async function postgresTransaction<T>(
   pool: pg.Pool, action: (client: PoolClient) => Promise<T>, commit = true,
 ): Promise<T> {
-  const client = await pool.connect();
+  return runPostgresTransaction(await pool.connect(), action, commit);
+}
+
+async function runPostgresTransaction<T>(
+  client: PoolClient, action: (client: PoolClient) => Promise<T>, commit = true,
+): Promise<T> {
   let connectionError: Error | undefined;
   let discard = false;
   // A checked-out client can disconnect while the callback is between queries.
@@ -76,7 +87,10 @@ export async function postgresTransaction<T>(
 const migrations = ['001-initial.sql', '002-audio-storage.sql'] as const;
 
 export async function migratePostgres(pool: pg.Pool): Promise<void> {
-  await postgresTransaction(pool, async client => {
+  const connection = await pool.connect().catch(error => {
+    throw new PostgresStartupError('POSTGRES_CONNECT', error);
+  });
+  await runPostgresTransaction(connection, async client => {
     const { rows: [encoding] } = await client.query('SHOW server_encoding');
     if (encoding.server_encoding !== 'UTF8') throw new Error('PostgreSQL database must use UTF-8');
     await client.query('SELECT pg_advisory_xact_lock(1296651348, 1)');
@@ -90,5 +104,7 @@ export async function migratePostgres(pool: pg.Pool): Promise<void> {
       await client.query(sql);
       await client.query('INSERT INTO mitten_schema_migrations VALUES ($1)', [index + 1]);
     }
+  }).catch(error => {
+    throw new PostgresStartupError('POSTGRES_MIGRATION', error);
   });
 }

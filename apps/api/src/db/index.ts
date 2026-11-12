@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from '../config/index.js';
 
-import { migratePostgres, openPostgres, postgresConnection, postgresTransaction } from './postgres.js';
+import { migratePostgres, openPostgres, postgresConnection, postgresTransaction, PostgresStartupError } from './postgres.js';
 
 export interface DatabaseConnection {
   get: Database['get'];
@@ -35,7 +35,12 @@ function openSQLite(): Promise<Database> {
 
 function postgresPool() {
   if (!postgres) postgres = (async () => {
-    const pool = openPostgres(config.databaseUrl, config.dbTls, config.dbPoolMax, config.nodeEnv === 'production');
+    let pool: ReturnType<typeof openPostgres>;
+    try {
+      pool = openPostgres(config.databaseUrl, config.dbTls, config.dbPoolMax, config.nodeEnv === 'production');
+    } catch (error) {
+      throw new PostgresStartupError('POSTGRES_CONFIG', error);
+    }
     try { await migratePostgres(pool); return pool; }
     catch (error) { await pool.end(); throw error; }
   })().catch(error => { postgres = null; throw error; });

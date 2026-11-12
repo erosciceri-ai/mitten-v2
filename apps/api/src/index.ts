@@ -11,6 +11,7 @@ import gestureRoutes from './routes/gestures.js';
 import healthRoutes from './routes/health.js';
 import audioRoutes from './routes/audio.js';
 import { getDatabase, closeDatabase } from './db/index.js';
+import { PostgresStartupError } from './db/postgres.js';
 
 const app = express();
 
@@ -66,10 +67,23 @@ export function isEntrypoint(moduleUrl: string, entry = process.argv[1]): boolea
 }
 
 if (isEntrypoint(import.meta.url)) {
-  validateConfig();
-  try { getAudioStorage(); await getDatabase(); }
-  catch {
-    console.error('MITTEN API could not initialize storage');
+  try {
+    validateConfig();
+  } catch {
+    console.error('MITTEN API startup failed [APP_CONFIG]');
+    process.exit(1);
+  }
+  try {
+    getAudioStorage();
+  } catch {
+    console.error('MITTEN API startup failed [AUDIO_STORAGE_CONFIG]');
+    process.exit(1);
+  }
+  try {
+    await getDatabase();
+  } catch (error) {
+    const code = error instanceof PostgresStartupError ? error.code : 'DATABASE_INIT';
+    console.error(`MITTEN API startup failed [${code}]`);
     process.exit(1);
   }
   const server = app.listen(config.port, config.host, () => {
