@@ -8,14 +8,16 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY tools/esp32-simulator/package.json tools/esp32-simulator/
+# npm ci runs the contracts workspace prepare script.
+COPY packages/contracts/tsconfig.json packages/contracts/
+COPY packages/contracts/src/ packages/contracts/src/
 RUN npm ci --workspace=@mitten/contracts --workspace=@mitten/api
 COPY apps/api/tsconfig.json apps/api/
 COPY apps/api/src/ apps/api/src/
-COPY packages/contracts/tsconfig.json packages/contracts/
-COPY packages/contracts/src/ packages/contracts/src/
+# Pruning must not rerun prepare after removing the TypeScript compiler.
 RUN npm run build --workspace=@mitten/contracts \
     && npm run build --workspace=@mitten/api \
-    && npm prune --omit=dev --workspace=@mitten/contracts --workspace=@mitten/api
+    && npm prune --omit=dev --ignore-scripts --workspace=@mitten/contracts --workspace=@mitten/api
 
 FROM node:24.16.0-bookworm-slim
 WORKDIR /app

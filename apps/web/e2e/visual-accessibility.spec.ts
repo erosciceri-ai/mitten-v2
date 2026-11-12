@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { registerAccount, test } from './fixtures';
 
 const widths = [375, 768, 1024, 1440];
 
@@ -36,11 +37,7 @@ test('las superficies públicas no desbordan y conservan foco visible', async ({
 test('las superficies privadas responden sin overflow horizontal', async ({ page }) => {
   const email = `visual-${Date.now()}@example.com`;
   await page.goto('/register');
-  await page.getByLabel('Email', { exact: true }).fill(email);
-  await page.getByLabel('Contraseña', { exact: true }).fill('visual-password-123');
-  await page.getByLabel('Confirmar contraseña', { exact: true }).fill('visual-password-123');
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await registerAccount(page, email, 'visual-password-123');
 
   for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });

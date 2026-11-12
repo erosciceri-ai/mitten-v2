@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { registerAccount, test } from './fixtures';
 
 test('registro, captura, audio, sincronización, reinicio y reconocimiento simulados', async ({ page }) => {
   const email = `demo-${Date.now()}@example.com`;
@@ -7,11 +8,7 @@ test('registro, captura, audio, sincronización, reinicio y reconocimiento simul
   await expect(page).toHaveURL(/\/login$/);
   await page.getByRole('link', { name: 'Registrate' }).click();
   await expect(page).toHaveURL(/\/register$/);
-  await page.getByLabel('Email', { exact: true }).fill(email);
-  await page.getByLabel('Contraseña', { exact: true }).fill('demo-password-123');
-  await page.getByLabel('Confirmar contraseña', { exact: true }).fill('demo-password-123');
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await registerAccount(page, email, 'demo-password-123');
 
   await page.getByRole('button', { name: 'Modo demostración' }).click();
   await expect(page.getByText('No hay un guante físico conectado.')).toBeVisible();
