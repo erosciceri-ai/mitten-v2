@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const port = Number(process.argv[2]);
 assert(Number.isInteger(port) && port >= 1 && port <= 65535, 'Supply the mapped loopback port');
+const container = process.argv[3];
 const api = `http://127.0.0.1:${port}/api`;
 const headers = { 'Content-Type': 'application/json' };
 
@@ -31,6 +33,12 @@ while (true) {
     if (response.ok) break;
   } catch {
     // A cold container may not be listening yet.
+  }
+  if (container) {
+    const state = JSON.parse(execFileSync('docker', ['inspect', '--format', '{{json .State}}', container], { encoding: 'utf8' }));
+    if (!state.Running) {
+      throw new Error(`Container stopped before /api/health responded (status=${state.Status}, exit=${state.ExitCode}, OOMKilled=${state.OOMKilled})`);
+    }
   }
   assert(performance.now() < deadline, 'Container did not become healthy within 45 seconds');
   await sleep(250);
