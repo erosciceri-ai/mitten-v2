@@ -27,10 +27,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && python3 -m venv /opt/piper \
     && /opt/piper/bin/pip install --no-cache-dir piper-tts==1.8.0 lameenc==1.8.4 \
     && mkdir -p /opt/voices \
-    && voice=es_MX-ald-medium.onnx \
-    && source_url=https://huggingface.co/rhasspy/piper-voices/resolve/ae9d8352b73c1b1750748843e753a504b00e05b0/es/es_MX/ald/medium \
+    && voice=es_MX-claude-high.onnx \
+    && source_url=https://huggingface.co/rhasspy/piper-voices/resolve/ae9d8352b73c1b1750748843e753a504b00e05b0/es/es_MX/claude/high \
     && curl --fail --location --retry 3 "$source_url/$voice?download=true" --output "/opt/voices/$voice" \
     && curl --fail --location --retry 3 "$source_url/$voice.json?download=true" --output "/opt/voices/$voice.json" \
+    && printf '%s  %s\n' \
+        3ef40a71ea63852cd8ab7e6fa7d2ecdcfa67a0b47c9c48e3f10e02ee02083ea0 "/opt/voices/$voice" \
+        1afc81f703c0e4cb3b4d7c0dca096b8b54a98806807f0170cf5eb5557723c12d "/opt/voices/$voice.json" \
+        | sha256sum --check --strict \
     && /opt/piper/bin/python -c 'import lameenc, onnxruntime, piper' \
     && apt-get purge -y curl \
     && rm -rf /var/lib/apt/lists/*
@@ -38,7 +42,7 @@ COPY --from=build /app /app
 COPY apps/api/tools/piper_synthesize.py apps/api/tools/
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=10000 \
     TTS_PROVIDER=piper TTS_CONCURRENCY=1 PIPER_EXECUTABLE=/opt/piper/bin/python \
-    PIPER_MODEL=/opt/voices/es_MX-ald-medium.onnx
+    PIPER_MODEL=/opt/voices/es_MX-claude-high.onnx
 USER node
 # Resolve the addon from the compiled API and load it in the final image.
 RUN node -e 'require("node:module").createRequire("/app/apps/api/dist/index.js")("sqlite3")'
