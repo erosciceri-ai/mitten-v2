@@ -83,6 +83,22 @@ it('enforces production HTTPS and only trusts forwarding information from config
   }
 });
 
+it('recognizes HTTPS from the immediate proxy in one-hop mode', async () => {
+  const original = config.nodeEnv;
+  const trust = app.get('trust proxy');
+  try {
+    config.nodeEnv = 'production';
+    app.set('trust proxy', 1);
+    expect((await fetch(base + '/auth/me')).status).toBe(403);
+    expect((await fetch(base + '/auth/me', {
+      headers: { 'X-Forwarded-Proto': 'https', 'X-Forwarded-For': '192.0.2.1' },
+    })).status).toBe(401);
+  } finally {
+    config.nodeEnv = original;
+    app.set('trust proxy', trust);
+  }
+});
+
 it('rejects oversized, malformed and unsupported request bodies with sanitized HTTP errors', async () => {
   const user = await createUser({ email: 'payload@example.com', password: 'password123' });
   const headers = { ...json, Authorization: `Bearer ${generateToken({ userId: user.id, email: user.email })}` };

@@ -17,7 +17,7 @@ const app = express();
 
 app.disable('x-powered-by');
 app.set('query parser', 'simple');
-app.set('trust proxy', config.trustedProxy.length ? config.trustedProxy : false);
+app.set('trust proxy', config.trustedProxy === 1 || config.trustedProxy.length ? config.trustedProxy : false);
 
 app.use((_req, res, next) => {
   res.set({

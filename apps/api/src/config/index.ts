@@ -9,12 +9,13 @@ import { isIP } from 'node:net';
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 dotenv.config({ path: resolve(apiRoot, '.env') });
 const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+const trustedProxyEnv = (process.env.TRUSTED_PROXY || '').trim();
 
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || '127.0.0.1',
-  trustedProxy: (process.env.TRUSTED_PROXY || '').split(',').map(value => value.trim()).filter(Boolean),
+  trustedProxy: trustedProxyEnv === '1' ? 1 as const : trustedProxyEnv.split(',').map(value => value.trim()).filter(Boolean),
   jwtSecret: isTest ? randomBytes(32).toString('hex') : process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   dbProvider: isTest ? 'sqlite' : process.env.DB_PROVIDER ?? 'sqlite',
@@ -52,7 +53,7 @@ export function validateConfig(): void {
   }
   if (process.env.RENDER === 'true' && (config.nodeEnv !== 'production' ||
       config.dbProvider !== 'postgres' || config.audioStorageProvider !== 's3' ||
-      config.dbTls !== 'verify-full' || config.trustedProxy.length === 0 ||
+      config.dbTls !== 'verify-full' || (config.trustedProxy !== 1 && config.trustedProxy.length === 0) ||
       config.ttsProvider === 'mock')) {
     throw new Error('Render requires production, PostgreSQL with verified TLS, S3, a trusted proxy and real TTS');
   }
@@ -77,6 +78,7 @@ function validateHttpConfig(): void {
       !(origin.protocol === 'https:' || (!production && origin.protocol === 'http:'))) {
     throw new Error('FRONTEND_URL must be an explicit origin and use HTTPS in production');
   }
+  if (config.trustedProxy === 1) return;
   for (const entry of config.trustedProxy) {
     const [address, prefix, extra] = entry.split('/');
     const version = isIP(address);
