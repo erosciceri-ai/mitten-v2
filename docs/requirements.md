@@ -17,26 +17,27 @@ MITTEN V2 comprende:
 - El guante físico y sus sensores.
 - El firmware ejecutado en el ESP32.
 - El reconocimiento local de gestos.
-- La reproducción autónoma mediante DFPlayer Mini y parlante.
+- La reproducción autónoma mediante microSD SPI, ESP32, MAX98357A por I²S y parlante.
 - Una aplicación web para usuarios, gestos, aprendizaje y sincronización.
 - Un backend para autenticación, persistencia, biblioteca de gestos, generación de audio y datos de sincronización.
 - La comunicación USB Serial entre el navegador y el ESP32 mediante Web Serial API.
 - El almacenamiento local en el ESP32 de una copia sincronizada de los gestos.
-- La preparación separada de la microSD utilizada por el DFPlayer Mini.
+- La preparación separada de la microSD conectada al ESP32 por SPI.
 
 ## 3. Principios y decisiones confirmadas
 
 ### 3.1. Funcionamiento autónomo
 
 - **REQ-AUT-001:** Después de su configuración y sincronización, MITTEN debe reconocer gestos previamente configurados sin una PC conectada.
-- **REQ-AUT-002:** Después de reconocer un gesto, el ESP32 debe ordenar al DFPlayer Mini reproducir la pista correspondiente.
+- **REQ-AUT-002:** Después de reconocer un gesto, el ESP32 debe reproducir la pista correspondiente desde la microSD mediante la salida I²S.
 - **REQ-AUT-003:** Durante el uso autónomo, el recorrido funcional debe ser:
 
   ```text
   Sensores
   → ESP32
   → reconocimiento del gesto
-  → DFPlayer Mini
+  → lectura de pista desde microSD SPI
+  → MAX98357A por I²S
   → parlante
   ```
 
@@ -117,9 +118,9 @@ MITTEN V2 comprende:
 - **REQ-GES-012:** La política de edición de gestos está definida: `gesture.id` y `audioTrack` son inmutables mientras exista el gesto; `name` y `data` pueden modificarse; el MP3 asociado puede regenerarse.
 - **REQ-GES-013:** Editar un gesto no implica sincronización incremental. Después de modificar `name` o `data`, la siguiente sincronización continúa siendo un reemplazo completo del perfil.
 - **REQ-GES-014:** Cada gesto debe tener un identificador interno independiente del nombre o frase visible; no se utilizará el texto del gesto como identidad técnica principal.
-- **REQ-GES-015:** La identidad técnica del gesto está definida: `id` integer (1–2147483647), asignado por el backend, único dentro del perfil. Permite mantener relaciones entre gesto, datos de reconocimiento, audio, sincronización y pista DFPlayer.
-- **REQ-GES-016:** Cada gesto sincronizado debe tener asociada una pista del DFPlayer de forma inequívoca.
-- **REQ-GES-017:** Cada gesto debe utilizar un `audioTrack` dentro del rango `1–50`. La pista es independiente de `gesture.id` y corresponde al archivo `/mp3/{audioTrack:04d}.mp3` de la microSD del DFPlayer Mini.
+- **REQ-GES-015:** La identidad técnica del gesto está definida: `id` integer (1–2147483647), asignado por el backend, único dentro del perfil. Permite mantener relaciones entre gesto, datos de reconocimiento, audio, sincronización y pista de audio local.
+- **REQ-GES-016:** Cada gesto sincronizado debe tener asociada una pista de audio local de forma inequívoca.
+- **REQ-GES-017:** Cada gesto debe utilizar un `audioTrack` dentro del rango `1–50`. La pista es independiente de `gesture.id` y se resuelve a un archivo local según una convención pendiente de definir.
 - **REQ-GES-018:** El límite máximo inicial es de 50 gestos por usuario/perfil activo, aplicable tanto a la biblioteca sincronizable como a la biblioteca local del ESP32.
 - **REQ-GES-019:** La aplicación debe poder representar la capacidad, por ejemplo: `23 / 50 gestos`.
 - **REQ-GES-020:** El límite de 50 gestos es una decisión inicial del prototipo y debe poder cambiarse en versiones futuras sin rediseñar todo el sistema.
@@ -173,7 +174,7 @@ MITTEN V2 comprende:
 - **REQ-REC-005:** Antes de reemplazar el algoritmo de V1, su comportamiento debe documentarse y poder probarse con muestras conocidas.
 - **REQ-REC-006:** Las alternativas de reconocimiento deben poder compararse con el comportamiento de referencia.
 - **REQ-REC-007:** MITTEN V2 debe permitir mejorar el reconocimiento sin requerir la reconstrucción completa de la aplicación.
-- **REQ-REC-008:** Un resultado de reconocimiento debe identificar inequívocamente el gesto y la pista de audio que corresponde solicitar al DFPlayer.
+- **REQ-REC-008:** Un resultado de reconocimiento debe identificar inequívocamente el gesto y la pista de audio local asociada.
 - **REQ-REC-009:** Los errores de sensores, datos corruptos o gestos no reconocidos no deben provocar la reproducción silenciosa de una pista incorrecta.
 
 ## 9. Conexión USB Serial y Web Serial
@@ -324,42 +325,44 @@ MITTEN V2 comprende:
 - **REQ-BAC-009:** SQLite debe seguir disponible para desarrollo local.
 - **REQ-BAC-010:** PostgreSQL debe conservar los contratos de la API y admitir una migración verificada desde SQLite.
 
-## 16. Audio y DFPlayer Mini
+## 16. Audio autónomo: microSD SPI y MAX98357A
 
-- **REQ-AUD-001:** MITTEN V2 debe utilizar el DFPlayer Mini para la reproducción autónoma de audio.
+Estos requisitos definen el objetivo, no el estado implementado. El firmware actual todavía utiliza DFPlayer Mini por UART. Véase el [plan de migración](firmware-audio-migration.md).
+
+- **REQ-AUD-001:** MITTEN V2 debe leer audio desde una microSD por SPI y entregar PCM por I²S al MAX98357A para la reproducción autónoma.
 - **REQ-AUD-002:** El recorrido de reproducción autónoma debe ser:
 
   ```text
   ESP32
-  → DFPlayer Mini
-  → microSD
+  → lee la pista desde microSD por SPI
+  → entrega PCM por I²S al MAX98357A
   → parlante
   ```
 
-- **REQ-AUD-003:** Cuando el ESP32 reconozca un gesto, debe ordenar al DFPlayer reproducir la pista asociada.
+- **REQ-AUD-003:** Cuando el ESP32 reconozca un gesto, debe resolver y reproducir la pista local asociada.
 - **REQ-AUD-004:** La PC no debe reproducir el audio durante el funcionamiento normal autónomo del guante.
 - **REQ-AUD-005:** El navegador puede permitir escuchar o previsualizar audios desde la interfaz, de manera independiente a la reproducción autónoma.
 - **REQ-AUD-006:** Al crear un gesto, `apps/api` debe generar o preparar un archivo MP3 correspondiente al texto, nombre o frase asociada.
 - **REQ-AUD-007:** El archivo generado debe quedar relacionado con el gesto y estar disponible para previsualización desde la aplicación.
-- **REQ-AUD-008:** Cada gesto debe asociarse inequívocamente a un identificador de archivo o pista que el ESP32 pueda solicitar al DFPlayer.
+- **REQ-AUD-008:** Cada gesto debe asociarse inequívocamente a un identificador de archivo o pista que el ESP32 pueda resolver en la microSD.
 - **REQ-AUD-009:** El identificador necesario para la reproducción autónoma debe formar parte de los datos sincronizados al ESP32.
-- **REQ-AUD-010:** `audioTrack` es un integer lógico dentro del rango `1–50`, independiente de `gesture.id`. El backend lo asigna mediante first-fit al crear el gesto; permanece inmutable mientras exista el gesto; se libera al eliminarlo y puede reutilizarse posteriormente. La pista corresponde a `/mp3/{audioTrack:04d}.mp3`.
+- **REQ-AUD-010:** `audioTrack` es un integer lógico dentro del rango `1–50`, independiente de `gesture.id`. El backend lo asigna mediante first-fit al crear el gesto; permanece inmutable mientras exista el gesto; se libera al eliminarlo y puede reutilizarse posteriormente. La ruta y la extensión del archivo en el dispositivo quedan pendientes de definición.
 
 ### 16.1. Estados diferenciados de un gesto
 
 - **REQ-AUD-011:** La aplicación debe diferenciar claramente entre tres estados independientes de un gesto:
   1. **Gesto guardado:** existe correctamente en la biblioteca del usuario dentro del backend.
   2. **Gesto sincronizado:** los datos necesarios para reconocimiento y reproducción están incluidos en la biblioteca actualmente sincronizada al ESP32.
-  3. **Audio preparado:** el archivo correspondiente fue preparado y colocado correctamente en la microSD utilizada por el DFPlayer.
+  3. **Audio preparado:** el archivo correspondiente fue preparado y colocado correctamente en la microSD conectada al ESP32 por SPI.
 - **REQ-AUD-012:** Estos estados no significan lo mismo; un gesto puede estar guardado y sincronizado, pero sin audio preparado.
-- **REQ-AUD-013:** En ese caso, el ESP32 podría reconocer el gesto, pero el DFPlayer podría no poder reproducir el audio correctamente.
+- **REQ-AUD-013:** En ese caso, el ESP32 podría reconocer el gesto, pero la pista podría no estar disponible para reproducirse.
 - **REQ-AUD-014:** La interfaz debe evitar afirmar simplemente que un gesto está "listo" cuando no pueda demostrarlo.
-- **REQ-AUD-015:** Debido a las limitaciones actuales del DFPlayer, la aplicación puede no ser capaz de comprobar directamente el contenido real de la microSD.
+- **REQ-AUD-015:** La aplicación no debe inferir el contenido de la microSD a partir de la sincronización del perfil.
 - **REQ-AUD-016:** Por lo tanto, el estado de audio podrá depender inicialmente de información registrada por el usuario o del proceso de preparación de la microSD; el mecanismo exacto se decidirá posteriormente.
 
 ## 17. Limitación conocida: gestión de la microSD
 
-- **REQ-MSD-001:** En esta versión no se exige transferir automáticamente los MP3 desde la aplicación hasta la microSD del DFPlayer Mini.
+- **REQ-MSD-001:** En esta versión no se exige transferir automáticamente los audios desde la aplicación hasta la microSD.
 - **REQ-MSD-002:** La carga de archivos de audio a la microSD debe tratarse como un proceso separado de la sincronización de datos.
 - **REQ-MSD-003:** El sistema y su documentación deben diferenciar claramente:
 
@@ -368,13 +371,13 @@ MITTEN V2 comprende:
   Backend → Frontend → ESP32
 
   GESTIÓN DE AUDIOS
-  Backend genera MP3 → procedimiento separado → microSD del DFPlayer
+  Backend genera MP3 → procedimiento separado → microSD del guante
   ```
 
 - **REQ-MSD-004:** La documentación de uso debe explicar que un gesto puede estar sincronizado en el ESP32 y, aun así, no reproducirse correctamente si la pista correspondiente no fue colocada en la microSD.
 - **REQ-MSD-005:** No debe diseñarse en esta fase hardware nuevo para resolver esta limitación.
 - **REQ-MSD-006:** El procedimiento exacto para preparar o actualizar la microSD queda pendiente de diseño.
-- **REQ-MSD-007:** La numeración de pistas del DFPlayer utiliza `audioTrack` dentro del rango `1–50`. Cada pista corresponde al archivo `/mp3/{audioTrack:04d}.mp3` de la microSD.
+- **REQ-MSD-007:** La numeración lógica utiliza `audioTrack` dentro del rango `1–50`; el mapeo a nombres físicos se decidirá junto con el formato de reproducción.
 
 ## 18. Flujos funcionales
 
@@ -444,7 +447,8 @@ PC desconectada
 → algoritmo de reconocimiento
 → gesto identificado
 → identificador de audio
-→ DFPlayer Mini
+→ lectura de pista desde microSD SPI
+→ MAX98357A por I²S
 → parlante
 ```
 
@@ -501,7 +505,7 @@ Resultado esperado: la aplicación no queda bloqueada ni informa éxito para una
 - **REQ-HAR-004:** El hardware físico debe utilizarse para validar la captura de gestos.
 - **REQ-HAR-005:** El hardware físico debe utilizarse para validar el reconocimiento.
 - **REQ-HAR-006:** El hardware físico debe utilizarse para validar la comunicación USB Serial.
-- **REQ-HAR-007:** El hardware físico debe utilizarse para validar el DFPlayer Mini y el parlante.
+- **REQ-HAR-007:** El hardware físico debe utilizarse para validar la microSD SPI, la salida I²S, el MAX98357A y el parlante.
 - **REQ-HAR-008:** El desarrollo cotidiano del frontend y del backend no debe depender permanentemente de disponer del guante físico.
 
 ## 22. Requisitos no funcionales
@@ -544,7 +548,7 @@ MITTEN V2 debe priorizar, en este orden general:
 
 ### 22.5. Compatibilidad
 
-- **REQ-NF-COM-001:** La solución debe ser compatible con el ESP32, los cinco sensores flex, el MPU6050, el DFPlayer Mini, la microSD y el parlante definidos para el prototipo.
+- **REQ-NF-COM-001:** La solución debe ser compatible con el ESP32, los cinco sensores flex, el MPU6050, la microSD SPI, el MAX98357A por I²S y el parlante definidos para el prototipo.
 - **REQ-NF-COM-002:** Cualquier cambio que afecte al hardware existente debe justificarse y validarse con el dispositivo real.
 
 ### 22.6. Compatibilidad Web Serial
@@ -563,7 +567,7 @@ Quedan explícitamente fuera del alcance actual de MITTEN V2:
 - Bluetooth como sistema principal de sincronización.
 - Un bridge local para la comunicación con el ESP32.
 - `monitor.py`.
-- La transferencia automática de MP3 a la microSD del DFPlayer Mini.
+- La transferencia automática de audio a la microSD del guante no es un requisito de esta fase.
 - Una arquitectura de microservicios.
 - Infraestructura cloud compleja.
 - Los antiguos ocho gestos obligatorios.
@@ -602,9 +606,9 @@ No vuelven a considerarse decisiones pendientes:
 - política de edición de gestos;
 - `gesture.id` inmutable;
 - `audioTrack` 1–50, first-fit, independiente de `gesture.id`, inmutable mientras exista el gesto y reutilizable después de eliminarlo;
-- convención DFPlayer `/mp3/{audioTrack:04d}.mp3`;
+- formato y convención de archivos del guante pendientes de definición;
 - generación o preparación de MP3 desde `apps/api`;
-- reproducción autónoma mediante DFPlayer Mini;
+- reproducción autónoma desde microSD SPI mediante MAX98357A por I²S;
 - datos de gestos V1 no migrados a V2;
 - `mittenv1/` como repositorio histórico independiente;
 - sincronización y persistencia atómica documentadas en `docs/synchronization.md`.
@@ -626,8 +630,8 @@ MITTEN V2 podrá considerarse funcional cuando, como mínimo, se verifique que:
 - **CA-011:** La aplicación muestra el inicio, progreso y resultado real de la sincronización.
 - **CA-012:** El ESP32 conserva los gestos sincronizados después de reiniciarse.
 - **CA-013:** El ESP32 reconoce un gesto previamente sincronizado sin una PC conectada.
-- **CA-014:** El ESP32 puede ordenar al DFPlayer Mini reproducir el audio correspondiente al gesto reconocido.
-- **CA-015:** El DFPlayer Mini puede reproducir por el parlante una pista correctamente preparada en la microSD.
+- **CA-014:** El ESP32 selecciona y reproduce la pista local correcta tras reconocer un gesto.
+- **CA-015:** El guante reproduce por el parlante una pista preparada en microSD, sin depender de la computadora.
 - **CA-016:** Una desconexión durante una operación no deja bloqueada la aplicación.
 - **CA-017:** Los timeouts, errores del firmware y respuestas inválidas se muestran claramente al usuario.
 - **CA-018:** Después de una desconexión recuperable, el usuario puede volver a conectar MITTEN.
@@ -645,7 +649,7 @@ MITTEN V2 podrá considerarse funcional cuando, como mínimo, se verifique que:
 - **CA-030:** El límite inicial es de 50 gestos por usuario/perfil activo.
 - **CA-031:** Los nombres o frases de los gestos respetan el máximo de 60 puntos de código Unicode.
 - **CA-032:** Cada gesto tiene una identidad técnica independiente del texto visible.
-- **CA-033:** Cada gesto sincronizado puede asociarse inequívocamente a una pista DFPlayer.
+- **CA-033:** Cada gesto sincronizado puede asociarse inequívocamente a una pista de audio local.
 - **CA-034:** La interfaz distingue entre los estados: guardado, sincronizado y audio preparado.
 - **CA-035:** `gesture.id` y `audioTrack` son independientes; el funcionamiento no depende de que tengan el mismo valor.
 - **CA-036:** Editar `name` o `data` de un gesto no modifica su `gesture.id` ni su `audioTrack`.

@@ -818,7 +818,7 @@ Aunque se transmitan gestos individualmente, el resultado lógico sigue siendo e
 
 El backend es la fuente de verdad de la biblioteca. Antes de iniciar esta secuencia, el frontend obtiene del backend el snapshot completo del usuario, lo valida y lo transforma al contrato serial. El ESP32 conserva únicamente el perfil confirmado más reciente.
 
-La sincronización transporta metadatos, `id`, `name`, `audioTrack` y `data`. No transfiere archivos MP3 ni inspecciona la microSD del DFPlayer.
+La sincronización transporta metadatos, `id`, `name`, `audioTrack` y `data`. No transfiere archivos de audio ni inspecciona la microSD. La [migración de audio](firmware-audio-migration.md) no modifica este contrato.
 
 ### 12.2. Identidades
 
@@ -931,7 +931,7 @@ Campos mínimos de `gesture`:
 |---|---|---|
 | `id` | integer | Entre `1` y `2147483647`; único dentro del perfil. |
 | `name` | string | Entre 1 y 60 puntos de código Unicode; sin caracteres de control. |
-| `audioTrack` | integer | Entre `1` y `50` en MITTEN V2. Asignado por el backend en creación (first-fit, inmutable). Convención DFPlayer: `/mp3/{audioTrack:04d}.mp3`, reproducción mediante `playMp3Folder(audioTrack)`. |
+| `audioTrack` | integer | Entre `1` y `50` en MITTEN V2. Asignado por el backend en creación (first-fit, inmutable). Convención local del firmware actual con DFPlayer (no parte del mensaje): `/mp3/{audioTrack:04d}.mp3`, reproducción mediante `playMp3Folder(audioTrack)`. |
 | `data` | object | Conforme a `docs/gesture-format.md`. |
 
 El nombre no es la identidad técnica del gesto. Dos nombres iguales no sustituyen la validación de IDs.
@@ -1126,7 +1126,7 @@ Campos:
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `gestureId` | integer | ID interno del gesto reconocido. |
-| `audioTrack` | integer | Pista solicitada al DFPlayer. |
+| `audioTrack` | integer | Identificador lógico de la pista solicitada localmente; no confirma reproducción audible. |
 
 Este evento es:
 
@@ -1139,7 +1139,7 @@ Este evento es:
 El firmware:
 
 - reconoce usando el perfil local;
-- ordena localmente la reproducción al DFPlayer;
+- solicita localmente la reproducción (DFPlayer por UART en el firmware actual);
 - NO espera una respuesta del frontend;
 - NO bloquea el audio para emitir el evento;
 - puede omitir el evento si no existe una sesión compatible o el canal no puede enviarlo.
@@ -1608,7 +1608,7 @@ Es responsable de:
 - ejecutar captura;
 - emitir estados y eventos;
 - mantener el reconocimiento local autónomo;
-- reproducir localmente mediante DFPlayer Mini el `audioTrack` asociado a un gesto reconocido;
+- solicitar la reproducción local de la pista asociada al `audioTrack` de un gesto reconocido;
 - no generar archivos MP3 ni asignar `audioTrack`;
 - crear y validar staging;
 - activar el perfil de forma segura;
@@ -1853,6 +1853,6 @@ Commit          = timeout 10000 ms
 Persistencia    = perfil anterior válido hasta commit seguro
 Reconocimiento  = local; recognition.detected sólo informativo
 ERROR           = device.status permitido; recuperación mediante reinicio
-Audio           = backend prepara MP3; firmware reproduce mediante DFPlayer Mini
+Audio           = backend prepara MP3; firmware solicita reproducción local por audioTrack
 Errores         = códigos estables + texto diagnóstico
 Simulador       = mismo protocolo observable que firmware real

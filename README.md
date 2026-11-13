@@ -11,7 +11,7 @@ La aplicación web se comunica directamente con el ESP32 mediante Web Serial API
 - 5 sensores flex para medir la flexión de los dedos
 - MPU6050 para orientación y movimiento de la mano
 - ESP32 con MicroPython como firmware
-- DFPlayer Mini para reproducción autónoma de MP3 desde microSD
+- MicroSD por SPI y MAX98357A por I²S como objetivo de audio autónomo, aún no implementado
 - Aplicación web (React + Vite + TypeScript)
 - API backend (Node.js + Express + TypeScript + SQLite), responsable también de preparar/generar el audio
 
@@ -52,7 +52,7 @@ MITTEN V2.1 puede demostrarse por software sin el guante físico:
 - La portada pública explica el objetivo, alcance, hardware, software y recorrido del gesto.
 - La aplicación permite registro, autenticación, biblioteca de gestos, captura y sincronización.
 - La suite integral recorre registro, captura simulada, persistencia, sincronización, reinicio,
-  reconocimiento y la trama UART destinada al DFPlayer.
+  reconocimiento y la trama UART destinada al DFPlayer del firmware actual. El [plan de migración](docs/firmware-audio-migration.md) describe el reemplazo pendiente.
 
 El simulador oficial usa NDJSON por `stdin/stdout`. No se conecta directamente a la interfaz web
 ni reemplaza Web Serial. La demostración conceptual de la portada tampoco mide precisión real.
@@ -133,7 +133,7 @@ npm run test:e2e   # Recorrido completo de navegador con simulador y MP3 fixture
   un MP3. Para voz argentina local, ejecutá `npm run tts:setup`; consulta
   [`docs/demo-software-mp3.md`](docs/demo-software-mp3.md). ElevenLabs sigue disponible como
   adaptador opcional.
-- **Hardware:** el recorrido físico debe validarse en el ESP32, sensores, MPU6050, DFPlayer Mini,
+- **Hardware:** el recorrido físico debe validarse en el ESP32, sensores, MPU6050, microSD SPI, MAX98357A por I²S,
   microSD y parlante reales antes de afirmar que el prototipo completo está certificado.
 
 ## Privacidad y datos locales

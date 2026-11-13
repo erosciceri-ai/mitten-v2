@@ -46,7 +46,7 @@ _FUNCTIONAL_COMMANDS = ("capture.start", "sync.begin", "sync.gesture", "sync.com
 class FirmwareDispatcher:
     """Owns protocol session state and dispatches one request at a time."""
 
-    def __init__(self, emit=None, sensor_manager=None, dfplayer=None):
+    def __init__(self, emit=None, sensor_manager=None, audio_player=None):
         self._emit_callback = emit
         self._handling_request = False
         self._events = []
@@ -73,7 +73,7 @@ class FirmwareDispatcher:
         # Shared runtime services
         self.capture_manager = CaptureManager(sensor_manager)
         self.recognizer = GestureRecognizer()
-        self.dfplayer = dfplayer
+        self.audio_player = audio_player
 
         # Load active profile on startup
         self._load_recognition_profile()
@@ -408,8 +408,12 @@ class FirmwareDispatcher:
                 try:
                     result = self.recognizer.recognize(self.sensor_manager.capture_sample())
                     if result.matched and result.gesture_id != self._last_recognized_id:
-                        if self.dfplayer is not None:
-                            self.dfplayer.play_track(result.audio_track)
+                        if self.audio_player is not None and result.audio_track is not None:
+                            try:
+                                self.audio_player.request_track(result.audio_track)
+                            except Exception:
+                                # Audio failure must not stop recognition or protocol events.
+                                pass
                         if self.handshake_compatible:
                             self._emit(self.recognizer.to_event(result))
                     self._last_recognized_id = result.gesture_id if result.matched else None

@@ -24,7 +24,7 @@ class StreamTransport:
 
 
 class UartStreamTransport(StreamTransport):
-    """Adapter around one protocol UART; DFPlayer will use a separate UART."""
+    """Adapter around the protocol UART; local audio uses SPI and I2S."""
 
     def __init__(self, uart):
         self._uart = uart
@@ -51,12 +51,12 @@ async def _yield_ms(milliseconds):
         await asyncio.sleep(milliseconds / 1000.0)
 
 
-async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, dfplayer=None):
+async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, audio_player=None):
     """Own the byte transport; dispatcher owns the single runtime service graph."""
     parser = NdjsonParser()
     def emit(envelope):
         transport.write(serialize_envelope(envelope))
-    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, dfplayer=dfplayer)
+    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, audio_player=audio_player)
     dispatcher.startup()
     pending_since = None
     iterations = 0
@@ -88,6 +88,12 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
             if error is not None and dispatcher.handshake_compatible:
                 emit(ErrorHandler.from_parse_error(error))
         dispatcher.update(now)
+        if audio_player is not None:
+            try:
+                audio_player.update(now)
+            except Exception:
+                # Audio errors must not stop protocol, capture, or recognition processing.
+                pass
         await _yield_ms(sleep_ms)
     return dispatcher
 
@@ -96,7 +102,13 @@ def main():
     from hardware import create_hardware
     from hardware_config import BOARD
     transport, sensors, player = create_hardware(BOARD)
-    asyncio.run(main_loop(transport, sensor_manager=sensors, dfplayer=player))
+    try:
+        asyncio.run(main_loop(transport, sensor_manager=sensors, audio_player=player))
+    finally:
+        try:
+            player.deinitialize()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

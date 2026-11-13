@@ -37,7 +37,7 @@ Un gesto completo está compuesto por dos partes independientes:
 |---|---|---|
 | `id` | integer | 1–2147483647; único dentro del perfil/usuario. Asignado por el backend. |
 | `name` | string | 1–60 **puntos de código Unicode**; sin caracteres de control (U+0000–U+001F, U+007F). El nombre visible no es identidad técnica. |
-| `audioTrack` | integer | 1–50 en Protocol Version 2; asignado por el backend mediante first-fit; independiente de `gesture.id`; inmutable mientras exista el gesto; reutilizable después de eliminarlo. Convención DFPlayer: `/mp3/{audioTrack:04d}.mp3`. |
+| `audioTrack` | integer | 1–50 en Protocol Version 2; asignado por el backend mediante first-fit; independiente de `gesture.id`; inmutable mientras exista el gesto; reutilizable después de eliminarlo. Convención del firmware actual con DFPlayer, no del hardware objetivo: `/mp3/{audioTrack:04d}.mp3`. |
 
 2.
 
@@ -311,7 +311,7 @@ Los offsets pertenecen al estado/configuración local del dispositivo y NO forma
 Rango `1..50`, asignación first-fit por el backend, independiente de `gesture.id`, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
 
 **Audio:**  
-`apps/api` genera o prepara el MP3 asociado al gesto. El frontend coordina y el ESP32 únicamente reproduce mediante DFPlayer Mini.
+`apps/api` genera o prepara el MP3 asociado al gesto. El frontend coordina y el ESP32 reproduce la pista asociada. El DFPlayer por UART es la implementación actual; microSD SPI + MAX98357A por I²S es el [objetivo pendiente](firmware-audio-migration.md).
 
 **Sincronización:**  
 Editar `name`, `data` o regenerar un MP3 no implica sincronización incremental. La siguiente sincronización continúa siendo un reemplazo completo del perfil.

@@ -4,9 +4,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import capture
-import dfplayer
 from protocol.commands import FirmwareDispatcher
-from tests.sensor_fakes import UART
 
 class Sensors:
     def capture_sample(self):
@@ -15,11 +13,13 @@ class Sensors:
 events = []
 clock = [0]
 capture.time_ms = lambda: clock[0]
-dfplayer.sleep_ms = lambda ms: None
-uart = UART()
-player = dfplayer.DFPlayer()
-player.begin(uart)
-device = FirmwareDispatcher(emit=events.append, sensor_manager=Sensors(), dfplayer=player)
+class AudioStub:
+    tracks = []
+    def request_track(self, track): self.tracks.append(track); return True
+    def update(self, now=None): pass
+
+player = AudioStub()
+device = FirmwareDispatcher(emit=events.append, sensor_manager=Sensors(), audio_player=player)
 device.startup()
 counter = [0]
 
@@ -49,7 +49,7 @@ elif action == 'sync':
 elif action == 'reboot':
     device.update(100)
     detected = [e for e in events if e.get('event') == 'recognition.detected']
-    print(json.dumps({'event':detected[0], 'uart':list(uart.writes[-1]),
+    print(json.dumps({'event':detected[0], 'audioTracks':player.tracks,
                      'profile':device.sync_manager.profile_manager.profile_revision}))
 else:
     raise ValueError('Unknown fixture action')

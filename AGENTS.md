@@ -12,7 +12,7 @@ El sistema utiliza:
 - Una aplicación web para configuración, gestión de gestos y comunicación con el guante.
 - Una API backend.
 - Una interfaz web React.
-- Generación de audio desde el backend y reproducción local en el dispositivo mediante DFPlayer Mini.
+- Generación de audio desde el backend. El objetivo oficial de reproducción autónoma es microSD SPI + MAX98357A por I²S; el firmware actual usa DFPlayer Mini por UART.
 
 El repositorio actual contiene una implementación anterior de MITTEN V1.
 
@@ -114,7 +114,7 @@ Responsable de:
 - Reconocimiento local de gestos cuando sea necesario.
 - Comunicación del estado del dispositivo mediante el protocolo serie.
 - Recepción de comandos válidos desde el frontend vía Web Serial.
-- Reproducción local del MP3 asociado a un gesto reconocido mediante DFPlayer Mini.
+- Reproducción local de la pista asociada a un gesto reconocido. La implementación SPI/I²S sigue pendiente.
 
 El ESP32 no genera archivos de audio ni asigna `audioTrack`; sólo reproduce pistas previamente preparadas y sincronizadas.
 
@@ -152,7 +152,7 @@ Responsable de:
 - Gestión de metadatos de audio y asignación de `audioTrack`.
 
 El frontend solicita y coordina estas operaciones.
-El ESP32 no genera audio; únicamente reproduce archivos MP3 previamente preparados desde la microSD mediante DFPlayer Mini.
+El ESP32 no sintetiza voz. El objetivo es leer pistas preparadas desde microSD por SPI y entregar PCM por I²S al MAX98357A. El [plan de migración](docs/firmware-audio-migration.md) registra las decisiones pendientes.
 
 La dirección técnica confirmada para MITTEN V2 es:
 
@@ -598,7 +598,7 @@ Debe mantenerse alineado con los documentos canónicos. Ante una contradicción,
 - `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - La calibración MPU6050 pertenece al estado/configuración local del dispositivo y no a `GestureData`.
 - `audioTrack` 1–50: independiente de `gesture.id`, asignación first-fit, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
-- DFPlayer usa `/mp3/{audioTrack:04d}.mp3`.
+- El firmware actual con DFPlayer usa `/mp3/{audioTrack:04d}.mp3`; esa ruta no define el formato ni el nombre de las pistas para la arquitectura SPI/I²S.
 - `apps/api` genera o prepara los archivos MP3. El frontend coordina y el ESP32 únicamente reproduce.
 - `gesture.id` es inmutable.
 - `gesture.name` y `gesture.data` son editables; el MP3 puede regenerarse.

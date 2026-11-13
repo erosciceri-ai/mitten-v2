@@ -25,7 +25,7 @@ MITTEN combina aprendizaje de gestos definidos por cada usuario con reconocimien
 - La configuración se realiza desde una aplicación web en español, con una cuenta personal y el guante conectado por USB mediante Web Serial.
 - El usuario captura gestos, administra su biblioteca, prepara el audio y sincroniza el perfil completo con MITTEN.
 - La demostración escolar debe hacer visible y comprensible el estado de conexión, captura y sincronización.
-- Después de la configuración, el guante reconoce gestos y reproduce audio de forma autónoma mediante DFPlayer Mini, microSD y parlante.
+- El objetivo es que, después de la configuración, el guante reconozca gestos y reproduzca audio autónomo desde microSD SPI mediante MAX98357A por I²S. La ruta de audio definitiva está pendiente.
 - La preparación física de los archivos MP3 en la microSD es un proceso separado de la sincronización de datos.
 
 ## Capabilities and Constraints
@@ -36,7 +36,7 @@ MITTEN combina aprendizaje de gestos definidos por cada usuario con reconocimien
 - La sincronización reemplaza de forma transaccional el perfil completo almacenado en el ESP32.
 - Web Serial es el único propietario del puerto serie y requiere un navegador compatible.
 - El ESP32 usa cinco sensores flex y un MPU6050; el firmware ejecuta MicroPython.
-- La reproducción autónoma depende de que `/mp3/{audioTrack:04d}.mp3` exista en la microSD del DFPlayer.
+- La reproducción autónoma requiere una pista local preparada para el `audioTrack`; sincronizar el gesto no copia ni verifica ese archivo. Véase el [plan de migración](../../docs/firmware-audio-migration.md).
 - El sistema es un prototipo funcional escolar mantenible por un equipo pequeño; debe evitar infraestructura y complejidad empresarial innecesarias.
 - La efectividad clínica y la idoneidad como dispositivo médico no están establecidas y no deben afirmarse.
 

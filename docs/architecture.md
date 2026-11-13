@@ -59,7 +59,7 @@ La estructura general es:
                 ┌──────────────────┐     ┌───────────────────┐
                 │ Base de datos    │     │ Sensores / Audio  │
                 │                  │     │ Flex + MPU6050     │
-                │ usuarios         │     │ DFPlayer Mini      │
+                │ usuarios         │     │ Audio SPI / I²S    │
                 │ gestos           │     │                   │
                 └──────────────────┘     └───────────────────┘
 ```
@@ -366,7 +366,7 @@ Esto permite:
 
 # 11. Audio
 
-Cada gesto sincronizable posee una asociación con una pista del DFPlayer.
+Cada gesto sincronizable posee una asociación con una pista local identificada por `audioTrack`.
 
 Conceptualmente:
 
@@ -397,13 +397,13 @@ La asignación de audio debe manejarse mediante identificadores estables.
 - El MP3 asociado puede regenerarse manteniendo la misma pista.
 - Al borrar el gesto, su `audioTrack` queda libre y puede reutilizarse mediante first-fit.
 
-**Convención DFPlayer (resuelta):**
+**Convención del firmware actual (DFPlayer por UART, no objetivo oficial):**
 - Carpeta física: `/mp3/` en la raíz de la microSD.
 - Nomenclatura: `{audioTrack:04d}.mp3` (p.ej. `0001.mp3`, `0017.mp3`, `0050.mp3`).
 - Reproducción: `playMp3Folder(audioTrack)` — selección explícita por número de pista dentro de `/mp3`, independiente del orden de copia en FAT.
 
 
-El mecanismo para preparar/transferir los archivos físicos a la microSD del DFPlayer es un proceso separado de la sincronización de datos (ver `docs/protocol.md` §12.5 y `docs/synchronization.md`).
+**Objetivo oficial:** microSD conectada al ESP32 por SPI; el ESP32 lee la pista y entrega PCM por I²S al MAX98357A, que amplifica la señal para el parlante. El formato local (MP3 o WAV PCM), la estrategia de reproducción y la provisión de archivos quedan pendientes. La provisión es independiente de la sincronización de datos. Véase el [plan de migración](firmware-audio-migration.md).
 
 ---
 
@@ -438,8 +438,8 @@ El firmware es responsable de:
 - almacenamiento de la biblioteca local;
 - captura de nuevos gestos;
 - reconocimiento;
-- control del DFPlayer;
-- reproducir mediante DFPlayer Mini el `audioTrack` asociado al gesto reconocido;
+- acceso a la microSD por SPI y salida PCM por I²S (objetivo, pendiente);
+- reproducir la pista local asociada al `audioTrack` del gesto reconocido;
 - no generar archivos MP3;
 - no asignar `audioTrack`;
 - comunicación Serial;
@@ -463,7 +463,7 @@ Flex 3 ─┤
 Flex 4 ─┼──► ESP32 ───► reconocimiento
 Flex 5 ─┤                    │
         │                    ▼
-MPU6050 ┘                DFPlayer
+MPU6050 ┘                audio SPI / I²S (objetivo)
                              │
                              ▼
                           Parlante
@@ -776,13 +776,13 @@ gesto reconocido
 audioTrack
    │
    ▼
-DFPlayer
+Audio local (objetivo: microSD SPI → PCM por I²S → MAX98357A)
 ```
 Mientras el dispositivo está conectado mediante una sesión compatible, un reconocimiento exitoso puede notificarse mediante el evento `recognition.detected`.
 
 Este evento es informativo y no forma parte del camino crítico de reproducción.
 
-El ESP32 reconoce el gesto y ordena la reproducción al DFPlayer localmente sin esperar respuesta del frontend.
+El objetivo es que el ESP32 reconozca el gesto y reproduzca localmente la pista sin esperar respuesta del frontend. El firmware disponible realiza la solicitud por UART al DFPlayer; la ruta SPI/I²S no está implementada.
 
 Esto evita que el guante necesite conexión constante con:
 
@@ -966,7 +966,7 @@ El ESP32 conoce únicamente el protocolo con el que se comunica.
         │                    │
         ▼                    ▼
    ┌─────────┐          ┌─────────┐
-   │ Sensores│          │DFPlayer │
+   │ Sensores│          │Audio local│
    └─────────┘          └────┬────┘
                              │
                              ▼
@@ -992,7 +992,7 @@ biblioteca local
    ↓
 reconocimiento
    ↓
-DFPlayer
+Audio local (objetivo: microSD SPI → PCM por I²S → MAX98357A)
    ↓
 audio
 ```
@@ -1171,7 +1171,7 @@ Este documento no define:
 - posición física de componentes;
 - mecanismo definitivo de transferencia de archivos de audio.
 
-El formato físico de la microSD para DFPlayer **sí está definido** en la sección 11: carpeta `/mp3/`, archivos `{audioTrack:04d}.mp3`, reproducción vía `playMp3Folder(audioTrack)`.
+La sección 11 conserva la convención de archivos del DFPlayer para el firmware actual. El formato y las rutas del nuevo hardware siguen pendientes.
 
 El protocolo serie completo mensaje por mensaje **sí está definido** en `docs/protocol.md`.
 

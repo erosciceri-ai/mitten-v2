@@ -13,7 +13,7 @@ python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider
 
 La suite API incluye `softwareE2E.test.ts`: registro HTTP, captura del firmware,
 persistencia API, sincronización, reinicio en otro proceso, reconocimiento y trama
-UART de DFPlayer. Necesita Python 3; `MITTEN_TEST_PYTHON` permite indicar su ejecutable.
+UART de DFPlayer del firmware actual. No cubre la ruta SPI/I²S pendiente. Necesita Python 3; `MITTEN_TEST_PYTHON` permite indicar su ejecutable.
 No requiere pytest para esa prueba. Los bytes del provider en pruebas de audio son
 dobles de transporte; esas pruebas no certifican voz ni decodificación MP3.
 
@@ -29,9 +29,8 @@ también finalizó correctamente y la prueba integral quedó incluida en la suit
 
 - API: configurar `JWT_SECRET` (mínimo 32 caracteres) desde `.env.example`.
   `TTS_PROVIDER=mock` responde 503 y nunca fabrica ni marca listo un MP3.
-  El provider existente ElevenLabs requiere clave y voice ID; ningún otro proveedor TTS se
-  anuncia como implementado. Su solicitud usa el formato MP3 de la
-  [API oficial](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
+  Piper es el proveedor utilizado en staging. ElevenLabs requiere clave y voice ID y
+  usa el formato MP3 de su [API oficial](https://elevenlabs.io/docs/api-reference/text-to-speech/convert).
 - Audio: archivos separados en `<AUDIO_DIR>/<userId>/mp3/0001.mp3`…`0050.mp3`.
   La descarga requiere autorización del propietario del gesto. Los metadatos de
   archivos globales históricos deben regenerarse. Copiar el MP3 descargado a
@@ -42,7 +41,7 @@ también finalizó correctamente y la prueba integral quedó incluida en la suit
   el UART del protocolo con REPL o DFPlayer.
 - Validar en el ESP32 real: compatibilidad de la versión MicroPython, lecturas y
   orientación del MPU, calibración física, captura, memoria con el perfil máximo,
-  UART/DFPlayer/microSD y recuperación LittleFS ante cortes eléctricos.
+  reproducción SPI/I²S según el [plan de migración](firmware-audio-migration.md) y recuperación LittleFS ante cortes eléctricos.
 
 El baseline local usa el score V1 por centros de rangos, denominadores mínimos
 400 ADC/20 grados y umbral inclusivo 2; los tests fijan vectores de aceptación y

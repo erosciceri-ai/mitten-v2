@@ -48,7 +48,7 @@ El siguiente se creará cuando sea necesario:
 - Estados oficiales: `INITIALIZING`, `CALIBRATING`, `IDLE`, `CAPTURING`, `SYNCING`, `ERROR`.
 - Formato de gesto `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - `audioTrack`: rango 1–50, independiente de `gesture.id`, asignación first-fit, estable mientras exista el gesto y reutilizable después de eliminarlo.
-- Audio: `apps/api` genera o prepara los MP3; el frontend coordina; el ESP32 únicamente reproduce mediante DFPlayer Mini desde `/mp3/{audioTrack:04d}.mp3`.
+- Audio: `apps/api` genera o prepara los MP3; el frontend coordina; el objetivo es reproducir desde microSD SPI mediante MAX98357A por I²S. El firmware actual todavía usa DFPlayer por UART. Véase el [plan de migración](firmware-audio-migration.md).
 - Algoritmo de reconocimiento inicial: **baseline de V1** (distancia normalizada a centro/rango); mejoras futuras no bloquean desarrollo.
 - Datos de gestos V1: **solo prueba**; no se migran a V2; se recapturan en formato V2.
 - Repositorio `mittenv1/`: **histórico independiente**; `v2/` es repositorio activo.
