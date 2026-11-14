@@ -6,10 +6,10 @@ except ImportError:
     import asyncio
 
 from utils.time import ticks_ms, ticks_diff
-from config import FRAME_INCOMPLETE_TIMEOUT_MS
+from config import FRAME_INCOMPLETE_TIMEOUT_MS, STATE_ERROR, ERR_INTERNAL_ERROR, ERR_SENSOR_ERROR
 from error.handler import ErrorHandler
 from protocol.commands import FirmwareDispatcher
-from protocol.envelopes import serialize_envelope
+from protocol.envelopes import build_event, serialize_envelope
 from protocol.framing import NdjsonParser
 
 
@@ -51,13 +51,20 @@ async def _yield_ms(milliseconds):
         await asyncio.sleep(milliseconds / 1000.0)
 
 
-async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, audio_player=None):
+async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None,
+                    audio_player=None, startup_error=None, storage_warning=None,
+                    initialize_audio_on_handshake=False):
     """Own the byte transport; dispatcher owns the single runtime service graph."""
     parser = NdjsonParser()
     def emit(envelope):
         transport.write(serialize_envelope(envelope))
     dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, audio_player=audio_player)
-    dispatcher.startup()
+    if startup_error is None:
+        dispatcher.startup()
+    else:
+        dispatcher.enter_error(startup_error[0], startup_error[1])
+    storage_warning_reported = False
+    audio_initialization_pending = initialize_audio_on_handshake
     pending_since = None
     iterations = 0
     while max_iterations is None or iterations < max_iterations:
@@ -80,6 +87,31 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
                     uncorrelated = response.get("event") == "protocol.error"
                     if dispatcher.handshake_compatible or not uncorrelated:
                         emit(response)
+                if (audio_initialization_pending and dispatcher.handshake_compatible
+                        and audio_player is not None):
+                    audio_initialization_pending = False
+                    if dispatcher.state.current != STATE_ERROR:
+                        try:
+                            audio_player.initialize(getattr(audio_player, "sd_pin", None))
+                        except Exception:
+                            try:
+                                audio_player.deinitialize()
+                            except Exception:
+                                pass
+                        if not audio_player.mounted:
+                            storage_warning = "Audio storage unavailable; local playback is disabled"
+                elif audio_initialization_pending and dispatcher.handshake_compatible:
+                    audio_initialization_pending = False
+                    storage_warning = storage_warning or "Audio playback is not configured"
+                if (storage_warning is not None and not storage_warning_reported
+                        and isinstance(item, dict)
+                        and item.get("command") == "device.handshake"
+                        and dispatcher.handshake_compatible):
+                    emit(build_event("diagnostic.log", {
+                        "level": "INFO",
+                        "message": storage_warning,
+                    }))
+                    storage_warning_reported = True
                 # Responses always precede state/progress notifications.
                 dispatcher.flush_events()
         elif pending_since is not None and ticks_diff(now, pending_since) >= FRAME_INCOMPLETE_TIMEOUT_MS:
@@ -98,17 +130,66 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
     return dispatcher
 
 
-def main():
-    from hardware import create_hardware
-    from hardware_config import BOARD
-    transport, sensors, player = create_hardware(BOARD)
+def _fallback_transport():
+    """Best effort transport used only to announce a startup failure.
+
+    When the board configuration or a firmware module is missing there is no
+    way to know the protocol pins, but UART0 with the ESP32 default pins is
+    the only channel that can still tell the operator what went wrong.
+    """
     try:
-        asyncio.run(main_loop(transport, sensor_manager=sensors, audio_player=player))
+        import machine
+        return UartStreamTransport(machine.UART(0, baudrate=115200))
+    except Exception:
+        return None
+
+
+def _report_boot_failure(transport, error):
+    """Announce a failure that happened before the protocol loop started.
+
+    The MITTEN image has no UART REPL and no ESP-IDF console, so an exception
+    raised during startup used to leave the board completely silent: the
+    operator could not tell a broken installation from a broken cable. The
+    device now keeps serving the protocol in ERROR, which lets the frontend
+    show the reason and lets device.status report it.
+    """
+    message = "%s: %s" % (type(error).__name__, error)
+    print("MITTEN boot failure: " + message)
+    if transport is None:
+        transport = _fallback_transport()
+    if transport is None:
+        return
+    try:
+        asyncio.run(main_loop(transport, startup_error=(ERR_INTERNAL_ERROR, message)))
+    except Exception:
+        pass
+
+
+def main():
+    transport = None
+    try:
+        from hardware import create_hardware, create_protocol_transport
+        from hardware_config import BOARD
+        transport = create_protocol_transport(BOARD)
+    except Exception as error:
+        _report_boot_failure(transport, error)
+        return
+    sensors = player = None
+    startup_error = None
+    try:
+        _, sensors, player = create_hardware(BOARD, transport=transport, initialize_audio=False)
+    except Exception as error:
+        startup_error = (ERR_SENSOR_ERROR, str(error))
+    try:
+        asyncio.run(main_loop(transport, sensor_manager=sensors, audio_player=player,
+                              startup_error=startup_error,
+                              initialize_audio_on_handshake=True))
     finally:
-        try:
-            player.deinitialize()
-        except Exception:
-            pass
+        if player is not None:
+            try:
+                player.deinitialize()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

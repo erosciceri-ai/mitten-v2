@@ -28,7 +28,9 @@ mitten/
 ├── packages/
 │   └── contracts/      # Implementación compartida de tipos, contratos y validaciones
 ├── tools/
-│   └── esp32-simulator/  # Simulador ESP32 (stdin/stdout NDJSON)
+│   ├── esp32-simulator/       # Simulador ESP32 (stdin/stdout NDJSON)
+│   ├── esp32-handshake-check/ # Verifica el handshake V2 contra la placa física
+│   └── esp32-firmware-sync/   # Inspecciona y actualiza el filesystem del firmware en la placa
 ├── docs/
 │   ├── requirements.md
 │   ├── architecture.md

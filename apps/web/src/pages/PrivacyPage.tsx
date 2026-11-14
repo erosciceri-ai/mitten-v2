@@ -36,7 +36,7 @@ export function PrivacyPage() {
         <article className="legal-document">
           <header>
             <h1>Política de privacidad de MITTEN V2.1</h1>
-            <p className="legal-updated">Última actualización: 8 de octubre de 2026</p>
+            <p className="legal-updated">Última actualización: 13 de noviembre de 2026</p>
           </header>
 
           {!contactEmail && (
@@ -63,7 +63,7 @@ export function PrivacyPage() {
 
           <section>
             <h2>3. Para qué se utilizan</h2>
-            <p>Los datos permiten autenticar a la persona, mantener su biblioteca privada, preparar el audio asociado, capturar gestos y sincronizar un perfil con el ESP32. MITTEN no vende datos personales ni los utiliza para publicidad.</p>
+            <p>Los datos permiten autenticar a la persona, mantener su biblioteca privada, generar MP3 para escuchar o descargar desde la web, capturar gestos y sincronizar el perfil con el ESP32. La sincronización envía el perfil y los números de pista; no transfiere MP3 ni verifica la microSD. MITTEN no vende datos personales ni los utiliza para publicidad.</p>
           </section>
 
           <section>
@@ -74,7 +74,7 @@ export function PrivacyPage() {
 
           <section>
             <h2>5. Comunicación con el guante</h2>
-            <p>Web Serial conecta el navegador directamente con el ESP32. El puerto no pertenece al backend ni a Google. Cuando decidís guardar una captura, sus muestras pasan a formar parte de tu biblioteca en la API; cuando sincronizás, el perfil se copia al almacenamiento local del guante.</p>
+            <p>Web Serial conecta el navegador directamente con el ESP32. El puerto no pertenece al backend ni a Google. Cuando decidís guardar una captura, sus muestras pasan a formar parte de tu biblioteca en la API; cuando sincronizás, el perfil y sus números de pista se copian al almacenamiento local del guante. El audio no viaja en esa transferencia. El firmware espera WAV preparados por separado en la microSD y la aplicación no puede verificar esos archivos.</p>
           </section>
 
           <section>
@@ -84,7 +84,7 @@ export function PrivacyPage() {
 
           <section>
             <h2>7. Conservación y control</h2>
-            <p>La información permanece asociada a la cuenta mientras ésta exista. Desde “Tu cuenta” podés descargar una copia JSON de los datos públicos de la cuenta y de todos sus gestos. Cerrar sesión elimina el token del navegador, pero no elimina la cuenta ni su biblioteca. La eliminación completa todavía no dispone de un flujo de autoservicio.</p>
+            <p>La información permanece asociada a la cuenta mientras ésta exista. Desde “Tu cuenta” podés descargar un JSON con los datos básicos exportables de la cuenta y todos sus gestos. Cerrar sesión elimina el token del navegador, pero no elimina la cuenta ni su biblioteca. La eliminación completa todavía no dispone de un flujo de autoservicio.</p>
           </section>
 
           <section>

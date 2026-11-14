@@ -83,7 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <footer className="mt-auto hidden border-t border-border bg-surface py-4 md:block">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 text-sm text-text-muted">
-          <span>Configurá el perfil. MITTEN se comunica de forma autónoma después de sincronizar.</span>
+          <span>La sincronización guarda el perfil; la reproducción requiere WAV preparados aparte en la microSD.</span>
           <div className="flex items-center gap-4"><Link to="/privacidad" className="font-semibold hover:underline">Privacidad</Link><Link to="/" className="font-semibold hover:underline">Conocer el proyecto</Link></div>
         </div>
       </footer>

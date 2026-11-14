@@ -1,5 +1,5 @@
 import { ArrowRight, Cable, Check, RotateCcw, Unplug } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Notice, PageHeader, Panel, StatusBadge } from '../components/ui/mitten-ui';
@@ -15,41 +15,58 @@ export function DashboardPage() {
   const [gestureCount, setGestureCount] = useState(0);
   const [audioReadyCount, setAudioReadyCount] = useState(0);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
+  const [libraryError, setLibraryError] = useState(false);
+  const [audioStatusError, setAudioStatusError] = useState(false);
+  const libraryRequestId = useRef(0);
+
+  const loadLibrary = useCallback(async () => {
+    const requestId = ++libraryRequestId.current;
+    setIsLoadingLibrary(true);
+    setLibraryError(false);
+    setAudioStatusError(false);
+    try {
+      const { gestures } = await getGestures();
+      const audioStates = await Promise.allSettled(gestures.map((gesture) => getGestureAudioInfo(gesture.id)));
+      if (requestId !== libraryRequestId.current) return;
+      setGestureCount(gestures.length);
+      setAudioReadyCount(audioStates.filter((result) => result.status === 'fulfilled' && Boolean(result.value.filePath)).length);
+      setAudioStatusError(audioStates.some((result) => result.status === 'rejected'));
+    } catch {
+      if (requestId === libraryRequestId.current) setLibraryError(true);
+    } finally {
+      if (requestId === libraryRequestId.current) setIsLoadingLibrary(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    getGestures()
-      .then(async ({ gestures }) => {
-        const audioStates = await Promise.allSettled(gestures.map((gesture) => getGestureAudioInfo(gesture.id)));
-        if (!cancelled) {
-          setGestureCount(gestures.length);
-          setAudioReadyCount(audioStates.filter((result) => result.status === 'fulfilled' && Boolean(result.value.filePath)).length);
-        }
-      })
-      .finally(() => { if (!cancelled) setIsLoadingLibrary(false); });
-    return () => { cancelled = true; };
-  }, []);
+    void loadLibrary();
+    return () => { libraryRequestId.current += 1; };
+  }, [loadLibrary]);
 
   const isConnecting = connectionStatus === 'connecting' || connectionStatus === 'handshake';
   const missingAudioCount = Math.max(gestureCount - audioReadyCount, 0);
-  const nextStep = !isConnected
+  const nextStep = libraryError
+    ? { title: 'No se pudo consultar la biblioteca', description: 'Revisá la conexión con la API y volvé a intentarlo.', action: 'Reintentar', kind: 'retry' as const }
+    : !isConnected
     ? { title: isDemoMode ? 'Iniciá el MITTEN simulado' : 'Conectá MITTEN', description: isDemoMode ? 'La demo usa el mismo protocolo, sin comunicarse con hardware real.' : 'Usá el cable USB y seleccioná su puerto para comenzar.', action: isDemoMode ? 'Iniciar simulador' : 'Conectar MITTEN', kind: 'connect' as const }
     : gestureCount === 0
-      ? { title: 'Creá tu primer gesto', description: 'Registrá un movimiento y escribí la frase que MITTEN pronunciará.', action: 'Crear gesto', href: '/gestures/new' }
+      ? { title: 'Creá tu primer gesto', description: 'Registrá un movimiento y asociá el mensaje que querés comunicar.', action: 'Crear gesto', href: '/gestures/new' }
+      : audioStatusError
+        ? { title: 'No se pudo consultar el estado del MP3', description: 'La aplicación no pudo verificar los audios web. Este dato tampoco informa si hay WAV en la microSD.', action: 'Revisar biblioteca', href: '/gestures' }
       : missingAudioCount > 0
-        ? { title: 'Prepará las frases de audio', description: `${missingAudioCount} ${missingAudioCount === 1 ? 'gesto necesita' : 'gestos necesitan'} un MP3 antes del uso autónomo.`, action: 'Revisar biblioteca', href: '/gestures' }
-        : { title: 'Sincronizá el perfil', description: 'Enviá la biblioteca completa al guante y después verificá la microSD.', action: 'Ir a sincronizar', href: '/sync' };
+        ? { title: 'Generá el MP3 de vista previa', description: String(missingAudioCount) + (missingAudioCount === 1 ? ' gesto no tiene MP3 para escuchar o descargar desde la web. Esto no prepara el WAV que usa el firmware.' : ' gestos no tienen MP3 para escuchar o descargar desde la web. Esto no prepara el WAV que usa el firmware.'), action: 'Revisar biblioteca', href: '/gestures' }
+        : { title: 'Sincronizá el perfil', description: 'La sincronización envía gestos y números de pista; no copia archivos de audio. El firmware requiere WAV preparados aparte en la microSD.', action: 'Ir a sincronizar', href: '/sync' };
 
   const journey = [
     { label: 'Conectar', detail: isConnected ? 'Guante conectado' : 'Pendiente', done: isConnected },
-    { label: 'Enseñar gestos', detail: isLoadingLibrary ? 'Consultando…' : `${gestureCount} ${gestureCount === 1 ? 'gesto' : 'gestos'}`, done: gestureCount > 0 },
-    { label: 'Preparar audio', detail: isLoadingLibrary ? 'Consultando…' : gestureCount > 0 ? `${audioReadyCount} de ${gestureCount}` : 'Sin gestos', done: gestureCount > 0 && missingAudioCount === 0 },
+    { label: 'Enseñar gestos', detail: libraryError ? 'No disponible' : isLoadingLibrary ? 'Consultando…' : `${gestureCount} ${gestureCount === 1 ? 'gesto' : 'gestos'}`, done: !libraryError && gestureCount > 0 },
+    { label: 'MP3 web', detail: libraryError || audioStatusError ? 'Estado no disponible' : isLoadingLibrary ? 'Consultando…' : gestureCount > 0 ? `${audioReadyCount} de ${gestureCount}` : 'Sin gestos', done: !libraryError && !audioStatusError && gestureCount > 0 && missingAudioCount === 0 },
     { label: 'Sincronizar', detail: syncIsComplete ? 'Perfil actualizado' : activeProfile ? `${activeProfile.gestureCount} en MITTEN` : 'Pendiente', done: syncIsComplete },
   ];
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <PageHeader eyebrow="Panel de preparación" title="Prepará MITTEN para hablar" description={<>Hola, {user?.email}. Completá el recorrido una vez y después vas a poder usar el guante sin mantener esta página abierta.</>} />
+      <PageHeader eyebrow="Panel de preparación" title="Prepará MITTEN para hablar" description={<>Hola, {user?.email}. La aplicación configura el perfil; la reproducción autónoma requiere además WAV preparados en la microSD.</>} />
 
       <section className="app-panel p-5" aria-labelledby="device-mode-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -63,11 +80,11 @@ export function DashboardPage() {
       </section>
 
       <section className="app-next-step relative overflow-hidden rounded-2xl px-6 py-7 sm:px-8" aria-labelledby="next-step-title">
-        <div className="absolute inset-y-0 right-0 w-2/5 bg-[radial-gradient(circle_at_center,rgb(26_163_154_/_0.32),transparent_66%)]" aria-hidden="true" />
+        <div className="absolute inset-y-0 right-0 w-2/5 bg-[radial-gradient(circle_at_center,rgb(0_211_221_/_0.2),transparent_66%)]" aria-hidden="true" />
         <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="max-w-2xl"><h2 id="next-step-title" className="text-2xl font-bold tracking-[-.025em]">Siguiente paso: {nextStep.title}</h2><p className="mt-2 text-[#c5d9df]">{nextStep.description}</p></div>
           {'kind' in nextStep ? (
-            <Button onClick={() => connect().catch(() => undefined)} disabled={isConnecting} className="shrink-0"><Cable aria-hidden="true" />{isConnecting ? 'Conectando…' : nextStep.action}</Button>
+            <Button onClick={() => nextStep.kind === 'connect' ? connect().catch(() => undefined) : loadLibrary()} disabled={isConnecting || isLoadingLibrary} className="shrink-0">{nextStep.kind === 'connect' ? <Cable aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}{isConnecting ? 'Conectando…' : nextStep.action}</Button>
           ) : (
             <Button asChild className="shrink-0"><Link to={nextStep.href}>{nextStep.action}<ArrowRight aria-hidden="true" /></Link></Button>
           )}
@@ -87,8 +104,8 @@ export function DashboardPage() {
             </li>
           ))}
         </ol>
-        <Notice tone="warning" title="Antes de desconectar la computadora">
-          Copia cada MP3 descargado a <code>/mp3</code> en la microSD y comprueba que el número de pista coincida. La web no puede verificar ese paso físico.
+        <Notice tone="warning" title="El perfil sincronizado no incluye el audio">
+          El firmware espera archivos WAV PCM mono de 16 kHz y 16 bits en <code>/mitten_audio/audio/NNNN.wav</code>. La web genera MP3, pero no los convierte ni los copia a la tarjeta; tampoco puede verificar su contenido. La reproducción física sigue pendiente de validación.
         </Notice>
       </Panel>
 
@@ -100,7 +117,7 @@ export function DashboardPage() {
         {isConnected && deviceInfo ? (
           <details className="mt-5 border-t border-border pt-5"><summary className="min-h-11 cursor-pointer py-2 font-semibold text-text hover:text-primary">Detalles técnicos del dispositivo</summary><dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-text-muted">Firmware</dt><dd className="mt-1 font-mono">v{deviceInfo.firmwareVersion}</dd></div><div><dt className="text-text-muted">Protocolo</dt><dd className="mt-1 font-mono">v{deviceInfo.protocolVersion}</dd></div><div><dt className="text-text-muted">Capacidad</dt><dd className="mt-1 tabular-nums">{deviceInfo.capabilities.maxGestures} gestos</dd></div><div><dt className="text-text-muted">Mensaje máximo</dt><dd className="mt-1 tabular-nums">{deviceInfo.capabilities.maxMessageBytes.toLocaleString()} bytes</dd></div></dl></details>
         ) : null}
-        {isConnected && isDemoMode ? <div className="mt-5 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center"><Button variant="outline" onClick={() => restartDemoDevice().catch(() => undefined)}>Reiniciar dispositivo simulado</Button><Button variant="outline" onClick={() => simulateRecognition().catch(() => undefined)} disabled={!activeProfile?.gestureCount}>Simular reconocimiento</Button>{lastRecognition ? <p className="text-sm text-success" role="status">Reconocimiento simulado: gesto {lastRecognition.gestureId}, pista {lastRecognition.audioTrack}.</p> : <p className="text-sm text-text-muted">Sincroniza al menos un gesto antes de simular el reconocimiento.</p>}</div> : null}
+        {isConnected && isDemoMode ? <div className="mt-5 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center"><Button variant="outline" onClick={() => restartDemoDevice().catch(() => undefined)}>Reiniciar dispositivo simulado</Button><Button variant="outline" onClick={() => simulateRecognition().catch(() => undefined)} disabled={!activeProfile?.gestureCount}>Simular reconocimiento</Button>{lastRecognition ? <p className="text-sm text-success" role="status">Reconocimiento simulado: gesto {lastRecognition.gestureId}, pista {lastRecognition.audioTrack}.</p> : <p className="text-sm text-text-muted">Sincronizá al menos un gesto antes de simular el reconocimiento.</p>}</div> : null}
       </Panel>
     </div>
   );

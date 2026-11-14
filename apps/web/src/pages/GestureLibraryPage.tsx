@@ -69,7 +69,7 @@ export function GestureLibraryPage() {
         {isLoading ? (
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-text-muted" role="status" aria-live="polite"><LoaderCircle className="size-8 animate-spin text-primary" aria-hidden="true" /><p>Cargando gestos…</p></div>
         ) : filteredGestures.length === 0 ? (
-          <EmptyState icon={<Hand className="size-6" />} title={searchQuery ? 'No encontramos coincidencias' : 'Tu biblioteca está vacía'} description={searchQuery ? 'Probá con otro nombre o borrá la búsqueda.' : 'Enseñá un movimiento para asociarlo con una frase hablada.'} action={!searchQuery ? <Button asChild><Link to="/gestures/new"><Plus aria-hidden="true" />Crear gesto</Link></Button> : undefined} />
+          <EmptyState icon={<Hand className="size-6" />} title={searchQuery ? 'No encontramos coincidencias' : 'Tu biblioteca está vacía'} description={searchQuery ? 'Probá con otro nombre o borrá la búsqueda.' : 'Enseñá un movimiento y asociá un mensaje. La web genera un MP3; el firmware requiere un WAV preparado por separado.'} action={!searchQuery ? <Button asChild><Link to="/gestures/new"><Plus aria-hidden="true" />Crear gesto</Link></Button> : undefined} />
         ) : (
           <div className="divide-y divide-border">
             {filteredGestures.map((gesture) => (
@@ -79,8 +79,8 @@ export function GestureLibraryPage() {
                   <div className="min-w-0">
                     <h3 className="truncate font-semibold text-text">{gesture.name}</h3>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
-                      <span>Pista de audio {gesture.audioTrack}</span>
-                      <span className="text-xs">Creado el {new Date(gesture.createdAt).toLocaleDateString()}</span>
+                      <span>Pista lógica {gesture.audioTrack}</span>
+                      <span className="text-xs">Creado el {new Date(gesture.createdAt).toLocaleDateString('es-AR')}</span>
                     </div>
                   </div>
                 </Link>

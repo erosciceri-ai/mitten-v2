@@ -281,7 +281,7 @@
 .signal-console__state { display: inline-flex; align-items: center; gap: .5rem; color: #c5d9df; }
 .signal-console__state::before { content: ''; width: .5rem; height: .5rem; border-radius: 50%; background: #66808f; }
 .signal-console--sensing .signal-console__state::before, .signal-console--matching .signal-console__state::before { background: #e59a42; box-shadow: 0 0 0 5px rgb(229 154 66 / .12); animation: console-pulse 900ms ease-in-out infinite alternate; }
-.signal-console--speaking .signal-console__state::before { background: #53c9a7; box-shadow: 0 0 0 5px rgb(83 201 167 / .12); }
+.signal-console--example .signal-console__state::before { background: #00d3dd; box-shadow: 0 0 0 5px rgb(0 211 221 / .12); }
 .signal-console__sensors { display: grid; grid-template-columns: repeat(5, 1fr); gap: .8rem; min-height: 185px; padding: 1.5rem; }
 .sensor-channel { display: grid; grid-template-rows: auto 1fr auto; gap: .6rem; min-width: 0; color: #86a0ae; text-align: center; font-size: .7rem; font-weight: 720; }
 .sensor-channel > div { display: flex; align-items: end; width: 100%; min-height: 100px; overflow: hidden; border-radius: .45rem; background: #081d2e; }
@@ -299,7 +299,7 @@
 .signal-console__result span, .signal-console__result strong { display: block; }
 .signal-console__result span { margin-bottom: .45rem; color: #7792a1; font-size: .7rem; font-weight: 700; }
 .signal-console__result strong { max-width: 48ch; color: #d8e6ea; font-size: .92rem; line-height: 1.55; }
-.signal-console--speaking .signal-console__result strong { color: white; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -.025em; }
+.signal-console--example .signal-console__result strong { color: white; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: -.025em; }
 
 .capability-section { background: white; }
 .capability-grid { display: grid; grid-template-columns: .82fr 1.18fr; gap: clamp(3rem, 10vw, 9rem); align-items: start; }

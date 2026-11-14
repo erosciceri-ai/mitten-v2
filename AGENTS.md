@@ -12,7 +12,7 @@ El sistema utiliza:
 - Una aplicación web para configuración, gestión de gestos y comunicación con el guante.
 - Una API backend.
 - Una interfaz web React.
-- Generación de audio desde el backend. El objetivo oficial de reproducción autónoma es microSD SPI + MAX98357A por I²S; el firmware actual usa DFPlayer Mini por UART.
+- Generación de audio desde el backend. La reproducción autónoma usa **microSD SPI + MAX98357A por I²S** (decisión confirmada el 2026-11-14): `firmware/esp32/audio.py` monta la tarjeta con `machine.SDCard` + `vfs.VfsFat` y reproduce WAV PCM mono 16 kHz por `machine.I2S`. `firmware/esp32/dfplayer.py` es código legado (DFPlayer Mini por UART) que el runtime no importa; se conserva solo como antecedente histórico.
 
 El repositorio actual contiene una implementación anterior de MITTEN V1.
 
@@ -598,7 +598,7 @@ Debe mantenerse alineado con los documentos canónicos. Ante una contradicción,
 - `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - La calibración MPU6050 pertenece al estado/configuración local del dispositivo y no a `GestureData`.
 - `audioTrack` 1–50: independiente de `gesture.id`, asignación first-fit, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
-- El firmware actual con DFPlayer usa `/mp3/{audioTrack:04d}.mp3`; esa ruta no define el formato ni el nombre de las pistas para la arquitectura SPI/I²S.
+- La arquitectura SPI/I²S (vigente) resuelve `audioTrack` 1–50 a `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono, 16 kHz, 16 bits). La ruta `/mp3/{audioTrack:04d}.mp3` pertenece al antecedente DFPlayer y no define el formato vigente.
 - `apps/api` genera o prepara los archivos MP3. El frontend coordina y el ESP32 únicamente reproduce.
 - `gesture.id` es inmutable.
 - `gesture.name` y `gesture.data` son editables; el MP3 puede regenerarse.

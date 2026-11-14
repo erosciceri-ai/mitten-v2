@@ -52,7 +52,7 @@ export function CreateGesturePage() {
     const newErrors: FormErrors = {};
     if (!name.trim()) newErrors.name = 'El nombre es requerido';
     else if (Array.from(name).length > 60) newErrors.name = 'El nombre no puede exceder 60 caracteres';
-    if (!capturedGestureData) newErrors.capture = 'Debes capturar un gesto primero';
+    if (!capturedGestureData) newErrors.capture = 'Capturá un gesto antes de guardarlo.';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -64,7 +64,7 @@ export function CreateGesturePage() {
     }
 
     if (firmwareState !== 'IDLE') {
-      showToast({ type: 'warning', message: 'MITTEN está ocupado. Espera a que vuelva a estar listo.' });
+      showToast({ type: 'warning', message: 'MITTEN está ocupado. Esperá a que vuelva a estar listo.' });
       return;
     }
 
@@ -114,9 +114,9 @@ export function CreateGesturePage() {
 
   const getPhaseDescription = (phase: CapturePhase) => {
     switch (phase) {
-      case 'PREPARING': return 'Preparando sensores...';
+      case 'PREPARING': return 'Preparando sensores…';
       case 'RECORDING': return 'Grabando gesto… Realizá el gesto ahora';
-      case 'PROCESSING': return 'Procesando datos capturados...';
+      case 'PROCESSING': return 'Procesando datos capturados…';
     }
   };
 
@@ -130,7 +130,7 @@ export function CreateGesturePage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <PageHeader eyebrow="Aprendizaje" title="Enseñar un gesto" description="Registrá el movimiento y escribí la frase que MITTEN dirá." />
+      <PageHeader eyebrow="Aprendizaje" title="Enseñar un gesto" description="Registrá el movimiento y asociá un mensaje. La web genera un MP3 para escucharlo o descargarlo; el guante necesita WAV preparados por separado." />
 
       {/* Connection Check */}
       {!isConnected && (
@@ -258,7 +258,7 @@ export function CreateGesturePage() {
           <li>Conectá MITTEN y esperá hasta que aparezca como listo.</li>
           <li>Iniciá la captura y adoptá el gesto cuando la pantalla te lo indique.</li>
           <li>Mantené la mano estable hasta que termine el registro.</li>
-          <li>Escribí la frase que querés comunicar y guardá el gesto.</li>
+          <li>Escribí el mensaje que querés asociar y guardá el gesto.</li>
         </ol>
       </div>
     </div>

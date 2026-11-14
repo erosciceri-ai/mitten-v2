@@ -14,19 +14,20 @@ La portada pública también se dirige a docentes, jurados, colaboradores y pers
 
 ## Product Purpose
 
-MITTEN permite registrar gestos de mano, asociarlos con una frase o nombre y reproducir el audio correspondiente cuando el guante reconoce el gesto. El éxito inmediato consiste en demostrar el recorrido completo y fiable del prototipo escolar. La meta de producto es que la persona pueda comunicarse cotidianamente mediante gestos sin depender de una PC, un navegador o el backend después de configurar y sincronizar el guante.
+MITTEN busca asociar gestos de mano personalizados con frases habladas. El prototipo permite configurar una biblioteca, capturar gestos, generar MP3 para la web y sincronizar el perfil; la reproducción autónoma usa una integración WAV inicial que todavía debe validarse en el hardware físico. La meta de producto es que la persona pueda comunicarse cotidianamente mediante gestos sin depender de una PC, un navegador o el backend después de preparar el guante.
 
 ## Positioning
 
-MITTEN combina aprendizaje de gestos definidos por cada usuario con reconocimiento y reproducción de audio locales en un guante autónomo. La aplicación web administra la biblioteca y coordina la configuración; el ESP32 conserva el perfil sincronizado y ejecuta el reconocimiento durante el uso diario.
+MITTEN busca combinar gestos definidos por cada usuario con reconocimiento y reproducción locales en un guante autónomo. La aplicación web administra la biblioteca y coordina la configuración; el ESP32 conserva el perfil sincronizado y ejecuta el reconocimiento local.
 
 ## Operating Context
 
 - La configuración se realiza desde una aplicación web en español, con una cuenta personal y el guante conectado por USB mediante Web Serial.
-- El usuario captura gestos, administra su biblioteca, prepara el audio y sincroniza el perfil completo con MITTEN.
+- El usuario captura gestos, administra su biblioteca, genera MP3 para escuchar o descargar desde la web y sincroniza el perfil completo con MITTEN.
 - La demostración escolar debe hacer visible y comprensible el estado de conexión, captura y sincronización.
-- El objetivo es que, después de la configuración, el guante reconozca gestos y reproduzca audio autónomo desde microSD SPI mediante MAX98357A por I²S. La ruta de audio definitiva está pendiente.
-- La preparación física de los archivos MP3 en la microSD es un proceso separado de la sincronización de datos.
+- El firmware contiene una integración inicial de reproducción WAV por microSD SPI y MAX98357A por I²S: WAV RIFF PCM mono, 16 kHz y 16 bits en `/mitten_audio/audio/NNNN.wav`. La reproducción física todavía no fue validada en la PCB.
+- La API genera MP3 para las funciones web. Esos archivos no son los WAV que usa el firmware; la conversión y preparación física de WAV siguen siendo manuales y separadas de la sincronización del perfil.
+- La sincronización transmite el perfil de gestos y sus identificadores `audioTrack`; no copia ni verifica archivos de audio en la microSD.
 
 ## Capabilities and Constraints
 
@@ -36,7 +37,7 @@ MITTEN combina aprendizaje de gestos definidos por cada usuario con reconocimien
 - La sincronización reemplaza de forma transaccional el perfil completo almacenado en el ESP32.
 - Web Serial es el único propietario del puerto serie y requiere un navegador compatible.
 - El ESP32 usa cinco sensores flex y un MPU6050; el firmware ejecuta MicroPython.
-- La reproducción autónoma requiere una pista local preparada para el `audioTrack`; sincronizar el gesto no copia ni verifica ese archivo. Véase el [plan de migración](../../docs/firmware-audio-migration.md).
+- La reproducción autónoma requiere un WAV local para el `audioTrack`; sincronizar el gesto no copia ni verifica ese archivo. Véase el [plan de migración](../../docs/firmware-audio-migration.md).
 - El sistema es un prototipo funcional escolar mantenible por un equipo pequeño; debe evitar infraestructura y complejidad empresarial innecesarias.
 - La efectividad clínica y la idoneidad como dispositivo médico no están establecidas y no deben afirmarse.
 

@@ -373,7 +373,10 @@ class FirmwareDispatcher:
         )
 
     def _on_state_change(self, state):
-        self._emit(build_state_event(state))
+        # V2 state notifications are session events. The handshake response
+        # already reports the current state if startup finished beforehand.
+        if self.handshake_compatible:
+            self._emit(build_state_event(state))
 
     # Capture handlers
     def _handle_capture_start(self, request_id, payload):

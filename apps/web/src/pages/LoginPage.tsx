@@ -29,9 +29,9 @@ export function LoginPage() {
 
   const validate = () => {
     const newErrors: FormErrors = {};
-    if (!email) newErrors.email = 'Email es requerido';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Email inválido';
-    if (!password) newErrors.password = 'Contraseña es requerida';
+    if (!email) newErrors.email = 'Ingresá tu correo.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Ingresá un correo válido.';
+    if (!password) newErrors.password = 'Ingresá tu contraseña.';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -43,7 +43,7 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       await login({ email, password });
-      showToast({ type: 'success', message: 'Bienvenido a MITTEN V2' });
+      showToast({ type: 'success', message: 'Bienvenido a MITTEN V2.1' });
       navigate('/app');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al iniciar sesión';

@@ -30,9 +30,9 @@ export function RegisterPage() {
 
   const validate = () => {
     const newErrors: FormErrors = {};
-    if (!email) newErrors.email = 'Email es requerido';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Email inválido';
-    if (!password) newErrors.password = 'Contraseña es requerida';
+    if (!email) newErrors.email = 'Ingresá tu correo.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Ingresá un correo válido.';
+    if (!password) newErrors.password = 'Ingresá tu contraseña.';
     else if (password.length < 8) newErrors.password = 'La contraseña debe tener al menos 8 caracteres';
     if (password !== confirmPassword) newErrors.confirmPassword = 'Las contraseñas no coinciden';
     setErrors(newErrors);

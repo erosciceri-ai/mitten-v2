@@ -197,22 +197,33 @@ def test_hardware_factory_wires_injected_peripherals(monkeypatch):
         def initialize(self, safe_sd_pin=None):
             self.safe_sd_pin = safe_sd_pin
     ports=[]
+    init_order=[]
     monkeypatch.setattr('audio.AudioPlayer', lambda machine, board: Player())
     class BoardADC(ADC):
-        def __init__(self,pin): super().__init__(32768)
-        def atten(self,value): assert value == 11
+        ATTN_11DB = 3
+        def __init__(self,pin):
+            init_order.append('adc')
+            super().__init__(32768)
+        def atten(self,value): assert value == self.ATTN_11DB
     class BoardPin:
         OUT=1
-        def __init__(self,pin,mode=None,value=None): self.pin,self.mode,self.initial_value=pin,mode,value
+        def __init__(self,pin,mode=None,value=None):
+            if value is not None:
+                init_order.append('amp_pin')
+            self.pin,self.mode,self.initial_value=pin,mode,value
     class Machine:
         Pin=BoardPin
         ADC=BoardADC
-        I2C=staticmethod(lambda *args,**kwargs:I2C())
+        @staticmethod
+        def I2C(*args,**kwargs):
+            init_order.append('i2c')
+            return I2C()
         @staticmethod
         def UART(identifier,**kwargs):
+            init_order.append('uart')
             uart=UART(); ports.append((identifier,kwargs,uart)); return uart
-    board={'flex_pins':[1,2,3,4,5],'adc_attenuation':11,'i2c_id':0,
-           'scl_pin':6,'sda_pin':7,'mpu_address':0x68,'mpu_offsets':[2,-1],
+    board={'flex_pins':[1,2,3,4,5],'adc_attenuation':'ATTN_11DB','i2c_id':0,
+           'scl_pin':6,'sda_pin':7,'mpu_address':None,'mpu_offsets':[2,-1],
            'protocol_uart':{'id':0,'tx':8,'rx':9},
            'sd_sck':12,'sd_miso':13,'sd_mosi':14,'sd_cs':15,
            'amp_sd_pin':16,'i2s_lrc':17,'i2s_bclk':18,'i2s_din':19}
@@ -223,3 +234,99 @@ def test_hardware_factory_wires_injected_peripherals(monkeypatch):
     sensors.calibrate()
     assert sensors.capture_sample() == [2048]*5+[-2,1]
     assert [p[1]['baudrate'] for p in ports] == [115200]
+    assert sensors.mpu.address == 0x68
+    assert init_order.index('uart') < init_order.index('amp_pin')
+    assert init_order.index('uart') < init_order.index('adc')
+    assert init_order.index('uart') < init_order.index('i2c')
+
+
+def test_hardware_factory_can_defer_audio_initialization(monkeypatch):
+    from hardware import create_hardware
+    from tests.sensor_fakes import UART
+
+    class Player:
+        def __init__(self):
+            self.mounted = False
+            self.initialized = False
+
+        def initialize(self, safe_sd_pin=None):
+            self.initialized = True
+
+    monkeypatch.setattr('audio.AudioPlayer', lambda machine, board: Player())
+
+    class BoardADC(ADC):
+        ATTN_11DB = 3
+        def atten(self, value):
+            assert value == self.ATTN_11DB
+        def read_u16(self):
+            return 32768
+
+    class BoardPin:
+        OUT = 1
+        def __init__(self, pin, mode=None, value=None):
+            self.pin, self.mode, self.initial_value = pin, mode, value
+        def value(self, value):
+            self.current_value = value
+
+    class Machine:
+        Pin = BoardPin
+        ADC = BoardADC
+        @staticmethod
+        def I2C(*args, **kwargs):
+            return I2C()
+        @staticmethod
+        def UART(identifier, **kwargs):
+            return UART()
+
+    board = {'flex_pins':[1,2,3,4,5], 'adc_attenuation':'ATTN_11DB', 'i2c_id':0,
+             'scl_pin':6, 'sda_pin':7, 'mpu_address':None, 'mpu_offsets':[2,-1],
+             'protocol_uart':{'id':0, 'tx':8, 'rx':9},
+             'sd_sck':12, 'sd_miso':13, 'sd_mosi':14, 'sd_cs':15,
+             'amp_sd_pin':16, 'i2s_lrc':17, 'i2s_bclk':18, 'i2s_din':19}
+
+    _, _, player = create_hardware(board, Machine, initialize_audio=False)
+    assert player.initialized is False
+    assert player.sd_pin.pin == board['amp_sd_pin']
+    assert player.sd_pin.initial_value == 0
+
+    # Missing optional audio wiring must not block the sensors needed for
+    # gesture capture and recognition.
+    sensor_only_board = dict(board)
+    for key in ('sd_sck', 'sd_miso', 'sd_mosi', 'sd_cs', 'amp_sd_pin',
+                'i2s_lrc', 'i2s_bclk', 'i2s_din'):
+        sensor_only_board.pop(key)
+    _, sensor_only, unavailable_player = create_hardware(
+        sensor_only_board, Machine, initialize_audio=False
+    )
+    sensor_only.calibrate()
+    assert unavailable_player is None
+
+
+def test_hardware_factory_rejects_ambiguous_mpu_autodetection():
+    from hardware import create_hardware
+
+    class MultiMPUI2C(I2C):
+        def scan(self): return [0x68, 0x69]
+
+    class TestMachine:
+        class Pin:
+            OUT = 1
+            def __init__(self, pin, mode=None, value=None): pass
+            def value(self, value): pass
+        class ADC:
+            ATTN_11DB = 3
+            def __init__(self, pin): pass
+            def atten(self, value): pass
+        @staticmethod
+        def I2C(*args, **kwargs): return MultiMPUI2C()
+        @staticmethod
+        def UART(*args, **kwargs): return object()
+
+    board={'flex_pins':[1,2,3,4,5],'adc_attenuation':'ATTN_11DB','i2c_id':0,
+           'scl_pin':6,'sda_pin':7,'mpu_address':None,'mpu_offsets':[0,0],
+           'protocol_uart':{'id':0,'tx':8,'rx':9},
+           'sd_sck':12,'sd_miso':13,'sd_mosi':14,'sd_cs':15,
+           'amp_sd_pin':16,'i2s_lrc':17,'i2s_bclk':18,'i2s_din':19}
+
+    with pytest.raises(OSError, match="exactly one MPU6050"):
+        create_hardware(board, TestMachine)

@@ -40,11 +40,11 @@ export function SyncPage() {
   const readiness = (() => {
     if (syncError) return { title: 'La sincronización no terminó', detail: 'Revisá el error y volvé a intentarlo. El perfil anterior sigue conservado.', tone: 'error' as const };
     if (isSyncing) return { title: 'Enviando biblioteca', detail: `${syncProgress.sent} de ${syncProgress.total} gestos enviados`, tone: 'primary' as const };
-    if (syncIsComplete) return { title: 'Perfil actualizado en MITTEN', detail: 'La biblioteca quedó guardada. Verificá por separado que los MP3 estén en la microSD.', tone: 'success' as const };
+    if (syncIsComplete) return { title: 'Perfil actualizado en MITTEN', detail: 'Los gestos y sus números de pista quedaron guardados. La sincronización no envía ni verifica archivos de audio.', tone: 'success' as const };
     if (!isConnected) return { title: 'Falta conectar MITTEN', detail: 'Conectá el guante para consultar su estado y transferir la biblioteca.', tone: 'warning' as const };
     if (firmwareState !== 'IDLE') return { title: 'MITTEN está ocupado', detail: `Estado actual: ${getFirmwareStateLabel(firmwareState)}. Esperá antes de sincronizar.`, tone: 'warning' as const };
     if (overCapacity) return { title: 'La biblioteca supera la capacidad', detail: `MITTEN admite ${deviceInfo?.capabilities.maxGestures} gestos y la biblioteca tiene ${gestures.length}.`, tone: 'error' as const };
-    if (gestures.length === 0) return { title: 'La biblioteca está vacía', detail: 'Puedes crear un gesto o sincronizarla vacía para borrar el perfil del guante.', tone: 'neutral' as const };
+    if (gestures.length === 0) return { title: 'La biblioteca está vacía', detail: 'Podés crear un gesto o sincronizarla vacía para borrar el perfil del guante.', tone: 'neutral' as const };
     return { title: 'Biblioteca lista para transferir', detail: `${gestures.length} ${gestures.length === 1 ? 'gesto será enviado' : 'gestos serán enviados'} como un perfil completo.`, tone: 'primary' as const };
   })();
 
@@ -80,7 +80,7 @@ export function SyncPage() {
     }
   };
 
-  const handlePrepareMicroSd = async () => {
+  const handleDownloadAudioPackage = async () => {
     setIsPreparingPackage(true);
     setMissingAudio([]);
     try {
@@ -88,15 +88,15 @@ export function SyncPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'mitten-microsd.zip';
+      link.download = 'mitten-audios-mp3.zip';
       link.click();
       URL.revokeObjectURL(url);
-      showToast({ type: 'success', message: 'Paquete para microSD preparado' });
+      showToast({ type: 'success', message: 'ZIP de MP3 descargado. No está listo para la microSD del firmware actual.' });
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && error.missingTracks) {
         setMissingAudio(error.missingTracks);
-        showToast({ type: 'error', message: 'Genera los MP3 pendientes antes de preparar la microSD' });
-      } else showToast({ type: 'error', message: error instanceof Error ? error.message : 'No se pudo preparar la microSD' });
+        showToast({ type: 'error', message: 'Generá el MP3 de cada gesto antes de descargar el ZIP.' });
+      } else showToast({ type: 'error', message: error instanceof Error ? error.message : 'No se pudo descargar el ZIP de MP3' });
     } finally { setIsPreparingPackage(false); }
   };
 
@@ -136,10 +136,10 @@ export function SyncPage() {
       </section>
 
       <section className="app-panel p-5">
-        <h2 className="font-semibold text-text">Audio para el uso autónomo</h2>
-        <p className="text-sm text-text-muted mt-2">La sincronización transfiere gestos y números de pista. Los archivos MP3 se copian por separado a <code>/mp3</code> en la microSD del DFPlayer.</p>
+        <h2 className="font-semibold text-text">MP3 generados por la aplicación</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">La API genera MP3 para escuchar y descargar desde la web. El firmware actual espera WAV PCM mono de 16 kHz y 16 bits en <code>/mitten_audio/audio/NNNN.wav</code>; este ZIP contiene MP3 e instrucciones heredadas para DFPlayer, así que no sirve para preparar la tarjeta del guante actual. La conversión a WAV y la copia siguen siendo manuales; la aplicación no puede comprobar el contenido de la microSD.</p>
         {missingAudio.length > 0 ? <Notice tone="error" title="Faltan MP3 para completar el paquete"><ul className="mt-2 list-disc pl-5">{missingAudio.map(track => <li key={track.audioTrack}><Link className="font-semibold underline" to={`/gestures/${gestures.find(gesture => gesture.audioTrack === track.audioTrack)?.id}`}>{track.name}</Link> · pista {String(track.audioTrack).padStart(4, '0')}</li>)}</ul></Notice> : null}
-        <Button className="mt-4" variant="outline" onClick={handlePrepareMicroSd} disabled={isPreparingPackage || gestures.length === 0}>{isPreparingPackage ? 'Preparando…' : 'Preparar microSD'}</Button>
+        <Button className="mt-4" variant="outline" onClick={handleDownloadAudioPackage} disabled={isPreparingPackage || gestures.length === 0}>{isPreparingPackage ? 'Preparando ZIP…' : 'Descargar ZIP de MP3'}</Button>
       </section>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">

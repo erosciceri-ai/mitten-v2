@@ -20,6 +20,7 @@ export function GestureDetailPage() {
 
   // Audio state
   const [audioInfo, setAudioInfo] = useState<GestureAudioInfo | null>(null);
+  const [audioInfoError, setAudioInfoError] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
@@ -49,12 +50,13 @@ export function GestureDetailPage() {
 
   const fetchAudioInfo = async () => {
     if (!gestureId) return;
+    setAudioInfoError(false);
     try {
       const info = await getGestureAudioInfo(gestureId);
       setAudioInfo(info);
-
     } catch (error) {
       setAudioInfo(null);
+      setAudioInfoError(true);
     }
   };
 
@@ -189,7 +191,7 @@ export function GestureDetailPage() {
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-[-0.035em] text-text text-balance">{gesture.name}</h1>
             <div className="flex items-center gap-3 mt-1 text-sm text-text-muted">
-              <StatusBadge tone="primary">Pista de audio {gesture.audioTrack}</StatusBadge>
+              <StatusBadge tone="primary">Pista lógica {gesture.audioTrack}</StatusBadge>
               <StatusBadge tone="success">Guardado</StatusBadge>
             </div>
           </div>
@@ -205,7 +207,7 @@ export function GestureDetailPage() {
       {/* Edit Form */}
       {isEditing && (
         <div className="app-panel p-6">
-          <h2 className="text-lg font-semibold text-text mb-4">Editar Nombre</h2>
+          <h2 className="text-lg font-semibold text-text mb-4">Editar nombre</h2>
           <div className="flex flex-col sm:flex-row gap-4 items-end">
             <div className="flex-1">
               <label htmlFor="edit-name" className="block text-sm font-medium text-text mb-1">
@@ -241,45 +243,54 @@ export function GestureDetailPage() {
               <dd className="font-mono font-medium">{gesture.id}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-text-muted">Pista de audio</dt>
+              <dt className="text-text-muted">Pista lógica</dt>
               <dd className="font-mono font-medium">{gesture.audioTrack}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-text-muted">Archivo en la microSD</dt>
-              <dd className="font-mono text-sm">/mp3/{gesture.audioTrack.toString().padStart(4, '0')}.mp3</dd>
+              <dt className="text-text-muted">Ruta WAV esperada</dt>
+              <dd className="font-mono text-sm">/mitten_audio/audio/{gesture.audioTrack.toString().padStart(4, '0')}.wav</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-text-muted">Creado</dt>
-              <dd>{new Date(gesture.createdAt).toLocaleString()}</dd>
+              <dd>{new Date(gesture.createdAt).toLocaleString('es-AR')}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-text-muted">Actualizado</dt>
-              <dd>{new Date(gesture.updatedAt).toLocaleString()}</dd>
+              <dd>{new Date(gesture.updatedAt).toLocaleString('es-AR')}</dd>
             </div>
           </dl>
         </div>
 
         <div className="app-panel p-6">
-          <h3 className="text-lg font-semibold text-text mb-4">Voz del gesto</h3>
+          <h3 className="text-lg font-semibold text-text mb-4">MP3 para la web</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-text-muted">Estado</span>
-              {audioInfo?.filePath ? (
+              <span className="text-text-muted">Generación en la API</span>
+              {audioInfoError ? (
+                <StatusBadge tone="error">Estado no disponible</StatusBadge>
+              ) : audioInfo?.filePath ? (
                 <StatusBadge tone="success">Generado</StatusBadge>
-              ) : (
+              ) : audioInfo ? (
                 <StatusBadge tone="warning">Pendiente</StatusBadge>
+              ) : (
+                <StatusBadge tone="neutral">Consultando…</StatusBadge>
               )}
             </div>
             {audioInfo?.generatedAt && (
               <div className="flex items-center justify-between">
                 <span className="text-text-muted">Generado</span>
-                <span className="font-mono text-sm">{new Date(audioInfo.generatedAt).toLocaleString()}</span>
+                <span className="font-mono text-sm">{new Date(audioInfo.generatedAt).toLocaleString('es-AR')}</span>
               </div>
             )}
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <span className="text-text-muted">Pista</span>
               <span className="font-mono">#{gesture.audioTrack}</span>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-text-muted">Audio en la microSD</span>
+              <StatusBadge tone="warning">No verificado</StatusBadge>
+            </div>
+            <p className="text-sm leading-6 text-text-muted">La API genera MP3 para escuchar o descargar desde la web. El firmware espera WAV PCM mono de 16 kHz y 16 bits en la ruta indicada; esta aplicación no convierte ni copia ese archivo.</p>
             <Button className="w-full" onClick={handleGenerateAudio} disabled={isGeneratingAudio}>
               {isGeneratingAudio ? (
                 <>

@@ -2,24 +2,24 @@ import { lazy, Suspense, type CSSProperties, useEffect, useState } from 'react';
 
 const SignalWaves = lazy(() => import('./react-bits/Waves/Waves'));
 
-type DemoStage = 'idle' | 'sensing' | 'matching' | 'speaking';
+type DemoStage = 'idle' | 'sensing' | 'matching' | 'example';
 
 const stages: Record<DemoStage, { label: string; detail: string }> = {
   idle: {
-    label: 'Listo para demostrar',
-    detail: 'Iniciá la secuencia para recorrer el procesamiento local de un gesto.',
+    label: 'Recorrido de ejemplo',
+    detail: 'Esta animación explica los pasos; no lee sensores ni ejecuta el reconocimiento.',
   },
   sensing: {
-    label: 'Leyendo sensores',
-    detail: 'Los cinco sensores flex y el MPU6050 forman una muestra de siete dimensiones.',
+    label: 'Muestra conceptual',
+    detail: 'En el guante, cinco sensores flex y el MPU6050 forman una muestra de siete dimensiones. Estos valores son ilustrativos.',
   },
   matching: {
-    label: 'Comparando el gesto',
-    detail: 'El ESP32 contrasta la muestra con el perfil que fue sincronizado previamente.',
+    label: 'Paso de reconocimiento',
+    detail: 'El firmware compara la muestra con el perfil sincronizado. Esta animación no ejecuta el algoritmo.',
   },
-  speaking: {
-    label: 'Frase reconocida',
-    detail: 'El DFPlayer Mini reproduce la pista preparada desde la microSD.',
+  example: {
+    label: 'Salida de ejemplo',
+    detail: 'El firmware busca un WAV local asociado. Esta demostración no reproduce audio real.',
   },
 };
 
@@ -29,10 +29,10 @@ export function ProjectDemo() {
   const [stage, setStage] = useState<DemoStage>('idle');
 
   useEffect(() => {
-    if (stage === 'idle' || stage === 'speaking') return undefined;
+    if (stage === 'idle' || stage === 'example') return undefined;
 
     const timer = window.setTimeout(() => {
-      setStage(stage === 'sensing' ? 'matching' : 'speaking');
+      setStage(stage === 'sensing' ? 'matching' : 'example');
     }, 1100);
 
     return () => window.clearTimeout(timer);
@@ -55,7 +55,7 @@ export function ProjectDemo() {
             disabled={running}
             onClick={() => setStage('sensing')}
           >
-            {stage === 'speaking' ? 'Repetir demostración' : running ? 'Procesando…' : 'Simular un gesto'}
+            {stage === 'example' ? 'Repetir recorrido' : running ? 'Mostrando recorrido…' : 'Ver recorrido conceptual'}
           </button>
         </div>
 
@@ -64,7 +64,7 @@ export function ProjectDemo() {
             <SignalWaves className="signal-console__waves" lineColor="#00D3DD" backgroundColor="transparent" waveAmpX={18} waveAmpY={8} xGap={18} yGap={42} maxCursorMove={24} />
           </Suspense>
           <div className="signal-console__topline">
-            <span>MITTEN / recorrido local</span>
+            <span>MITTEN / recorrido conceptual</span>
             <span className="signal-console__state" aria-live="polite">{stages[stage].label}</span>
           </div>
 
@@ -81,14 +81,14 @@ export function ProjectDemo() {
           <div className="signal-console__route" aria-label="Etapas de la demostración">
             <div className={stage !== 'idle' ? 'is-active' : ''}><span>01</span><strong>Sensores</strong></div>
             <i aria-hidden="true" />
-            <div className={stage === 'matching' || stage === 'speaking' ? 'is-active' : ''}><span>02</span><strong>ESP32</strong></div>
+            <div className={stage === 'matching' || stage === 'example' ? 'is-active' : ''}><span>02</span><strong>ESP32</strong></div>
             <i aria-hidden="true" />
-            <div className={stage === 'speaking' ? 'is-active' : ''}><span>03</span><strong>Audio</strong></div>
+            <div className={stage === 'example' ? 'is-active' : ''}><span>03</span><strong>WAV</strong></div>
           </div>
 
           <div className="signal-console__result">
-            <span>{stage === 'speaking' ? 'Salida preparada' : 'Estado del proceso'}</span>
-            <strong>{stage === 'speaking' ? '“Necesito ayuda”' : stages[stage].detail}</strong>
+            <span>{stage === 'example' ? 'Mensaje de ejemplo' : 'Estado del recorrido'}</span>
+            <strong>{stage === 'example' ? '“Necesito ayuda”' : stages[stage].detail}</strong>
           </div>
         </div>
       </div>

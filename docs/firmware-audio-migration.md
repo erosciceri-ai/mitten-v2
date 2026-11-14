@@ -2,6 +2,8 @@
 
 **Decisión aprobada:** el ESP32 lee pistas WAV PCM desde microSD por SPI y entrega PCM por I²S al MAX98357A y al parlante. Existe una implementación inicial en `firmware/esp32/audio.py`, integrada con el reconocimiento; **no está validada físicamente**. La transferencia web y la conversión MP3 quedan fuera de esta etapa.
 
+**Decisión reconfirmada el 2026-11-14 (microSD + MAX98357A).** El hardware de la PCB es microSD por SPI + MAX98357A por I²S + parlante; DFPlayer Mini por UART queda descartado como camino de reproducción. `firmware/esp32/audio.py` ya implementa ese camino (`machine.SDCard(slot=2, ...)` + `vfs.VfsFat` + `machine.I2S(..., mode=I2S.TX)`) y `firmware/esp32/dfplayer.py` queda como antecedente histórico que el runtime no importa. Esta aclaración no cambia el protocolo ni el formato de las pistas.
+
 ## Punto de partida
 
 - El firmware arranca en `firmware/esp32/main.py`; `hardware.py` inicializa sensores, transporte serie y el reproductor SPI/I²S. DFPlayer por UART queda como antecedente histórico, no como dependencia activa. El modo de diagnóstico USB pertenece a una etapa anterior.
@@ -68,6 +70,20 @@ La documentación oficial [v1.26.0 de `SDCard`](https://docs.micropython.org/en/
 El flujo de reconocimiento solicita la pista sin transmitir todo el archivo dentro de `dispatcher.update`. `main_loop` sigue atendiendo el transporte y actualizando sensores; después bombea como máximo un bloque PCM de 512 bytes por iteración. Con `I2S.irq()` disponible, la escritura I²S es no bloqueante. La lectura FAT/SPI de 512 bytes y la apertura/validación del WAV sí son síncronas; si el driver no ofrece `irq()`, la escritura cae al modo bloqueante. A 16 kHz mono de 16 bits, 512 bytes representan 16 ms de audio, pero eso **no limita el tiempo real** de una lectura SD ni el costo de inicialización. No se midió latencia física: no se puede afirmar que el reconocimiento/captura esté libre de retrasos.
 
 `hardware.py` lleva GPIO14 a LOW antes de inicializar sensores y periféricos, y entrega ese mismo pin al reproductor. El reproductor solo lo pone HIGH después de validar el WAV e inicializar I²S; ante error o liberación, lo devuelve a LOW antes de desmontar/liberar recursos. La prueba automatizada valida LOW durante montaje fallido y errores de reproducción. Esto verifica el comportamiento del código, no el nivel eléctrico real en la PCB.
+
+## Estado de la placa (2026-11-14)
+
+| Elemento | Estado |
+| --- | --- |
+| Módulo microSD SPI | Conectado en la PCB. Contenido de la tarjeta sin verificar. |
+| MAX98357A por I²S + parlante | No validado físicamente; el firmware mantiene el amplificador en GPIO14 LOW hasta montar y validar un WAV. |
+| Rutas de pistas | El firmware resuelve `/mitten_audio/audio/{audioTrack:04d}.wav`. No hay WAVs confirmados en la tarjeta. |
+| Sensores flex | **Desconectados** en la última verificación. No hay captura ni reconocimiento confiables hasta conectarlos. |
+| MPU6050 | Detectado en `0x68` por I²C0 (SDA 21 / SCL 22), con offsets medidos `[-177.3251, -166.9727]`. |
+| Handshake V2 | Sin respuesta hasta la fecha; el firmware instalado en la placa no llega al bucle de protocolo. `tools/esp32-handshake-check` sirve para distinguir "firmware mudo" de "cable roto". |
+
+La cadena de audio no puede validarse hasta que el firmware complete el
+handshake y exista un perfil V2 sincronizado.
 
 ## Siguientes pruebas físicas
 

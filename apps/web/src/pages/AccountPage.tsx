@@ -54,7 +54,7 @@ export function AccountPage() {
 
       <section className="app-panel p-5 sm:p-6" aria-labelledby="data-title">
         <h2 id="data-title" className="text-lg font-semibold text-text">Tus datos</h2>
-        <p className="text-text-muted mt-2 max-w-xl">Descargá un archivo JSON con los datos públicos de tu cuenta y todos los gestos de tu biblioteca. No incluye credenciales ni archivos MP3.</p>
+        <p className="text-text-muted mt-2 max-w-xl">Descargá un JSON con los datos básicos exportables de tu cuenta y todos los gestos de tu biblioteca. No incluye credenciales ni archivos MP3.</p>
         <Button
           className="mt-5"
           variant="outline"
@@ -69,7 +69,7 @@ export function AccountPage() {
       {!user?.googleLinked && (
         <section className="app-panel p-5 sm:p-6" aria-labelledby="google-link-title">
           <h2 id="google-link-title" className="text-lg font-semibold text-text">Vincular Google</h2>
-          <p className="text-text-muted mt-2 max-w-xl">La cuenta de Google debe usar el mismo correo que tu cuenta MITTEN. Después podrás entrar con cualquiera de los dos métodos.</p>
+          <p className="text-text-muted mt-2 max-w-xl">La cuenta de Google debe usar el mismo correo que tu cuenta MITTEN. Después podés iniciar sesión con cualquiera de los dos métodos.</p>
           {error && <p className="mt-4 p-3 rounded-md bg-error-light text-error text-sm" role="alert">{error}</p>}
           <div className="mt-5">
             {isGoogleSignInConfigured ? (

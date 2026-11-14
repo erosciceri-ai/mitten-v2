@@ -8,22 +8,22 @@ const contactEmail = import.meta.env.VITE_CONTACT_EMAIL?.trim();
 const processSteps = [
   {
     title: 'La mano realiza un gesto',
-    text: 'Cinco sensores flex registran la posición de los dedos y el MPU6050 mide la orientación de la mano.',
+    text: 'Cinco sensores flex registran la flexión de los dedos y el MPU6050 aporta dos valores de orientación.',
   },
   {
     title: 'MITTEN interpreta el movimiento',
-    text: 'El ESP32 compara las siete dimensiones capturadas con el perfil de gestos aprendido por la persona.',
+    text: 'El ESP32 compara las siete dimensiones con los gestos registrados y sincronizados previamente.',
   },
   {
-    title: 'El guante reproduce la frase',
-    text: 'Al reconocer el gesto, el DFPlayer Mini reproduce desde la microSD la pista de audio asociada.',
+    title: 'El guante busca la pista local',
+    text: 'El firmware espera WAV PCM mono de 16 kHz y 16 bits en la microSD, y los envía por I²S al MAX98357A. La integración inicial existe, pero aún no se validó en la placa.',
   },
 ];
 
 const faqs = [
   {
     question: '¿MITTEN necesita una computadora para funcionar?',
-    answer: 'La computadora se usa para configurar, capturar y sincronizar. Después, el reconocimiento y la reproducción de audio ocurren localmente en el guante.',
+    answer: 'La meta es que, tras configurar y sincronizar el perfil, el reconocimiento y la reproducción ocurran en el guante. Para reproducir, hace falta preparar WAV compatibles en la microSD; la aplicación no los convierte ni los transfiere. La salida de audio todavía requiere validación física.',
   },
   {
     question: '¿Todos deben aprender los mismos gestos?',
@@ -44,7 +44,7 @@ function HeroSystemDiagram() {
     <div className="hero-system" aria-label="Recorrido de una señal: mano, sensores, ESP32 y audio">
       <svg className="hero-system__art" viewBox="0 0 520 430" role="img" aria-labelledby="hero-diagram-title hero-diagram-description">
         <title id="hero-diagram-title">Cómo MITTEN convierte un gesto en audio</title>
-        <desc id="hero-diagram-description">Una mano equipada con sensores envía datos al ESP32, que activa una pista de audio.</desc>
+        <desc id="hero-diagram-description">Recorrido previsto: sensores flex y MPU6050, reconocimiento local en el ESP32 y lectura de un archivo WAV para la salida de audio. La prueba física de reproducción está pendiente.</desc>
         <path className="hero-system__orbit" d="M71 320C154 369 277 377 376 318C446 276 475 193 437 120" />
         <circle className="hero-system__signal" cx="71" cy="320" r="7" />
 
@@ -54,18 +54,18 @@ function HeroSystemDiagram() {
 
         <g className="hero-system__node" transform="translate(355 64)">
           <rect width="116" height="72" rx="18" />
-          <text x="58" y="32">7 dimensiones</text>
-          <text x="58" y="52">capturadas</text>
+          <text x="58" y="32">Sensores</text>
+          <text x="58" y="52">5 flex + MPU6050</text>
         </g>
         <g className="hero-system__node" transform="translate(355 177)">
           <rect width="116" height="72" rx="18" />
           <text x="58" y="32">ESP32</text>
-          <text x="58" y="52">reconoce</text>
+          <text x="58" y="52">MicroPython</text>
         </g>
         <g className="hero-system__node hero-system__node--audio" transform="translate(355 290)">
           <rect width="116" height="72" rx="18" />
-          <text x="58" y="32">DFPlayer</text>
-          <text x="58" y="52">reproduce</text>
+          <text x="58" y="32">WAV por I²S</text>
+          <text x="58" y="52">parlante</text>
         </g>
 
         <path className="hero-system__connector" d="M262 163C307 151 321 104 355 101" />
@@ -107,12 +107,12 @@ export function PublicHomePage() {
           <div className="public-container hero-grid">
             <div className="hero-copy">
               <h1>Cada gesto tiene algo que decir.</h1>
-              <p className="hero-lead">MITTEN es un guante inteligente de comunicación que reconoce gestos configurados y reproduce sus mensajes de voz sin depender de una computadora durante el uso cotidiano.</p>
+              <p className="hero-lead">MITTEN explora una forma alternativa de comunicar frases cotidianas con gestos personalizados. El reconocimiento local está implementado; la reproducción WAV del guante todavía no se validó físicamente.</p>
               <div className="hero-actions">
                 <a className="button button--primary" href="#funcionamiento">Descubrir MITTEN</a>
                 <Link className="button button--quiet" to="/login">Configurar mi guante</Link>
               </div>
-              <p className="hero-note">Prototipo funcional educativo · MITTEN V2.1</p>
+              <p className="hero-note">Prototipo educativo · MITTEN V2.1 · reproducción física en validación</p>
             </div>
             <HeroSystemDiagram />
           </div>
@@ -120,7 +120,7 @@ export function PublicHomePage() {
             <div><strong>5</strong><span>sensores flex</span></div>
             <div><strong>7</strong><span>dimensiones por muestra</span></div>
             <div><strong>50</strong><span>gestos por perfil</span></div>
-            <div><strong>Local</strong><span>reconocimiento y audio</span></div>
+            <div><strong>WAV</strong><span>reproducción física por validar</span></div>
           </div>
           <div className="public-container browser-check" role="status">
             <span className={`browser-check__icon ${browserReady ? 'browser-check__icon--ready' : ''}`} aria-hidden="true">
@@ -143,11 +143,11 @@ export function PublicHomePage() {
               <h2 id="purpose-title">Tecnología para expresar una intención de forma directa.</h2>
             </div>
             <div className="story-copy">
-              <p className="story-copy__lead">MITTEN busca transformar gestos configurados por cada persona en audio comprensible, mediante un dispositivo portable y autónomo después de su preparación.</p>
+              <p className="story-copy__lead">MITTEN busca ofrecer una vía alternativa para comunicar mensajes cotidianos: cada persona registra sus propios gestos y los asocia con frases de voz.</p>
               <div className="scope-list">
                 <article>
                   <h3>Lo que hace</h3>
-                  <p>Captura gestos, mantiene una biblioteca personal, prepara sus frases de audio y sincroniza el perfil completo con el guante.</p>
+                  <p>La web guarda la biblioteca, genera MP3 para escuchar y descargar, y sincroniza el perfil. El MP3 no se convierte ni se copia a la microSD del guante.</p>
                 </article>
                 <article>
                   <h3>Lo que no promete</h3>
@@ -162,9 +162,9 @@ export function PublicHomePage() {
           <div className="public-container">
             <div className="section-heading section-heading--horizontal">
               <div>
-                <h2 id="process-title">De la mano al parlante, en tres momentos.</h2>
+                <h2 id="process-title">Del gesto a la voz, paso a paso.</h2>
               </div>
-              <p>La web prepara el perfil. El guante realiza el reconocimiento y reproduce la frase de manera local.</p>
+              <p>La web prepara y sincroniza el perfil. La reproducción autónoma requiere un WAV compatible en la tarjeta; esa preparación no está integrada y falta probarla en la placa.</p>
             </div>
             <ol className="process-list">
               {processSteps.map((step, index) => (
@@ -193,11 +193,11 @@ export function PublicHomePage() {
                 </div>
                 <h3>Dentro del guante</h3>
                 <ul>
-                  <li><span>ESP32</span><small>Control y reconocimiento</small></li>
+                  <li><span>ESP32 + MicroPython</span><small>Control y reconocimiento local</small></li>
                   <li><span>5 sensores flex</span><small>Flexión de los dedos</small></li>
                   <li><span>MPU6050</span><small>Orientación y movimiento</small></li>
-                  <li><span>DFPlayer Mini</span><small>Reproducción de MP3</small></li>
-                  <li><span>microSD y parlante</span><small>Audio disponible sin PC</small></li>
+                  <li><span>microSD por SPI</span><small>Lectura de WAV PCM mono</small></li>
+                  <li><span>MAX98357A por I²S</span><small>Salida al parlante · prueba física pendiente</small></li>
                 </ul>
               </article>
 
@@ -209,11 +209,11 @@ export function PublicHomePage() {
                 </div>
                 <h3>En la aplicación</h3>
                 <ul>
-                  <li><span>React + TypeScript</span><small>Interfaz y Web Serial</small></li>
-                  <li><span>Node.js + Express</span><small>API y lógica de aplicación</small></li>
+                  <li><span>React + Vite + TypeScript</span><small>Interfaz y Web Serial</small></li>
+                  <li><span>Node.js + Express + TypeScript</span><small>API y lógica de aplicación</small></li>
                   <li><span>SQLite</span><small>Usuarios y bibliotecas</small></li>
-                  <li><span>MicroPython</span><small>Firmware modular del ESP32</small></li>
-                  <li><span>Protocolo V2</span><small>NDJSON transaccional</small></li>
+                  <li><span>Protocolo V2</span><small>Perfil NDJSON transaccional</small></li>
+                  <li><span>API de audio</span><small>Genera MP3 para previsualizar y descargar</small></li>
                 </ul>
               </article>
             </div>
@@ -232,8 +232,8 @@ export function PublicHomePage() {
             <ul className="capability-list">
               <li><strong>Biblioteca personal</strong><span>Creá, editá, buscá y eliminá gestos propios.</span></li>
               <li><strong>Captura guiada</strong><span>Registrá el movimiento directamente desde el guante.</span></li>
-              <li><strong>Audio asociado</strong><span>Prepará y revisá la frase que reproducirá cada gesto.</span></li>
-              <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo sin perder el anterior ante un fallo.</span></li>
+              <li><strong>Audio de la aplicación</strong><span>Generá y escuchá MP3 desde la web; no son los WAV que requiere el firmware.</span></li>
+              <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo sin perder el anterior ante un fallo. No transfiere ni verifica audio.</span></li>
             </ul>
           </div>
         </section>
