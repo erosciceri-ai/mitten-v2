@@ -98,6 +98,26 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
     return dispatcher
 
 
+# "serial": Web Serial por USB (comportamiento histórico). "relay": WebSocket vía Render.
+TRANSPORT_MODE = "serial"
+
+
+async def _run(transport, sensors, player):
+    """Wi-Fi corre como tarea aparte; sin red el guante sigue reconociendo y reproduciendo."""
+    from wifi_manager import WifiManager, CONNECTED
+    if TRANSPORT_MODE == "relay":
+        from relay_transport import RelayTransport
+        relay = RelayTransport(lambda: wifi.state == CONNECTED)
+        wifi = WifiManager(on_form=relay.handle_form)
+        asyncio.create_task(wifi.run())
+        asyncio.create_task(relay.run())
+        transport = relay
+    else:
+        wifi = WifiManager()
+        asyncio.create_task(wifi.run())
+    await main_loop(transport, sensor_manager=sensors, audio_player=player)
+
+
 def main():
     import os
     from hardware import create_hardware
@@ -106,8 +126,10 @@ def main():
     try:
         # UART0 is also the MicroPython REPL on the board's USB serial bridge.
         # Give that port exclusively to the NDJSON protocol before Web Serial connects.
-        os.dupterm(None)
-        asyncio.run(main_loop(transport, sensor_manager=sensors, audio_player=player))
+        # En modo relay el REPL queda disponible: el protocolo no usa el UART.
+        if TRANSPORT_MODE != "relay":
+            os.dupterm(None)
+        asyncio.run(_run(transport, sensors, player))
     finally:
         try:
             player.deinitialize()

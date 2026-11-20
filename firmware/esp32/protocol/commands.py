@@ -1,7 +1,18 @@
 """Protocol V2 request dispatcher for the hardware-independent firmware core."""
 
+import binascii
+
+from audio_store import (
+    AudioStoreError,
+    CHUNK_MAX_BYTES,
+    MAX_TRACK_BYTES,
+    MIN_TRACK_BYTES,
+    TRACKS,
+    UPLOAD_TIMEOUT_MS,
+)
 from config import (
     BOOTSTRAP_MAX_MESSAGE_BYTES,
+    ERR_AUDIO_NO_UPLOAD,
     ERR_DEVICE_BUSY,
     ERR_DUPLICATE_REQUEST_ID,
     ERR_HANDSHAKE_REQUIRED,
@@ -40,13 +51,15 @@ from utils.time import ticks_ms, ticks_diff
 from validation.gesture import validate_gesture_data
 
 
-_FUNCTIONAL_COMMANDS = ("capture.start", "sync.begin", "sync.gesture", "sync.commit", "sync.abort")
+_AUDIO_COMMANDS = ("audio.begin", "audio.chunk", "audio.commit", "audio.abort", "audio.status")
+_FUNCTIONAL_COMMANDS = ("capture.start", "sync.begin", "sync.gesture", "sync.commit", "sync.abort") + _AUDIO_COMMANDS
+_AUDIO_CHUNK_BASE64_MAX = ((CHUNK_MAX_BYTES + 2) // 3) * 4
 
 
 class FirmwareDispatcher:
     """Owns protocol session state and dispatches one request at a time."""
 
-    def __init__(self, emit=None, sensor_manager=None, audio_player=None):
+    def __init__(self, emit=None, sensor_manager=None, audio_player=None, audio_store=None):
         self._emit_callback = emit
         self._handling_request = False
         self._events = []
@@ -74,6 +87,12 @@ class FirmwareDispatcher:
         self.capture_manager = CaptureManager(sensor_manager)
         self.recognizer = GestureRecognizer()
         self.audio_player = audio_player
+        self.audio_store = audio_store
+        if self.audio_store is None and audio_player is not None and hasattr(audio_player, "remount"):
+            from audio_store import AudioStore
+            self.audio_store = AudioStore(remount=audio_player.remount, is_playing=audio_player.is_playing)
+            self.audio_store.recover()
+        self._audio_active = False
 
         # Load active profile on startup
         self._load_recognition_profile()
@@ -178,6 +197,9 @@ class FirmwareDispatcher:
 
         if command in _FUNCTIONAL_COMMANDS and self.state.current == STATE_ERROR:
             return build_error_response(request_id, ERR_INVALID_STATE, "Device requires restart")
+
+        if command in _AUDIO_COMMANDS:
+            return self._handle_audio(request_id, command, request["payload"])
 
         # Sync commands - check if we're in a state that allows them
         if command in ("sync.begin", "sync.gesture", "sync.commit", "sync.abort"):
@@ -372,6 +394,96 @@ class FirmwareDispatcher:
             {"command": command},
         )
 
+    # Audio upload handlers (WAV tracks written to the microSD)
+    @staticmethod
+    def _is_int(value, minimum, maximum):
+        return isinstance(value, int) and not isinstance(value, bool) and minimum <= value <= maximum
+
+    def _audio_payload_errors(self, command, payload):
+        errors = []
+        if command in ("audio.begin", "audio.chunk", "audio.commit") or "audioTrack" in payload:
+            if not self._is_int(payload.get("audioTrack"), 1, TRACKS):
+                errors.append("audioTrack must be an integer between 1 and %d" % TRACKS)
+        if command == "audio.begin":
+            if not self._is_int(payload.get("sizeBytes"), MIN_TRACK_BYTES, MAX_TRACK_BYTES):
+                errors.append("sizeBytes must be an integer between %d and %d" % (MIN_TRACK_BYTES, MAX_TRACK_BYTES))
+            if not self._is_int(payload.get("crc32"), 0, 0xFFFFFFFF):
+                errors.append("crc32 must be an unsigned 32-bit integer")
+        if command == "audio.chunk":
+            if not self._is_int(payload.get("offset"), 0, MAX_TRACK_BYTES):
+                errors.append("offset must be a non-negative integer")
+            if self._decode_chunk(payload.get("data")) is None:
+                errors.append("data must be canonical base64 of 1 to %d bytes" % CHUNK_MAX_BYTES)
+        return errors
+
+    @staticmethod
+    def _decode_chunk(data):
+        if not isinstance(data, str) or not 0 < len(data) <= _AUDIO_CHUNK_BASE64_MAX:
+            return None
+        try:
+            raw = binascii.a2b_base64(data)
+            if binascii.b2a_base64(raw).strip() != data.encode():
+                return None
+        except Exception:
+            return None
+        return raw if 0 < len(raw) <= CHUNK_MAX_BYTES else None
+
+    def _handle_audio(self, request_id, command, payload):
+        store = self.audio_store
+        if store is None:
+            return build_error_response(
+                request_id, ERR_UNKNOWN_COMMAND, "Audio upload is not available on this device", {"command": command}
+            )
+        if command == "audio.begin":
+            if self.state.current != STATE_IDLE:
+                return self._functional_command_error(request_id, command)
+        elif command == "audio.status":
+            if self.state.current != STATE_IDLE and not self._audio_active:
+                return self._functional_command_error(request_id, command)
+        elif not self._audio_active:
+            if self.state.current in (STATE_CAPTURING, STATE_SYNCING):
+                return build_error_response(request_id, ERR_DEVICE_BUSY, "Another exclusive operation is in progress")
+            return build_error_response(request_id, ERR_AUDIO_NO_UPLOAD, "There is no active audio upload")
+
+        errors = self._audio_payload_errors(command, payload)
+        if errors:
+            return build_error_response(request_id, ERR_INVALID_PAYLOAD, "Invalid %s payload" % command, {"errors": errors})
+
+        cause = "audio.failed"
+        try:
+            track = payload.get("audioTrack")
+            if command == "audio.begin":
+                store.begin(track, payload["sizeBytes"], payload["crc32"])
+                self.state.transition(STATE_SYNCING, "audio.begin")
+                self._audio_active = True
+                response = build_success_response(request_id, {
+                    "audioTrack": track, "offset": 0,
+                    "chunkMaxBytes": CHUNK_MAX_BYTES, "idleTimeoutMs": UPLOAD_TIMEOUT_MS,
+                })
+            elif command == "audio.chunk":
+                offset = store.chunk(track, payload["offset"], self._decode_chunk(payload["data"]))
+                response = build_success_response(request_id, {"audioTrack": track, "offset": offset})
+            elif command == "audio.commit":
+                result = store.commit(track)
+                cause = "audio.commit"
+                response = build_success_response(request_id, {"audioTrack": track, "sizeBytes": result["size"]})
+            elif command == "audio.abort":
+                store.abort()
+                cause = "audio.abort"
+                response = build_success_response(request_id, {"aborted": True})
+            else:
+                response = build_success_response(request_id, {"tracks": store.summary(track)})
+        except AudioStoreError as error:
+            response = build_error_response(request_id, error.code, error.message, error.details)
+        self._audio_settle(cause)
+        return response
+
+    def _audio_settle(self, cause):
+        """Vuelve a IDLE cuando la carga terminó, falló o venció."""
+        if self._audio_active and not self.audio_store.is_uploading():
+            self._audio_active = False
+            self.state.transition(STATE_IDLE, cause)
+
     def _on_state_change(self, state):
         self._emit(build_state_event(state))
 
@@ -398,6 +510,9 @@ class FirmwareDispatcher:
 
     def update(self, now=None):
         now = ticks_ms() if now is None else now
+        if self.audio_store is not None:
+            self.audio_store.tick()
+            self._audio_settle("audio.failed")
         if self.state.current == STATE_SYNCING:
             self.sync_manager.check_timeout(now)
         if self.state.current == STATE_CAPTURING and self.capture_request_id:
