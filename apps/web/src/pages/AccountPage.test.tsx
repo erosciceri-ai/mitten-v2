@@ -5,6 +5,8 @@ import { AccountPage } from './AccountPage';
 const mocks = vi.hoisted(() => ({
   exportAccountData: vi.fn(),
   linkGoogleAccount: vi.fn(),
+  getDevices: vi.fn(),
+  revokeDevice: vi.fn(),
   refreshUser: vi.fn(),
   showToast: vi.fn(),
 }));
@@ -12,6 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../services/api', () => ({
   exportAccountData: mocks.exportAccountData,
   linkGoogleAccount: mocks.linkGoogleAccount,
+  getDevices: mocks.getDevices,
+  revokeDevice: mocks.revokeDevice,
 }));
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
@@ -35,7 +39,8 @@ describe('AccountPage', () => {
     vi.clearAllMocks();
   });
 
-  it('downloads the authenticated account export as JSON', async () => {
+  it('downloads the authenticated account export as JSON and renders paired devices section', async () => {
+    mocks.getDevices.mockResolvedValue({ devices: [] });
     mocks.exportAccountData.mockResolvedValue({
       format: 'mitten-account-export',
       version: 1,
@@ -56,5 +61,6 @@ describe('AccountPage', () => {
     expect(click).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:account-export');
     expect(mocks.showToast).toHaveBeenCalledWith({ type: 'success', message: 'Copia de tus datos descargada' });
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Guantes vinculados' })).toBeTruthy());
   });
 });

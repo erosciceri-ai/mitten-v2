@@ -115,7 +115,7 @@ export function GloveAudioPanel() {
           <h2 id="glove-audio-title" className="text-lg font-bold text-text">Audio en el guante</h2>
           <p className="mt-1 text-sm text-text-muted">Cada frase se convierte a WAV en tu navegador y se guarda en la microSD de MITTEN. Mientras se envía, el guante no reconoce gestos.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {isBusy ? <Button variant="outline" onClick={() => controller.current?.abort()}><X aria-hidden="true" />Cancelar</Button> : null}
           <Button onClick={() => run(missing)} disabled={isBusy || !isIdle || missing.length === 0}><Send aria-hidden="true" />Enviar los que faltan{missing.length ? ` (${missing.length})` : ''}</Button>
         </div>

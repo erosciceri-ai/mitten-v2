@@ -111,9 +111,28 @@ export async function linkGoogleAccount(credential: string): Promise<{ user: Use
   });
 }
 
+export interface PairedDevice {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  online: boolean;
+}
+
 /** Código de 6 dígitos (vence a los 10 min) para vincular el guante desde su portal Wi-Fi. */
 export async function createDevicePairingCode(): Promise<{ code: string; expiresInSeconds: number }> {
   return request('/device/pairing', { method: 'POST' });
+}
+
+export async function getDevices(): Promise<{ devices: PairedDevice[] }> {
+  return request<{ devices: PairedDevice[] }>('/device');
+}
+
+export async function revokeDevice(id: string): Promise<void> {
+  await request<void>(`/device/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function getCurrentUser(): Promise<User> {
