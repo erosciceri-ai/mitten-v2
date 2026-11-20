@@ -91,7 +91,7 @@ export function DashboardPage() {
           ))}
         </ol>
         <Notice tone="warning" title="Antes de desconectar la computadora">
-          Copia cada MP3 descargado a <code>/mp3</code> en la microSD y comprueba que el número de pista coincida. La web no puede verificar ese paso físico.
+          Después de sincronizar el perfil, usá el panel «Audio en el guante» para enviar las pistas WAV a <code>/mitten_audio/audio/NNNN.wav</code> en la microSD.
         </Notice>
       </Panel>
 

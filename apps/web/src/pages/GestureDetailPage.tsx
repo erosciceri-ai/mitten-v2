@@ -246,7 +246,7 @@ export function GestureDetailPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-text-muted">Archivo en la microSD</dt>
-              <dd className="font-mono text-sm">/mp3/{gesture.audioTrack.toString().padStart(4, '0')}.mp3</dd>
+              <dd className="font-mono text-sm">/mitten_audio/audio/{gesture.audioTrack.toString().padStart(4, '0')}.wav</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-text-muted">Creado</dt>

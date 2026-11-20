@@ -90,5 +90,8 @@ it('blocks incomplete microSD packages and returns only the authenticated user t
   const manifest = JSON.parse(await zip.file('manifest.json')!.async('text'));
   expect(manifest.tracks.map((track: { name: string }) => track.name)).toEqual(['Necesito agua', 'Gracias']);
   expect(JSON.stringify(manifest)).not.toContain('Privado');
+  const readme = await zip.file('COPIAR_A_MICROSD.txt')!.async('text');
+  expect(readme).toContain('Enviar al guante');
+  expect(readme).not.toMatch(/DFPlayer/i);
 });
 
