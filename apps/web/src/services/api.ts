@@ -38,6 +38,15 @@ async function getAuthToken(): Promise<string | null> {
   return localStorage.getItem('auth_token');
 }
 
+/** Same token as the REST client, read synchronously (used by the Wi-Fi relay transport). */
+export function getStoredAuthToken(): string | null {
+  return localStorage.getItem('auth_token');
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -100,6 +109,11 @@ export async function linkGoogleAccount(credential: string): Promise<{ user: Use
     method: 'POST',
     body: JSON.stringify({ credential }),
   });
+}
+
+/** Código de 6 dígitos (vence a los 10 min) para vincular el guante desde su portal Wi-Fi. */
+export async function createDevicePairingCode(): Promise<{ code: string; expiresInSeconds: number }> {
+  return request('/device/pairing', { method: 'POST' });
 }
 
 export async function getCurrentUser(): Promise<User> {

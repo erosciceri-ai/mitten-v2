@@ -76,3 +76,6 @@ nul
 /.runtime/
 /apps/web/test-results/
 /apps/web/playwright-report/
+firmware/esp32/wifi.json
+firmware/esp32/wifi.json.tmp
+firmware/esp32/relay.json

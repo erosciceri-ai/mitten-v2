@@ -29,7 +29,8 @@ const google = Boolean(googleClientId);
 const csp = [
   "default-src 'self'", "base-uri 'none'", "object-src 'none'", "frame-ancestors 'none'", "form-action 'self'",
   "script-src 'self'" + (google ? ' https://accounts.google.com/gsi/client' : ''),
-  `connect-src 'self' ${apiUrl.origin}` + (google ? ' https://accounts.google.com/gsi/' : ''),
+  // wss:// aparte: un origen https:// del CSP no autoriza el WebSocket del relay del guante (/ws/web).
+  `connect-src 'self' ${apiUrl.origin} wss://${apiUrl.host}` + (google ? ' https://accounts.google.com/gsi/' : ''),
   google ? 'frame-src https://accounts.google.com/gsi/' : "frame-src 'none'",
   "style-src 'self' 'unsafe-inline'" + (google ? ' https://accounts.google.com/gsi/style' : ''),
   "img-src 'self' data:", "font-src 'self'", "media-src 'self' blob:",

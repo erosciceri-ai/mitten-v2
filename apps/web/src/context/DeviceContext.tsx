@@ -1,9 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { DeviceService } from '../serial/DeviceService';
 import { DemoTransport, type DemoDeviceControls } from '../serial/DemoTransport';
+import { RelayTransport, relayUrlFromApiBase } from '../serial/RelayTransport';
+import type { AudioUploadOptions } from '../serial/DeviceService';
+import { getApiBaseUrl, getStoredAuthToken } from '../services/api';
 import {
   FirmwareState,
 } from '../types';
+import type { AudioCommitResult, AudioStatusResult } from '@mitten/contracts';
 import type {
   DeviceInfo,
   CapturePhase,
@@ -15,10 +19,14 @@ import type {
   ConnectionStatus,
 } from '../types';
 
+export type DeviceMode = 'hardware' | 'demo' | 'relay';
+
 interface DeviceContextValue {
-  deviceMode: 'hardware' | 'demo';
-  setDeviceMode: (mode: 'hardware' | 'demo') => void;
+  deviceMode: DeviceMode;
+  setDeviceMode: (mode: DeviceMode) => void;
   isDemoMode: boolean;
+  /** Glove connected through the backend relay (Wi-Fi) instead of USB. */
+  isRelayMode: boolean;
   // Connection state
   connectionStatus: ConnectionStatus;
   deviceInfo: DeviceInfo | null;
@@ -56,6 +64,8 @@ interface DeviceContextValue {
   abortSync: () => Promise<void>;
   restartDemoDevice: () => Promise<void>;
   simulateRecognition: (gestureId?: number) => Promise<boolean>;
+  uploadAudio: (audioTrack: number, wav: Uint8Array, options?: AudioUploadOptions) => Promise<AudioCommitResult>;
+  getAudioStatus: (audioTrack?: number) => Promise<AudioStatusResult>;
   
   // State resetters
   clearCaptureState: () => void;
@@ -67,8 +77,10 @@ interface DeviceContextValue {
 const DeviceContext = createContext<DeviceContextValue | null>(null);
 
 export function DeviceProvider({ children }: { children: ReactNode }) {
-  const [deviceMode, setDeviceModeState] = useState<'hardware' | 'demo'>(() =>
-    sessionStorage.getItem('mitten_device_mode') === 'demo' ? 'demo' : 'hardware'
+  const [deviceMode, setDeviceModeState] = useState<DeviceMode>(() => {
+    const stored = sessionStorage.getItem('mitten_device_mode');
+    return stored === 'demo' || stored === 'relay' ? stored : 'hardware';
+  }
   );
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
@@ -176,7 +188,14 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           console.error(`Device error [${code}]:`, message, details);
         }
       },
-    }, deviceMode === 'demo' ? handlers => new DemoTransport(handlers) : undefined);
+    }, deviceMode === 'demo'
+      ? handlers => new DemoTransport(handlers)
+      : deviceMode === 'relay'
+        ? handlers => new RelayTransport(handlers, {
+            url: relayUrlFromApiBase(getApiBaseUrl(), window.location),
+            getToken: getStoredAuthToken,
+          })
+        : undefined);
     
     deviceServiceRef.current = service;
     
@@ -186,7 +205,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     };
   }, [deviceMode]);
 
-  const setDeviceMode = useCallback((mode: 'hardware' | 'demo') => {
+  const setDeviceMode = useCallback((mode: DeviceMode) => {
     if (connectionStatus !== 'disconnected' && connectionStatus !== 'error') {
       throw new Error('Desconecta el dispositivo antes de cambiar de modo');
     }
@@ -350,6 +369,18 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     return (service.getTransport() as unknown as DemoDeviceControls).recognize(gestureId);
   }, [deviceMode]);
 
+  const uploadAudio = useCallback((audioTrack: number, wav: Uint8Array, options?: AudioUploadOptions) => {
+    const service = deviceServiceRef.current;
+    if (!service) return Promise.reject(new Error('Device service not initialized'));
+    return service.uploadAudio(audioTrack, wav, options);
+  }, []);
+
+  const getAudioStatus = useCallback((audioTrack?: number) => {
+    const service = deviceServiceRef.current;
+    if (!service) return Promise.reject(new Error('Device service not initialized'));
+    return service.getAudioStatus(audioTrack);
+  }, []);
+
   const clearCaptureState = useCallback(() => {
     setCaptureError(null);
     setCapturedGestureData(null);
@@ -375,6 +406,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     deviceMode,
     setDeviceMode,
     isDemoMode: deviceMode === 'demo',
+    isRelayMode: deviceMode === 'relay',
+    uploadAudio,
+    getAudioStatus,
     connectionStatus,
     deviceInfo,
     connectionError,
