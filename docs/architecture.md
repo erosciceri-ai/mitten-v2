@@ -46,15 +46,15 @@ La estructura general es:
                     │         apps/web          │
                     └──────────┬───────┬────────┘
                                │       │
-                       HTTP/JSON│       │Web Serial
-                               │       │
+                HTTP/JSON + WS │       │ Web Serial (USB)
+                   (/ws/web)   │       │
                                ▼       ▼
                 ┌──────────────────┐   ┌─────────────────────┐
                 │       API        │   │       ESP32         │
-                │ Node + Express   │   │    MicroPython      │
-                │    apps/api      │   │  firmware/esp32     │
-                └────────┬─────────┘   └──────────┬──────────┘
-                         │                        │
+                │ Node + Express   │◄──┤    MicroPython      │
+                │    apps/api      │WS │  firmware/esp32     │
+                └────────┬─────────┘saliente                 │
+                         │             └──────────┬──────────┘
                          ▼                        ▼
                 ┌──────────────────┐     ┌───────────────────┐
                 │ Base de datos    │     │ Sensores / Audio  │
@@ -64,9 +64,7 @@ La estructura general es:
                 └──────────────────┘     └───────────────────┘
 ```
 
-La aplicación web actúa como intermediario entre el backend y el guante.
-
-El backend no se comunica directamente con el ESP32.
+La aplicación web coordina la comunicación con el guante por **Web Serial** (USB) o mediante el **relay WebSocket seguro** de la API (`/ws/web` ↔ `/ws/device`, con conexión saliente desde el ESP32). Durante el uso normal autónomo, el reconocimiento y la reproducción de audio en el guante no dependen de Internet ni del backend.
 
 ---
 
@@ -397,13 +395,11 @@ La asignación de audio debe manejarse mediante identificadores estables.
 - El MP3 asociado puede regenerarse manteniendo la misma pista.
 - Al borrar el gesto, su `audioTrack` queda libre y puede reutilizarse mediante first-fit.
 
-**Convención del firmware actual (DFPlayer por UART, no objetivo oficial):**
-- Carpeta física: `/mp3/` en la raíz de la microSD.
-- Nomenclatura: `{audioTrack:04d}.mp3` (p.ej. `0001.mp3`, `0017.mp3`, `0050.mp3`).
-- Reproducción: `playMp3Folder(audioTrack)` — selección explícita por número de pista dentro de `/mp3`, independiente del orden de copia en FAT.
-
-
-**Objetivo oficial:** microSD conectada al ESP32 por SPI; el ESP32 lee la pista y entrega PCM por I²S al MAX98357A, que amplifica la señal para el parlante. El formato local (MP3 o WAV PCM), la estrategia de reproducción y la provisión de archivos quedan pendientes. La provisión es independiente de la sincronización de datos. Véase el [plan de migración](firmware-audio-migration.md).
+**Convención del firmware actual (microSD SPI + MAX98357A por I²S, DFPlayer retirado):**
+- Carpeta física: `/mitten_audio/audio/` en la microSD FAT32.
+- Nomenclatura: `{audioTrack:04d}.wav` (p.ej. `0001.wav`, `0017.wav`, `0050.wav`), formato WAV RIFF PCM mono, 16 kHz, 16 bits.
+- Reproducción: lectura incremental de bloques de 512 bytes por SPI hacia I²S (`firmware/esp32/audio.py`).
+- Carga desde la web: el navegador descarga el MP3 de la API, lo convierte a WAV (`apps/web/src/audio/gloveWav.ts`) y lo sube con `audio.*` hacia `firmware/esp32/audio_store.py` (`docs/audio-transfer.md`). Validación física en placa pendiente; véase el [plan de migración](firmware-audio-migration.md).
 
 ---
 
@@ -782,7 +778,7 @@ Mientras el dispositivo está conectado mediante una sesión compatible, un reco
 
 Este evento es informativo y no forma parte del camino crítico de reproducción.
 
-El objetivo es que el ESP32 reconozca el gesto y reproduzca localmente la pista sin esperar respuesta del frontend. El firmware disponible realiza la solicitud por UART al DFPlayer; la ruta SPI/I²S no está implementada.
+El ESP32 reconoce el gesto y reproduce localmente la pista WAV desde microSD por SPI/I²S (`firmware/esp32/audio.py`) sin esperar respuesta del frontend (validación física en placa pendiente; el módulo legacy DFPlayer por UART fue retirado).
 
 Esto evita que el guante necesite conexión constante con:
 
@@ -1169,9 +1165,9 @@ Este documento no define:
 - diseño mecánico del guante;
 - carcasa;
 - posición física de componentes;
-- mecanismo definitivo de transferencia de archivos de audio.
+- detalles eléctricos definitivos tras validación en placa.
 
-La sección 11 conserva la convención de archivos del DFPlayer para el firmware actual. El formato y las rutas del nuevo hardware siguen pendientes.
+La sección 11 documenta la convención vigente `/mitten_audio/audio/{audioTrack:04d}.wav` (microSD SPI + I²S) y la transferencia desde el navegador (`docs/audio-transfer.md`).
 
 El protocolo serie completo mensaje por mensaje **sí está definido** en `docs/protocol.md`.
 

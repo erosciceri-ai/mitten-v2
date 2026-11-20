@@ -189,21 +189,21 @@ MITTEN V2 comprende:
 - **REQ-SER-008:** Los componentes y páginas deben consumir las capacidades de esa capa centralizada y no implementar conexiones serie propias.
 - **REQ-SER-009:** La velocidad inicial de comunicación debe ser 115200 baudios.
 - **REQ-SER-010:** La velocidad sólo debe cambiarse si existe una razón técnica comprobada y documentada.
-- **REQ-SER-011:** El ESP32 no necesita conectarse directamente al backend mediante Wi-Fi.
-- **REQ-SER-012:** La sincronización debe recorrer:
+- **REQ-SER-011:** En modo USB, Web Serial es el único propietario del puerto; además, el sistema admite el transporte opcional **Wi-Fi relay (`wss://`)**, donde el ESP32 abre una conexión saliente hacia el backend (`/ws/device`) para enlazarse con la sesión web (`/ws/web`) sin exponer puertos locales ni usar bridge ni `monitor.py`.
+- **REQ-SER-012:** La sincronización y carga de audio hacia el guante recorren:
 
   ```text
-  Backend
+  Backend / Navegador
   → Frontend
-  → Web Serial
+  → Web Serial (USB) o Wi-Fi Relay (wss://)
   → ESP32
   ```
 
-- **REQ-SER-013:** El aprendizaje debe devolver los datos mediante:
+- **REQ-SER-013:** El aprendizaje devuelve los datos mediante:
 
   ```text
   ESP32
-  → Web Serial
+  → Web Serial (USB) o Wi-Fi Relay (wss://)
   → Frontend
   → Backend
   ```
@@ -327,7 +327,7 @@ MITTEN V2 comprende:
 
 ## 16. Audio autónomo: microSD SPI y MAX98357A
 
-Estos requisitos definen el objetivo, no el estado implementado. El firmware actual todavía utiliza DFPlayer Mini por UART. Véase el [plan de migración](firmware-audio-migration.md).
+La reproducción SPI/I²S (`firmware/esp32/audio.py`) y la carga de WAV desde el navegador (`audio.*`, `docs/audio-transfer.md`) ya están implementadas en software; el módulo legacy DFPlayer por UART fue retirado. La validación física en PCB/parlante sigue pendiente. Véase el [plan de migración](firmware-audio-migration.md).
 
 - **REQ-AUD-001:** MITTEN V2 debe leer audio desde una microSD por SPI y entregar PCM por I²S al MAX98357A para la reproducción autónoma.
 - **REQ-AUD-002:** El recorrido de reproducción autónoma debe ser:
@@ -346,38 +346,38 @@ Estos requisitos definen el objetivo, no el estado implementado. El firmware act
 - **REQ-AUD-007:** El archivo generado debe quedar relacionado con el gesto y estar disponible para previsualización desde la aplicación.
 - **REQ-AUD-008:** Cada gesto debe asociarse inequívocamente a un identificador de archivo o pista que el ESP32 pueda resolver en la microSD.
 - **REQ-AUD-009:** El identificador necesario para la reproducción autónoma debe formar parte de los datos sincronizados al ESP32.
-- **REQ-AUD-010:** `audioTrack` es un integer lógico dentro del rango `1–50`, independiente de `gesture.id`. El backend lo asigna mediante first-fit al crear el gesto; permanece inmutable mientras exista el gesto; se libera al eliminarlo y puede reutilizarse posteriormente. La ruta y la extensión del archivo en el dispositivo quedan pendientes de definición.
+- **REQ-AUD-010:** `audioTrack` es un integer lógico dentro del rango `1–50`, independiente de `gesture.id`. El backend lo asigna mediante first-fit al crear el gesto; permanece inmutable mientras exista el gesto; se libera al eliminarlo y puede reutilizarse posteriormente. La ruta física en la microSD es `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono, 16 kHz, 16 bits).
 
 ### 16.1. Estados diferenciados de un gesto
 
 - **REQ-AUD-011:** La aplicación debe diferenciar claramente entre tres estados independientes de un gesto:
   1. **Gesto guardado:** existe correctamente en la biblioteca del usuario dentro del backend.
   2. **Gesto sincronizado:** los datos necesarios para reconocimiento y reproducción están incluidos en la biblioteca actualmente sincronizada al ESP32.
-  3. **Audio preparado:** el archivo correspondiente fue preparado y colocado correctamente en la microSD conectada al ESP32 por SPI.
-- **REQ-AUD-012:** Estos estados no significan lo mismo; un gesto puede estar guardado y sincronizado, pero sin audio preparado.
+  3. **Audio preparado:** el archivo correspondiente fue preparado (MP3 en la API) y transferido al guante como WAV (`/mitten_audio/audio/NNNN.wav`) mediante `audio.*` o copiado en la microSD conectada al ESP32 por SPI.
+- **REQ-AUD-012:** Estos estados no significan lo mismo; un gesto puede estar guardado y sincronizado, pero sin audio preparado en la microSD.
 - **REQ-AUD-013:** En ese caso, el ESP32 podría reconocer el gesto, pero la pista podría no estar disponible para reproducirse.
 - **REQ-AUD-014:** La interfaz debe evitar afirmar simplemente que un gesto está "listo" cuando no pueda demostrarlo.
-- **REQ-AUD-015:** La aplicación no debe inferir el contenido de la microSD a partir de la sincronización del perfil.
-- **REQ-AUD-016:** Por lo tanto, el estado de audio podrá depender inicialmente de información registrada por el usuario o del proceso de preparación de la microSD; el mecanismo exacto se decidirá posteriormente.
+- **REQ-AUD-015:** La aplicación no debe inferir el contenido de la microSD a partir de la sincronización del perfil (`sync.*`).
+- **REQ-AUD-016:** El estado de audio en la microSD se consulta explícitamente en el guante conectado mediante `audio.status` (ver `docs/audio-transfer.md`).
 
-## 17. Limitación conocida: gestión de la microSD
+## 17. Gestión de audio entre backend, navegador y microSD
 
-- **REQ-MSD-001:** En esta versión no se exige transferir automáticamente los audios desde la aplicación hasta la microSD.
-- **REQ-MSD-002:** La carga de archivos de audio a la microSD debe tratarse como un proceso separado de la sincronización de datos.
+- **REQ-MSD-001:** La sincronización de gestos (`sync.*`) y la carga de audio al guante (`audio.*`) son flujos separados: `audio.*` permite transferir las pistas WAV desde el navegador (conversión MP3→WAV local), además de conservar el respaldo ZIP MP3 desde la API.
+- **REQ-MSD-002:** La carga de archivos de audio a la microSD debe tratarse como un proceso separado de la sincronización de perfil (`sync.*`).
 - **REQ-MSD-003:** El sistema y su documentación deben diferenciar claramente:
 
   ```text
   SINCRONIZACIÓN DE DATOS
-  Backend → Frontend → ESP32
+  Backend → Frontend → ESP32 (sync.*)
 
   GESTIÓN DE AUDIOS
-  Backend genera MP3 → procedimiento separado → microSD del guante
+  Backend genera MP3 → navegador convierte MP3→WAV y sube vía audio.* (o respaldo ZIP) → microSD (/mitten_audio/audio/NNNN.wav)
   ```
 
-- **REQ-MSD-004:** La documentación de uso debe explicar que un gesto puede estar sincronizado en el ESP32 y, aun así, no reproducirse correctamente si la pista correspondiente no fue colocada en la microSD.
-- **REQ-MSD-005:** No debe diseñarse en esta fase hardware nuevo para resolver esta limitación.
-- **REQ-MSD-006:** El procedimiento exacto para preparar o actualizar la microSD queda pendiente de diseño.
-- **REQ-MSD-007:** La numeración lógica utiliza `audioTrack` dentro del rango `1–50`; el mapeo a nombres físicos se decidirá junto con el formato de reproducción.
+- **REQ-MSD-004:** La documentación de uso debe explicar que un gesto puede estar sincronizado en el ESP32 y, aun así, no reproducirse correctamente si su pista WAV no fue cargada en la microSD.
+- **REQ-MSD-005:** No debe diseñarse en esta fase hardware nuevo para resolver esta separación.
+- **REQ-MSD-006:** La carga web usa `audio.begin` / `audio.chunk` / `audio.commit` / `audio.abort` / `audio.status` (`docs/protocol.md` §12.12 y `docs/audio-transfer.md`).
+- **REQ-MSD-007:** La numeración lógica utiliza `audioTrack` dentro del rango `1–50`, mapeado físicamente a `/mitten_audio/audio/{audioTrack:04d}.wav`.
 
 ## 18. Flujos funcionales
 
@@ -556,18 +556,17 @@ MITTEN V2 debe priorizar, en este orden general:
 - **REQ-NF-WSB-001:** La aplicación web tendrá como objetivo inicial navegadores compatibles con Web Serial API: **Chrome y Edge modernos**.
 - **REQ-NF-WSB-002:** El sistema depende de la disponibilidad de Web Serial; la interfaz debe informar claramente cuando Web Serial no esté disponible en el navegador.
 - **REQ-NF-WSB-003:** Cuando la aplicación no se ejecute en `localhost`, deberá utilizar un contexto seguro (HTTPS) cuando el navegador lo requiera para Web Serial.
-- **REQ-NF-WSB-004:** No se diseñarán todavía mecanismos alternativos de comunicación (Bluetooth, WebUSB, etc.).
+- **REQ-NF-WSB-004:** Se incorporó el modo opcional **Wi-Fi relay (`wss://`)** sobre Protocolo V2 a través del backend como alternativa al cable USB/Web Serial; Bluetooth y WebUSB siguen fuera de alcance.
 
 ## 23. Fuera de alcance actual
 
 Quedan explícitamente fuera del alcance actual de MITTEN V2:
 
 - Una aplicación móvil nativa.
-- El funcionamiento mediante Wi-Fi directo entre el ESP32 y el backend.
+- Conexiones entrantes hacia el ESP32 o servidor HTTP público en el guante fuera del portal temporal de provisión Wi-Fi (`MITTEN-XXXX`).
 - Bluetooth como sistema principal de sincronización.
 - Un bridge local para la comunicación con el ESP32.
 - `monitor.py`.
-- La transferencia automática de audio a la microSD del guante no es un requisito de esta fase.
 - Una arquitectura de microservicios.
 - Infraestructura cloud compleja.
 - Los antiguos ocho gestos obligatorios.
@@ -577,9 +576,9 @@ Quedan explícitamente fuera del alcance actual de MITTEN V2:
 
 Las siguientes decisiones permanecen abiertas y pueden resolverse en fases posteriores sin bloquear la arquitectura actual de MITTEN V2:
 
-1. **Procedimiento exacto de preparación de la microSD:** pasos que debe seguir el usuario para copiar, actualizar y verificar los MP3 generados por el backend.
+1. **Validación física en placa de audio SPI/I²S y Wi-Fi relay:** confirmar en el hardware real las llamadas MicroPython, la lectura/escritura FAT en microSD, TLS contra Render y consumo de RAM.
 
-2. **Método exacto para registrar o verificar el estado `audio preparado`:** mecanismo mediante el cual la aplicación registra que la pista correspondiente fue colocada correctamente en la microSD.
+2. **Endurecimiento de backend del relay (P1-7 / P1-8):** persistencia y revocación individual de dispositivos vinculados y validación estricta de `TRUSTED_PROXY`/rate limits WebSocket.
 
 3. **Algoritmo de reconocimiento definitivo:** el algoritmo de MITTEN V1 se utiliza como baseline inicial. Futuras alternativas podrán evaluarse mediante pruebas reproducibles sin cambiar los contratos actuales.
 
@@ -590,8 +589,8 @@ No vuelven a considerarse decisiones pendientes:
 - firmware en MicroPython;
 - backend con Node.js, Express y TypeScript, con SQLite local o PostgreSQL;
 - frontend con React, Vite y TypeScript;
-- Web Serial como único propietario del puerto serie;
-- eliminación de `monitor.py` y del bridge local;
+- Web Serial como único propietario del puerto serie (modo USB) y Wi-Fi relay saliente `wss://` vía backend (modo Wi-Fi);
+- eliminación de `monitor.py`, del bridge local y de DFPlayer;
 - estructura general del repositorio;
 - Protocol Version 2;
 - `maxMessageBytes = 8192`;
@@ -606,7 +605,7 @@ No vuelven a considerarse decisiones pendientes:
 - política de edición de gestos;
 - `gesture.id` inmutable;
 - `audioTrack` 1–50, first-fit, independiente de `gesture.id`, inmutable mientras exista el gesto y reutilizable después de eliminarlo;
-- formato y convención de archivos del guante pendientes de definición;
+- formato y ruta del guante: WAV PCM mono 16 kHz 16 bits en `/mitten_audio/audio/{audioTrack:04d}.wav`, cargado desde el navegador mediante `audio.*`;
 - generación o preparación de MP3 desde `apps/api`;
 - reproducción autónoma desde microSD SPI mediante MAX98357A por I²S;
 - datos de gestos V1 no migrados a V2;

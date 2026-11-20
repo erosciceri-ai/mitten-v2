@@ -1,4 +1,4 @@
-# MITTEN V2 — Protocolo serie Web Serial
+# MITTEN V2 — Protocolo de comunicación (Web Serial y Wi-Fi relay)
 
 ## 1. Propósito
 
@@ -8,16 +8,16 @@ Este documento define la especificación técnica oficial de la comunicación en
 apps/web ↔ firmware/esp32
 ```
 
-mediante USB Serial y Web Serial API.
+mediante **USB Serial / Web Serial API** (`TRANSPORT_MODE = "serial"`) o mediante el **transporte opcional Wi-Fi relay sobre WebSocket seguro (`wss://`)** a través del backend (`TRANSPORT_MODE = "relay"`).
 
 La especificación debe permitir implementar de forma independiente y compatible:
 
-- el cliente Web Serial de `apps/web`;
+- el cliente de transporte (`SerialTransport` y `RelayTransport`) en `apps/web`;
 - el protocolo del firmware MicroPython en `firmware/esp32`;
 - los contratos correspondientes en `packages/contracts`;
 - el simulador ubicado en `tools/esp32-simulator`.
 
-Este documento define el protocolo observable en el puerto serie. No define:
+Este documento define el protocolo observable V2 (y el envoltorio mínimo de control del relay). No define:
 
 - la API HTTP;
 - la estructura matemática definitiva de un gesto;
@@ -104,7 +104,19 @@ La configuración inicial obligatoria es:
 | Parity | `none` |
 | Flow control | `none` |
 
-Web Serial es el único propietario del puerto. Ningún componente de UI, proceso auxiliar, bridge local o `monitor.py` puede abrir el mismo puerto en paralelo.
+Web Serial es el único propietario del puerto serie cuando se usa USB. Ningún componente de UI, proceso auxiliar, bridge local o `monitor.py` puede abrir el mismo puerto en paralelo.
+
+### 4.1.1. Transporte opcional Wi-Fi relay (`wss://`)
+
+Cuando el firmware corre con `TRANSPORT_MODE = "relay"`, la comunicación utiliza una conexión WebSocket segura saliente iniciada por el ESP32 hacia el backend, sin abrir puertos directos en la red local del usuario:
+
+- **Vinculación inicial:** la web autenticada solicita `POST /api/device/pairing` y obtiene un código temporal de 6 dígitos (TTL `10 minutos`, un solo uso), que el usuario carga junto a las credenciales Wi-Fi (2,4 GHz) en el portal AP del ESP32 (`MITTEN-XXXX`, `http://192.168.4.1`).
+- **Endpoints WebSocket (`noServer`, `maxPayload = 16 KB`, `ping` cada `25 s`):**
+  - `/ws/device` (guante → backend): primer mensaje JSON `{"type":"pair","code":"123456"}` o `{"type":"auth","deviceToken":"<JWT>"}` (JWT firmado con `aud: "mitten-device"`, `kind: "device"`, TTL `365 días`, no válido como sesión web).
+  - `/ws/web` (navegador → backend): valida `Origin === FRONTEND_URL` en el upgrade y recibe como primer mensaje `{"type":"auth","token":"<JWT>"}`. Se admite una sola sesión web activa por cuenta.
+  - En producción exige TLS o proxy confiable (`TRUSTED_PROXY` + `x-forwarded-proto: https`).
+- **Reenvío transparente y avisos propios:** una vez autenticados ambos extremos en la misma cuenta, cada mensaje de texto WebSocket contiene una línea NDJSON del Protocolo V2 y se reenvía sin alterarlo. Los mensajes propios del relay llevan `{"type":"relay","event":...}` (`ready`, `paired`, `device_online`, `device_offline`, `error`) y nunca se reenvían al otro extremo.
+- **Códigos de cierre del relay:** `4000` (sesión reemplazada), `4001` (sin autenticar dentro de `5000 ms`), `4003` (no autorizado), `4029` (demasiados intentos de vinculación).
 
 ### 4.2. Codificación
 
@@ -627,15 +639,10 @@ Campos:
 | `nextIndex` | integer | Próximo índice esperado. |
 
 Si nunca se sincronizó un perfil válido, `activeProfile` es `null`.
-Si `state === "SYNCING"`, `activeSync` DEBE ser distinto de `null`.
+Durante una sincronización de perfil (`sync.*`), si `state === "SYNCING"`, `activeSync` DEBE ser distinto de `null`.
+Durante una carga de audio (`audio.*`, sección 12.12), el dispositivo reutiliza el estado exclusivo `SYNCING` sin transacción de perfil activa, por lo que `activeSync` es `null` y la combinación `{"state":"SYNCING","activeSync":null}` es válida en ese flujo.
 
-La siguiente combinación es inválida:
-
-```json
-{"state":"SYNCING","activeSync":null}
-```
-
-Si el frontend recibe esa combinación después de un handshake compatible, debe tratarla como `INVALID_DEVICE_MESSAGE`.
+Fuera de una carga de audio activa, si se recibe `{"state":"SYNCING","activeSync":null}` durante una sincronización de perfil, el frontend DEBE rechazarlo como incoherente (`INVALID_DEVICE_MESSAGE`).
 
 ### 10.3. Comandos permitidos por estado
 
@@ -936,7 +943,7 @@ Campos mínimos de `gesture`:
 |---|---|---|
 | `id` | integer | Entre `1` y `2147483647`; único dentro del perfil. |
 | `name` | string | Entre 1 y 60 puntos de código Unicode; sin caracteres de control. |
-| `audioTrack` | integer | Entre `1` y `50` en MITTEN V2. Asignado por el backend en creación (first-fit, inmutable). Convención local del firmware actual con DFPlayer (no parte del mensaje): `/mp3/{audioTrack:04d}.mp3`, reproducción mediante `playMp3Folder(audioTrack)`. |
+| `audioTrack` | integer | Entre `1` y `50` en MITTEN V2. Asignado por el backend en creación (first-fit, inmutable). Ruta local en la microSD del firmware SPI/I²S (no parte del mensaje): `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono 16 kHz 16 bits). |
 | `data` | object | Conforme a `docs/gesture-format.md`. |
 
 El nombre no es la identidad técnica del gesto. Dos nombres iguales no sustituyen la validación de IDs.
@@ -1176,7 +1183,7 @@ Este evento es:
 El firmware:
 
 - reconoce usando el perfil local;
-- solicita localmente la reproducción (DFPlayer por UART en el firmware actual);
+- solicita localmente la reproducción WAV desde microSD por SPI/I²S (MAX98357A);
 - NO espera una respuesta del frontend;
 - NO bloquea el audio para emitir el evento;
 - puede omitir el evento si no existe una sesión compatible o el canal no puede enviarlo.
@@ -1882,11 +1889,11 @@ No son decisiones abiertas:
 - independencia entre `gesture.id` y `audioTrack`;
 - recuperación desde `ERROR` mediante reinicio del ESP32;
 - formato de gesto definido por `docs/gesture-format.md`.
-- `state === SYNCING` implica que `activeSync` es distinto de `null`;
+- `state === SYNCING` mantiene `activeSync !== null` durante `sync.*` y `activeSync === null` durante `audio.*`;
 
 ## 22. Resumen del contrato
 ```text
-Transporte      = USB Serial 115200, UTF-8, NDJSON + LF
+Transporte      = USB Serial 115200 (Web Serial) o Wi-Fi relay wss:// (/ws/web, /ws/device), UTF-8, NDJSON + LF
 Versión         = Protocol 2
 Frame máximo    = 8192 bytes
 Bootstrap       = device.handshake estable entre versiones

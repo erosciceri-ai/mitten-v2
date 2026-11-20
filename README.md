@@ -6,14 +6,15 @@ Guante electrónico wearable que traduce gestos de mano a audio hablado.
 
 Una vez configurado y sincronizado, MITTEN puede reconocer gestos y reproducir el audio asociado sin depender de la PC, el navegador, el frontend ni el backend.
 
-La aplicación web se comunica directamente con el ESP32 mediante Web Serial API usando el protocolo serie MITTEN V2.
+La aplicación web se comunica con el ESP32 mediante **Web Serial API** (USB) o mediante el transporte opcional **Wi-Fi relay (`wss://`)** a través de la API backend usando el protocolo MITTEN V2.
 
 - 5 sensores flex para medir la flexión de los dedos
 - MPU6050 para orientación y movimiento de la mano
 - ESP32 con MicroPython como firmware
-- MicroSD por SPI y MAX98357A por I²S como objetivo de audio autónomo, aún no implementado
+- MicroSD por SPI y MAX98357A por I²S para reproducción WAV autónoma (implementado en software; validación física pendiente)
+- Carga de audio desde el navegador (`audio.*` con conversión MP3→WAV) y portal de provisión Wi-Fi
 - Aplicación web (React + Vite + TypeScript)
-- API backend (Node.js + Express + TypeScript + SQLite), responsable también de preparar/generar el audio
+- API backend (Node.js + Express + TypeScript + SQLite/PostgreSQL), TTS y relay WebSocket (`/ws/web`, `/ws/device`)
 
 ## Estructura del repositorio
 
@@ -52,7 +53,7 @@ MITTEN V2.1 puede demostrarse por software sin el guante físico:
 - La portada pública explica el objetivo, alcance, hardware, software y recorrido del gesto.
 - La aplicación permite registro, autenticación, biblioteca de gestos, captura y sincronización.
 - La suite integral recorre registro, captura simulada, persistencia, sincronización, reinicio,
-  reconocimiento y la trama UART destinada al DFPlayer del firmware actual. El [plan de migración](docs/firmware-audio-migration.md) describe el reemplazo pendiente.
+  reconocimiento y solicitud de la pista WAV correspondiente del reproductor SPI/I²S. El [plan de migración](docs/firmware-audio-migration.md) y [`docs/audio-transfer.md`](docs/audio-transfer.md) describen la arquitectura de audio y la validación física pendiente.
 
 El simulador oficial usa NDJSON por `stdin/stdout`. No se conecta directamente a la interfaz web
 ni reemplaza Web Serial. La demostración conceptual de la portada tampoco mide precisión real.
