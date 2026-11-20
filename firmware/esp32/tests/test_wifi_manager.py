@@ -124,6 +124,17 @@ class WifiManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(wm.validate_credentials("casa", "corta"))
         self.assertIsNotNone(wm.validate_credentials("a" * 33, ""))
 
+    def test_resolve_ap_password(self):
+        self.assertEqual(wm.resolve_ap_password(None), wm.AP_PASSWORD)
+        self.assertEqual(wm.resolve_ap_password({}), wm.AP_PASSWORD)
+        self.assertEqual(wm.resolve_ap_password({"ap_password": ""}), wm.AP_PASSWORD)
+        self.assertEqual(wm.resolve_ap_password({"ap_password": None}), wm.AP_PASSWORD)
+        self.assertEqual(wm.resolve_ap_password({"ap_password": "12345678"}), "12345678")
+        self.assertEqual(wm.resolve_ap_password({"ap_password": "a" * 63}), "a" * 63)
+        for bad in ("short7", "a" * 64, "ñ" * 32, 12345678):
+            with self.assertRaises(ValueError):
+                wm.resolve_ap_password({"ap_password": bad})
+
     async def test_first_boot_portal_save_and_connect(self):
         mgr = self.make()
         task = asyncio.create_task(mgr.run())

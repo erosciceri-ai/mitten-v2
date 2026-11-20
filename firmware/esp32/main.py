@@ -102,18 +102,20 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
 TRANSPORT_MODE = "serial"
 
 
-async def _run(transport, sensors, player):
+async def _run(transport, sensors, player, board=None):
     """Wi-Fi corre como tarea aparte; sin red el guante sigue reconociendo y reproduciendo."""
-    from wifi_manager import WifiManager, CONNECTED
+    from wifi_manager import WifiManager, CONNECTED, resolve_ap_password
+    ap_password = resolve_ap_password(board)
     if TRANSPORT_MODE == "relay":
-        from relay_transport import RelayTransport
-        relay = RelayTransport(lambda: wifi.state == CONNECTED)
-        wifi = WifiManager(on_form=relay.handle_form)
+        from relay_transport import RelayTransport, RELAY_URL
+        relay_url = (board.get("relay_url") if isinstance(board, dict) else None) or RELAY_URL
+        relay = RelayTransport(lambda: wifi.state == CONNECTED, url=relay_url)
+        wifi = WifiManager(ap_password=ap_password, on_form=relay.handle_form)
         asyncio.create_task(wifi.run())
         asyncio.create_task(relay.run())
         transport = relay
     else:
-        wifi = WifiManager()
+        wifi = WifiManager(ap_password=ap_password)
         asyncio.create_task(wifi.run())
     await main_loop(transport, sensor_manager=sensors, audio_player=player)
 
@@ -129,7 +131,7 @@ def main():
         # En modo relay el REPL queda disponible: el protocolo no usa el UART.
         if TRANSPORT_MODE != "relay":
             os.dupterm(None)
-        asyncio.run(_run(transport, sensors, player))
+        asyncio.run(_run(transport, sensors, player, board=BOARD))
     finally:
         try:
             player.deinitialize()

@@ -80,6 +80,17 @@ def validate_credentials(ssid, password):
     return None
 
 
+def resolve_ap_password(board=None):
+    """Devuelve la clave del AP desde BOARD['ap_password'] o el valor de fábrica."""
+    if isinstance(board, dict):
+        password = board.get("ap_password")
+        if password is not None and password != "":
+            if not isinstance(password, str) or not 8 <= len(password.encode("utf-8")) <= 63:
+                raise ValueError("ap_password must be 8 to 63 UTF-8 bytes")
+            return password
+    return AP_PASSWORD
+
+
 class WifiManager:
     def __init__(self, config_path=CONFIG_PATH, ap_password=AP_PASSWORD, port=PORTAL_PORT,
                  button=None, hold_ms=BUTTON_HOLD_MS, portal_timeout_ms=PORTAL_TIMEOUT_MS,

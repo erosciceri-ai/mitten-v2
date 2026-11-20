@@ -139,6 +139,37 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(report.counts["FALLA"], 1)
         self.assertIn("excepción RuntimeError: boom", self.out.text())
 
+    def test_section_ap_security_warns_on_default_and_never_prints_secrets(self):
+        self.assertFalse(diag.section_ap_security(self.report, board={}))
+        self.assertEqual((self.report.counts["AVISO"], self.report.counts["FALLA"]), (1, 0))
+        self.assertNotIn("mitten1234", self.out.text())
+
+    def test_section_ap_security_accepts_custom_password_without_echoing_it(self):
+        self.assertTrue(diag.section_ap_security(self.report, board={"ap_password": "mi-clave-unica-99"}))
+        self.assertEqual((self.report.counts["OK"], self.report.counts["AVISO"], self.report.counts["FALLA"]), (1, 0, 0))
+        self.assertNotIn("mi-clave-unica-99", self.out.text())
+
+    def test_section_ap_security_fails_on_invalid_password_without_echoing_it(self):
+        self.assertFalse(diag.section_ap_security(self.report, board={"ap_password": "short1"}))
+        self.assertEqual(self.report.counts["FALLA"], 1)
+        self.assertNotIn("short1", self.out.text())
+
+    def test_run_security_section_uses_stubbed_board_without_raising(self):
+        import sys
+        import types
+        saved = sys.modules.get("hardware_config")
+        sys.modules["hardware_config"] = types.SimpleNamespace(BOARD={})
+        try:
+            report = diag.run(sections=("security",), out=self.out)
+        finally:
+            if saved is None:
+                sys.modules.pop("hardware_config", None)
+            else:
+                sys.modules["hardware_config"] = saved
+        self.assertEqual((report.counts["AVISO"], report.counts["FALLA"]), (1, 0))
+        self.assertIn("== Seguridad AP ==", self.out.text())
+        self.assertNotIn("mitten1234", self.out.text())
+
 
 if __name__ == "__main__":
     unittest.main()

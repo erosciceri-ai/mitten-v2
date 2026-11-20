@@ -138,6 +138,27 @@ def section_wifi(report, config_path="wifi.json", timeout_ms=20000):
     return True
 
 
+# ---- 2b. seguridad de configuración AP ------------------------------------
+def section_ap_security(report, board=None):
+    report.title("Seguridad AP")
+    if board is None:
+        try:
+            from hardware_config import BOARD as board
+        except Exception:
+            board = {}
+    import wifi_manager as wm
+    try:
+        effective = wm.resolve_ap_password(board)
+    except ValueError:
+        report.fail("ap_password en hardware_config.py es inválida (debe tener entre 8 y 63 caracteres).")
+        return False
+    if effective == wm.AP_PASSWORD:
+        report.warn("AP_PASSWORD sigue en valor de fábrica: definí 'ap_password' en hardware_config.py antes de entregar el guante.")
+        return False
+    report.ok("AP_PASSWORD personalizado configurado en hardware_config.py.")
+    return True
+
+
 # ---- 3. relay: DNS, TLS y handshake WebSocket ------------------------------
 async def _relay_probe(url, ca_path):
     import relay_transport as rt
@@ -304,13 +325,14 @@ def section_sd(report, root="/mitten_audio/diag"):
 
 
 # ---- ejecución -------------------------------------------------------------
-def run(sections=("system", "imports", "wifi", "relay", "sd"), out=print):
+def run(sections=("system", "imports", "wifi", "security", "relay", "sd"), out=print):
     report = Report(out)
     report.out("MITTEN diagnóstico Wi-Fi + audio")
     table = {
         "system": section_system,
         "imports": section_imports,
         "wifi": section_wifi,
+        "security": section_ap_security,
         "relay": section_relay,
         "sd": section_sd,
     }

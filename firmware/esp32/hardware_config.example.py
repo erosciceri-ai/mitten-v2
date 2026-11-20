@@ -14,4 +14,7 @@ BOARD = {
     'protocol_uart': {'id': None, 'tx': None, 'rx': None},
     'sd_sck': 18, 'sd_miso': 19, 'sd_mosi': 23, 'sd_cs': 13,
     'amp_sd_pin': 14, 'i2s_lrc': 25, 'i2s_bclk': 26, 'i2s_din': 27,
+    # Opcionales para modo Wi-Fi / relay (mantienen defaults si se omiten):
+    # 'ap_password': 'cambiar-clave-wifi-8-63',  # 8 a 63 bytes UTF-8; reemplaza 'mitten1234'
+    # 'relay_url': 'wss://mitten-api-staging.onrender.com/ws/device',
 }
