@@ -110,11 +110,11 @@ Web Serial es el único propietario del puerto serie cuando se usa USB. Ningún 
 
 Cuando el firmware corre con `TRANSPORT_MODE = "relay"`, la comunicación utiliza una conexión WebSocket segura saliente iniciada por el ESP32 hacia el backend, sin abrir puertos directos en la red local del usuario:
 
-- **Vinculación inicial:** la web autenticada solicita `POST /api/device/pairing` y obtiene un código temporal de 6 dígitos (TTL `10 minutos`, un solo uso), que el usuario carga junto a las credenciales Wi-Fi (2,4 GHz) en el portal AP del ESP32 (`MITTEN-XXXX`, `http://192.168.4.1`).
+- **Vinculación inicial y gestión de dispositivos:** la web autenticada solicita `POST /api/device/pairing` y obtiene un código temporal de 6 dígitos (TTL `10 minutos`, un solo uso, almacenado con HMAC en `device_pairing_codes`), que el usuario carga junto a las credenciales Wi-Fi (2,4 GHz) en el portal AP del ESP32 (`MITTEN-XXXX`, `http://192.168.4.1`). Cada dispositivo vinculado queda registrado en la tabla `devices` (hash SHA-256 del token y `jti`), y puede listarse con `GET /api/device` o revocarse individualmente con `DELETE /api/device/:id` (desconectando el socket activo con código `4003`).
 - **Endpoints WebSocket (`noServer`, `maxPayload = 16 KB`, `ping` cada `25 s`):**
-  - `/ws/device` (guante → backend): primer mensaje JSON `{"type":"pair","code":"123456"}` o `{"type":"auth","deviceToken":"<JWT>"}` (JWT firmado con `aud: "mitten-device"`, `kind: "device"`, TTL `365 días`, no válido como sesión web).
+  - `/ws/device` (guante → backend): primer mensaje JSON `{"type":"pair","code":"123456"}` o `{"type":"auth","deviceToken":"<JWT>"}` (JWT firmado con `aud: "mitten-device"`, `kind: "device"`, `jti`, TTL `365 días`, validado contra `devices` y no válido como sesión web).
   - `/ws/web` (navegador → backend): valida `Origin === FRONTEND_URL` en el upgrade y recibe como primer mensaje `{"type":"auth","token":"<JWT>"}`. Se admite una sola sesión web activa por cuenta.
-  - En producción exige TLS o proxy confiable (`TRUSTED_PROXY` + `x-forwarded-proto: https`).
+  - En producción exige TLS o proxy confiable (`TRUSTED_PROXY` verificando la IP/CIDR real del par TCP + `x-forwarded-proto: https`), además de límites por IP en upgrades (`429`) e intentos de vinculación (`4029`).
 - **Reenvío transparente y avisos propios:** una vez autenticados ambos extremos en la misma cuenta, cada mensaje de texto WebSocket contiene una línea NDJSON del Protocolo V2 y se reenvía sin alterarlo. Los mensajes propios del relay llevan `{"type":"relay","event":...}` (`ready`, `paired`, `device_online`, `device_offline`, `error`) y nunca se reenvían al otro extremo.
 - **Códigos de cierre del relay:** `4000` (sesión reemplazada), `4001` (sin autenticar dentro de `5000 ms`), `4003` (no autorizado), `4029` (demasiados intentos de vinculación).
 
