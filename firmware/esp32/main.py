@@ -99,10 +99,14 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
 
 
 def main():
+    import os
     from hardware import create_hardware
     from hardware_config import BOARD
     transport, sensors, player = create_hardware(BOARD)
     try:
+        # UART0 is also the MicroPython REPL on the board's USB serial bridge.
+        # Give that port exclusively to the NDJSON protocol before Web Serial connects.
+        os.dupterm(None)
         asyncio.run(main_loop(transport, sensor_manager=sensors, audio_player=player))
     finally:
         try:

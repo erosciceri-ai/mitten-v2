@@ -12,7 +12,7 @@ El sistema utiliza:
 - Una aplicación web para configuración, gestión de gestos y comunicación con el guante.
 - Una API backend.
 - Una interfaz web React.
-- Generación de audio desde el backend. El objetivo oficial de reproducción autónoma es microSD SPI + MAX98357A por I²S; el firmware actual usa DFPlayer Mini por UART.
+- Generación de audio desde el backend. La reproducción autónoma V2 usa WAV PCM desde microSD por SPI y salida I²S al MAX98357A. La implementación inicial ya está integrada, pero aún no fue validada físicamente; la provisión desde la web y la conversión MP3→WAV siguen pendientes. Ver `docs/firmware-audio-migration.md`.
 
 El repositorio actual contiene una implementación anterior de MITTEN V1.
 
@@ -114,9 +114,9 @@ Responsable de:
 - Reconocimiento local de gestos cuando sea necesario.
 - Comunicación del estado del dispositivo mediante el protocolo serie.
 - Recepción de comandos válidos desde el frontend vía Web Serial.
-- Reproducción local de la pista asociada a un gesto reconocido. La implementación SPI/I²S sigue pendiente.
+- Reproducción local de la pista asociada a un gesto reconocido mediante la implementación inicial SPI/I²S: WAV PCM desde microSD al MAX98357A. La integración aún no está validada físicamente; ver `docs/firmware-audio-migration.md`.
 
-El ESP32 no genera archivos de audio ni asigna `audioTrack`; sólo reproduce pistas previamente preparadas y sincronizadas.
+El ESP32 no genera archivos de audio ni asigna `audioTrack`; reproduce pistas WAV preparadas y copiadas manualmente a la microSD. La sincronización V2 no transfiere los archivos de audio.
 
 El ESP32 no debe contener lógica de gestión de aplicación que pertenezca al backend.
 
@@ -152,7 +152,7 @@ Responsable de:
 - Gestión de metadatos de audio y asignación de `audioTrack`.
 
 El frontend solicita y coordina estas operaciones.
-El ESP32 no sintetiza voz. El objetivo es leer pistas preparadas desde microSD por SPI y entregar PCM por I²S al MAX98357A. El [plan de migración](docs/firmware-audio-migration.md) registra las decisiones pendientes.
+El ESP32 no sintetiza voz. Lee pistas WAV preparadas desde microSD por SPI y entrega PCM por I²S al MAX98357A. El [plan de migración](docs/firmware-audio-migration.md) registra la implementación, las decisiones aprobadas y la validación física pendiente.
 
 La dirección técnica confirmada para MITTEN V2 es:
 
@@ -598,8 +598,8 @@ Debe mantenerse alineado con los documentos canónicos. Ante una contradicción,
 - `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - La calibración MPU6050 pertenece al estado/configuración local del dispositivo y no a `GestureData`.
 - `audioTrack` 1–50: independiente de `gesture.id`, asignación first-fit, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
-- El firmware actual con DFPlayer usa `/mp3/{audioTrack:04d}.mp3`; esa ruta no define el formato ni el nombre de las pistas para la arquitectura SPI/I²S.
-- `apps/api` genera o prepara los archivos MP3. El frontend coordina y el ESP32 únicamente reproduce.
+- El firmware histórico con DFPlayer usaba `/mp3/{audioTrack:04d}.mp3`; esa ruta no define el formato ni el nombre de las pistas de la implementación V2 SPI/I²S.
+- `apps/api` genera o prepara los archivos MP3 para la aplicación; el firmware V2 reproduce archivos WAV copiados manualmente a la microSD. La conversión MP3→WAV y la transferencia al dispositivo siguen pendientes.
 - `gesture.id` es inmutable.
 - `gesture.name` y `gesture.data` son editables; el MP3 puede regenerarse.
 - Editar un gesto no implica sincronización incremental.

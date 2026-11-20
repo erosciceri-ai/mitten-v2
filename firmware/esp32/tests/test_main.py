@@ -1,8 +1,11 @@
 import asyncio
 import importlib
 import json
+import os
 import sys
+import types
 
+import main as firmware_main
 from main import main_loop
 
 
@@ -114,3 +117,29 @@ def test_mixed_chunk_preserves_bootstrap_error_order():
     ]
     assert len(errors) == 1
     assert errors[0]["data"]["error"]["code"] == "INVALID_JSON"
+
+
+def test_main_detaches_repl_after_hardware_init_before_starting_protocol(monkeypatch):
+    calls = []
+
+    class Player:
+        def deinitialize(self):
+            calls.append("deinitialize")
+
+    monkeypatch.setitem(sys.modules, "hardware_config", types.SimpleNamespace(BOARD={}))
+    monkeypatch.setitem(
+        sys.modules,
+        "hardware",
+        types.SimpleNamespace(create_hardware=lambda board: (calls.append("hardware") or (None, None, Player()))),
+    )
+    monkeypatch.setattr(os, "dupterm", lambda stream: calls.append(("dupterm", stream)), raising=False)
+
+    def run(coroutine):
+        calls.append("run")
+        coroutine.close()
+
+    monkeypatch.setattr(firmware_main.asyncio, "run", run)
+
+    firmware_main.main()
+
+    assert calls == ["hardware", ("dupterm", None), "run", "deinitialize"]
