@@ -76,6 +76,11 @@ describe('types', () => {
         'sync.gesture',
         'sync.commit',
         'sync.abort',
+        'audio.begin',
+        'audio.chunk',
+        'audio.commit',
+        'audio.abort',
+        'audio.status',
       ]);
     });
 
@@ -227,6 +232,8 @@ describe('types', () => {
       expect(PROTOCOL_ERROR_CODES).toContain('UNKNOWN_COMMAND');
       expect(PROTOCOL_ERROR_CODES).toContain('SYNC_INCOMPLETE');
       expect(PROTOCOL_ERROR_CODES).toContain('STORAGE_ERROR');
+      expect(PROTOCOL_ERROR_CODES).toContain('AUDIO_BAD_OFFSET');
+      expect(PROTOCOL_ERROR_CODES).toContain('AUDIO_INTEGRITY');
     });
   });
 
