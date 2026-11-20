@@ -18,8 +18,12 @@ export function DevicePairingCard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (expiresAt === null) return undefined;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    if (expiresAt === null || expiresAt <= Date.now()) return undefined;
+    const timer = setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= expiresAt) clearInterval(timer);
+    }, 1000);
     return () => clearInterval(timer);
   }, [expiresAt]);
 
@@ -58,9 +62,9 @@ export function DevicePairingCard() {
         <Button onClick={generate} disabled={isLoading}>{isActive ? 'Generar otro código' : 'Generar código de vinculación'}</Button>
         <div role="status" aria-live="polite" className="min-h-11">
           {isActive ? (
-            <p className="text-sm text-text-muted">
-              Código: <span data-testid="pairing-code" className="font-mono text-2xl font-bold tracking-[0.3em] text-text">{code}</span>
-              <span className="ml-3">vence en {formatCountdown(remaining)}</span>
+            <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-text-muted">
+              <span>Código: <span data-testid="pairing-code" className="font-mono text-2xl font-bold tracking-[0.3em] text-text">{code}</span></span>
+              <span>vence en {formatCountdown(remaining)}</span>
             </p>
           ) : code !== null ? <p className="text-sm text-warning">El código venció. Generá uno nuevo.</p> : null}
         </div>
