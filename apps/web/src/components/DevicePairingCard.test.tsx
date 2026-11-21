@@ -87,4 +87,25 @@ describe('DevicePairingCard', () => {
     expect(screen.getByText('No se pudo generar el código')).toBeTruthy();
     expect(screen.getByText('Límite alcanzado')).toBeTruthy();
   });
+
+  it('copies the active pairing code to clipboard and keeps countdown outside aria-live', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    mocks.createDevicePairingCode.mockResolvedValue({ code: '654321', expiresInSeconds: 600 });
+
+    render(<DevicePairingCard />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Generar código de vinculación' }));
+    });
+
+    const countdownText = screen.getByText(/vence en 10:00/);
+    expect(countdownText.closest('[aria-live]')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copiar código' }));
+    });
+
+    expect(writeText).toHaveBeenCalledWith('654321');
+    expect(screen.getByRole('button', { name: 'Copiado' })).toBeTruthy();
+  });
 });

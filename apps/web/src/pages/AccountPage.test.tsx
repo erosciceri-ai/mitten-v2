@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   revokeDevice: vi.fn(),
   refreshUser: vi.fn(),
   showToast: vi.fn(),
+  user: { id: 7, email: 'persona@example.com', googleLinked: true } as { id: number; email: string; googleLinked: boolean } | null,
 }));
 
 vi.mock('../services/api', () => ({
@@ -19,7 +20,7 @@ vi.mock('../services/api', () => ({
 }));
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 7, email: 'persona@example.com', googleLinked: true },
+    user: mocks.user,
     refreshUser: mocks.refreshUser,
   }),
 }));
@@ -62,5 +63,18 @@ describe('AccountPage', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:account-export');
     expect(mocks.showToast).toHaveBeenCalledWith({ type: 'success', message: 'Copia de tus datos descargada' });
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Guantes vinculados' })).toBeTruthy());
+  });
+
+  it('shows a retry notice instead of blank identity or Google link when user is null', async () => {
+    mocks.user = null;
+    mocks.getDevices.mockResolvedValue({ devices: [] });
+
+    render(<AccountPage />);
+
+    expect(screen.getByText('No se pudieron cargar los datos de tu cuenta')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Vincular Google' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(mocks.refreshUser).toHaveBeenCalledOnce();
+    mocks.user = { id: 7, email: 'persona@example.com', googleLinked: true };
   });
 });

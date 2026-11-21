@@ -34,9 +34,9 @@ test('registro, captura, audio, sincronización, reinicio y reconocimiento simul
   await page.getByRole('link', { name: 'Panel', exact: true }).click();
   await page.getByRole('button', { name: 'Reiniciar dispositivo simulado' }).click();
   await page.getByRole('button', { name: 'Simular reconocimiento' }).click();
-  await expect(page.getByText(/Reconocimiento simulado: gesto/)).toBeVisible();
+  await expect(page.getByText(/Reconocimiento simulado: «Necesito agua» \(pista \d+\)/)).toBeVisible();
 
-  await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+  await page.getByRole('button', { name: 'Salir de la cuenta' }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill('demo-password-123');
