@@ -6,40 +6,46 @@ Deploy the MicroPython runtime files directly from `firmware/esp32/` to the ESP3
 
 - Top-level modules and assets:
   - `main.py`, `config.py`, `hardware.py`, `hardware_config.py`
-  - `sensors.py`, `recognition.py`, `audio.py`, `audio_store.py`
+  - `capture.py`, `sensors.py`, `recognition.py`, `audio.py`, `audio_store.py`
   - `wifi_manager.py`, `relay_transport.py`, `diag_wifi_audio.py`
-  - `isrg_root_x1.der` (Let's Encrypt ISRG Root X1 CA certificate for `wss://` TLS verification)
+  - Optional: `relay_ca.der` (DER root CA certificate loaded by `relay_transport.py` via `CA_PATH = "relay_ca.der"` for `wss://` TLS verification; if omitted, TLS encrypts the socket without verifying the server certificate)
 - Package directories (preserve directory structure):
-  - `capture/`
-  - `protocol/`
-  - `storage/`
+  - `commands/`
   - `error/`
+  - `profile/`
+  - `protocol/`
+  - `staging/`
+  - `statemachine/`
+  - `storage/`
+  - `sync/`
   - `utils/`
+  - `validation/`
 
-## Transport modes (`config.py` and `hardware_config.py`)
+## Transport modes (`main.py` and `hardware_config.py`)
 
-MITTEN V2 supports two transport modes configured via `TRANSPORT_MODE` in `config.py`:
+MITTEN V2 supports two transport modes configured via `TRANSPORT_MODE` in `main.py`:
 
-1. **`TRANSPORT_MODE = "serial"` (default — USB UART0)**:
+1. **`TRANSPORT_MODE = "relay"` (default — Wi-Fi WebSocket relay)**:
+   - Uses `wifi_manager.py`, `relay_transport.py`, and optional `relay_ca.der` to connect outbound over `wss://` to the backend (`/ws/device`), while the web app connects to `/ws/web`.
+   - Persists Wi-Fi credentials in `wifi.json` and pairing credentials in `relay.json`.
+   - Configure optional defaults in `hardware_config.py` under `BOARD`:
+     - `BOARD["relay_url"]`: default backend relay URL (defaults to `RELAY_URL` in `relay_transport.py`, e.g. `wss://<api-host>/ws/device`).
+     - `BOARD["ap_password"]`: optional WPA2 password (8+ characters; defaults to `mitten1234`) for the provisioning soft-AP.
+   - When no Wi-Fi credentials are stored in `wifi.json`, or when holding the `BOOT` button (`GPIO0`) for 3 s, the ESP32 starts the provisioning soft-AP (`MITTEN-<suffix>`) at `http://192.168.4.1/` so the user can enter Wi-Fi credentials, the 6-digit pairing code from the Dashboard, and the relay URL.
+   - Because UART0 is not used for NDJSON in relay mode, the MicroPython serial REPL remains available for diagnostics.
+2. **`TRANSPORT_MODE = "serial"` (fallback — USB UART0)**:
    - On startup, the firmware detaches the MicroPython REPL from UART0 (`os.dupterm(None)`) so UART0 is dedicated to the NDJSON protocol at 115200 baud.
    - Close Thonny or any serial monitor before connecting the browser via Web Serial.
-2. **`TRANSPORT_MODE = "relay"` (optional — Wi-Fi WebSocket relay)**:
-   - Uses `wifi_manager.py`, `relay_transport.py`, and `isrg_root_x1.der` to connect outbound over `wss://` to the backend (`/ws/device`), while the web app connects to `/ws/web`.
-   - Configure optional defaults in `hardware_config.py` under `BOARD`:
-     - `BOARD["relay_url"]`: default backend relay URL (for example, `wss://<api-host>/ws/device`).
-     - `BOARD["ap_password"]`: optional WPA2 password (8+ characters) for the provisioning soft-AP.
-   - When no Wi-Fi credentials or pairing token are stored in `/mitten_wifi.json`, the ESP32 starts the `MITTEN-SETUP` captive provisioning soft-AP at `http://192.168.4.1/` so the user can enter Wi-Fi credentials, the 6-digit pairing code from the Dashboard, and the relay URL.
-   - Because UART0 is not used for NDJSON in relay mode, the MicroPython serial REPL remains available for diagnostics.
 
 ## Upload procedure
 
 1. Install the official MicroPython **v1.26+ / v1.29.0 ESP32_GENERIC** firmware for the ESP32-WROOM-32 board using Thonny or `esptool`.
-2. Review `hardware_config.py` (copied or adapted from `hardware_config.example.py`) and `TRANSPORT_MODE` in `config.py`.
+2. Review `hardware_config.py` (copied or adapted from `hardware_config.example.py`) and `TRANSPORT_MODE` in `main.py` (`"relay"` by default for Wi-Fi, or `"serial"` for USB fallback).
 3. In Thonny (**View → Files**) or using `mpremote`, copy the runtime files and directories listed above from `firmware/esp32/` to the ESP32 root (`/`).
 4. Optional pre-flight check: before enabling full startup, run `import diag_wifi_audio` from the REPL to verify the microSD mount, test WAV playback over I²S, and test Wi-Fi / HTTPS reachability.
 5. Restart the board:
-   - In `"serial"` mode, close Thonny and connect from the MITTEN web app using Web Serial.
-   - In `"relay"` mode, generate a pairing code in the web Dashboard, connect to the `MITTEN-SETUP` Wi-Fi network (`http://192.168.4.1/`) if not yet provisioned, and complete pairing.
+   - In `"relay"` mode (default), generate a pairing code in the web Dashboard, connect to the `MITTEN-<suffix>` Wi-Fi network (`http://192.168.4.1/`) if not yet provisioned, and complete pairing.
+   - In `"serial"` mode, close Thonny and connect from the MITTEN web app using **Guante por USB** (Web Serial).
 
 ## Audio tracks on the microSD
 
@@ -47,7 +53,7 @@ Gesture profile synchronization (`sync.*`) transfers gesture models and metadata
 
 You can populate the microSD card in either of two ways:
 
-1. **Browser-to-glove transfer (`audio.*`)**: In the web Dashboard ("Audio del guante (microSD)" → **Enviar al guante**), the browser converts each gesture's MP3 to a 16 kHz 16-bit mono PCM WAV and streams it over the active transport (Web Serial or Wi-Fi relay) in base64 chunks with SHA-256 verification and atomic staging (`audio_store.py`). See `docs/audio-transfer.md`.
+1. **Browser-to-glove transfer (`audio.*`)**: In the web Dashboard ("Audio en el guante" → **Enviar** / **Enviar los que faltan**), the browser converts each gesture's MP3 to a 16 kHz 16-bit mono PCM WAV and streams it over the active transport (Wi-Fi relay or Web Serial) in base64 chunks with CRC-32 verification and atomic staging (`audio_store.py`). See `docs/audio-transfer.md`.
 2. **Direct microSD copy**: Export or convert compatible 16 kHz 16-bit mono PCM WAV files on a computer and copy them directly to `/mitten_audio/audio/0001.wav`..`0050.wav` on a FAT32-formatted microSD card.
 
 If the microSD card is missing or unmounted, sensor capture, recognition events, and protocol communication remain operational, while local speaker playback is unavailable.

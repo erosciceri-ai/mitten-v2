@@ -126,6 +126,7 @@ def test_main_detaches_repl_after_hardware_init_before_starting_protocol(monkeyp
         def deinitialize(self):
             calls.append("deinitialize")
 
+    monkeypatch.setattr(firmware_main, "TRANSPORT_MODE", "serial")
     monkeypatch.setitem(sys.modules, "hardware_config", types.SimpleNamespace(BOARD={}))
     monkeypatch.setitem(
         sys.modules,

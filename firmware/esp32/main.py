@@ -98,8 +98,8 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
     return dispatcher
 
 
-# "serial": Web Serial por USB (comportamiento histórico). "relay": WebSocket vía Render.
-TRANSPORT_MODE = "serial"
+# "relay": WebSocket vía Wi-Fi (default). "serial": Web Serial por USB (respaldo local).
+TRANSPORT_MODE = "relay"
 
 
 async def _run(transport, sensors, player, board=None):

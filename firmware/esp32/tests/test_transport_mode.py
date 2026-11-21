@@ -43,6 +43,9 @@ class TransportModeTests(unittest.TestCase):
         else:
             os.dupterm = self.old_dupterm
 
+    def test_default_transport_mode_is_relay(self):
+        self.assertEqual(self.old_mode, "relay")
+
     def test_serial_mode_keeps_historic_startup_order(self):
         firmware_main.TRANSPORT_MODE = "serial"
         firmware_main.main()
