@@ -139,6 +139,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+export function useOptionalAuth(): AuthContextValue | null {
+  return useContext(AuthContext);
+}
+
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
