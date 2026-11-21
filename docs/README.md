@@ -14,6 +14,7 @@ Este directorio contiene la especificación técnica de MITTEN V2.
 
 ## Documentos operativos
 
+- `audio-transfer.md` — transferencia de audio (`audio.*`), conversión MP3→WAV en el navegador y verificación en microSD.
 - `google-authentication.md` — configuración, verificación y política de vinculación para Google Identity Services en MITTEN V2.1.
 - `software-validation.md` — recorrido de validación sin hardware físico.
 - `demo-software-mp3.md` — arranque único, modo demostración, Piper, paquete microSD y puerta de validación física.
@@ -41,14 +42,14 @@ El siguiente se creará cuando sea necesario:
 - Firmware: **MicroPython** en ESP32.
 - Backend: **Node.js + Express + TypeScript** con SQLite local o PostgreSQL. Ver [persistencia de Fase 3](persistence.md).
 - Frontend: **React + Vite + TypeScript**.
-- Comunicación: **Web Serial API** (único propietario del puerto).
-- Sin `monitor.py`, sin bridge local, sin Wi-Fi directo ESP32↔Backend.
+- Comunicación: **Web Serial API** (único propietario del puerto serie en modo USB) y transporte opcional **Wi-Fi relay saliente (`wss://`)** a través del backend (`/ws/web` y `/ws/device`).
+- Sin `monitor.py` y sin bridge local de puerto serie.
 - Protocolo: **Protocol Version 2** (NDJSON UTF-8 + LF).
 - Sincronización: **reemplazo completo del perfil** mediante una transacción `sync.begin → sync.gesture × N → sync.commit/abort`; `sync.gesture × N` es el transporte, no sincronización incremental.
 - Estados oficiales: `INITIALIZING`, `CALIBRATING`, `IDLE`, `CAPTURING`, `SYNCING`, `ERROR`.
 - Formato de gesto `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - `audioTrack`: rango 1–50, independiente de `gesture.id`, asignación first-fit, estable mientras exista el gesto y reutilizable después de eliminarlo.
-- Audio: `apps/api` genera o prepara los MP3; el frontend coordina; el objetivo es reproducir desde microSD SPI mediante MAX98357A por I²S. El firmware actual todavía usa DFPlayer por UART. Véase el [plan de migración](firmware-audio-migration.md).
+- Audio: `apps/api` genera o prepara los MP3; el navegador los convierte a WAV PCM mono 16 kHz 16 bits y los transfiere con los comandos `audio.*` (`docs/audio-transfer.md`); el firmware reproduce `/mitten_audio/audio/{audioTrack:04d}.wav` desde microSD SPI mediante MAX98357A por I²S (validación física en placa pendiente; DFPlayer retirado). Véase el [plan de migración](firmware-audio-migration.md).
 - Algoritmo de reconocimiento inicial: **baseline de V1** (distancia normalizada a centro/rango); mejoras futuras no bloquean desarrollo.
 - Datos de gestos V1: **solo prueba**; no se migran a V2; se recapturan en formato V2.
 - Repositorio `mittenv1/`: **histórico independiente**; `v2/` es repositorio activo.

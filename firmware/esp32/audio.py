@@ -77,6 +77,25 @@ class AudioPlayer:
             return False
         return True
 
+    def remount(self, writable):
+        """Alterna el montaje FAT entre solo lectura y escritura; falla si se está reproduciendo."""
+        if not self.mounted or self.source is not None:
+            return False
+        import vfs
+        try:
+            vfs.umount(MOUNT)
+            vfs.mount(vfs.VfsFat(self.card), MOUNT, readonly=not writable)
+            return True
+        except Exception:
+            try:
+                vfs.mount(vfs.VfsFat(self.card), MOUNT, readonly=True)
+            except Exception:
+                self.mounted = False
+            return False
+
+    def is_playing(self):
+        return self.source is not None
+
     def request_track(self, track):
         """Open and start a valid track without streaming the entire file inline."""
         path = track_path(track)

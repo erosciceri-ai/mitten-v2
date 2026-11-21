@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { GoogleSignInButton, isGoogleSignInConfigured } from '../components/GoogleSignInButton';
+import { PairedDevicesPanel } from '../components/PairedDevicesPanel';
 import { PageHeader } from '../components/ui/mitten-ui';
 import { Button } from '../components/ui/button';
 import { useToast } from '../components/ToastContainer';
@@ -51,6 +52,8 @@ export function AccountPage() {
           <div><dt className="text-text-muted">Google</dt><dd className="font-medium mt-1">{user?.googleLinked ? 'Vinculado' : 'No vinculado'}</dd></div>
         </dl>
       </section>
+
+      <PairedDevicesPanel />
 
       <section className="app-panel p-5 sm:p-6" aria-labelledby="data-title">
         <h2 id="data-title" className="text-lg font-semibold text-text">Tus datos</h2>

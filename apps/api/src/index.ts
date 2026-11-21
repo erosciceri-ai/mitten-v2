@@ -10,6 +10,8 @@ import authRoutes from './routes/auth.js';
 import gestureRoutes from './routes/gestures.js';
 import healthRoutes from './routes/health.js';
 import audioRoutes from './routes/audio.js';
+import deviceRoutes from './routes/device.js';
+import { attachRelay } from './ws/relay.js';
 import { getDatabase, closeDatabase } from './db/index.js';
 import { PostgresStartupError } from './db/postgres.js';
 
@@ -52,6 +54,7 @@ app.use(limitRequests(900, 60_000));
 app.use('/api/auth', authRoutes);
 app.use('/api/gestures', gestureRoutes);
 app.use('/api/audio', audioRoutes);
+app.use('/api/device', deviceRoutes);
 app.use('/api', healthRoutes);
 
 // 404 handler
@@ -90,6 +93,7 @@ if (isEntrypoint(import.meta.url)) {
     const address = server.address();
     console.log(`MITTEN API listening on ${typeof address === 'object' && address ? address.port : config.port}`);
   });
+  const relay = attachRelay(server);
   server.requestTimeout = 30_000;
   server.headersTimeout = 15_000;
   server.on('error', () => {
@@ -97,6 +101,7 @@ if (isEntrypoint(import.meta.url)) {
     process.exit(1);
   });
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => {
+    relay.close();
     server.close(() => { void closeDatabase().then(() => process.exit(0), () => process.exit(1)); });
   });
 }

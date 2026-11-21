@@ -1,6 +1,8 @@
 import { ArrowRight, Cable, Check, RotateCcw, Unplug } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DevicePairingCard } from '../components/DevicePairingCard';
+import { GloveAudioPanel } from '../components/GloveAudioPanel';
 import { Button } from '../components/ui/button';
 import { Notice, PageHeader, Panel, StatusBadge } from '../components/ui/mitten-ui';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +13,7 @@ import { getConnectionLabel, getFirmwareStateDescription, getFirmwareStateLabel 
 export function DashboardPage() {
   const { user } = useAuth();
   const { isConnected, connectionStatus, deviceInfo, firmwareState, activeProfile, syncIsComplete, connect, disconnect, getStatus,
-    deviceMode, setDeviceMode, isDemoMode, restartDemoDevice, simulateRecognition, lastRecognition } = useDevice();
+    deviceMode, setDeviceMode, isDemoMode, isRelayMode, restartDemoDevice, simulateRecognition, lastRecognition } = useDevice();
   const [gestureCount, setGestureCount] = useState(0);
   const [audioReadyCount, setAudioReadyCount] = useState(0);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
@@ -33,7 +35,7 @@ export function DashboardPage() {
   const isConnecting = connectionStatus === 'connecting' || connectionStatus === 'handshake';
   const missingAudioCount = Math.max(gestureCount - audioReadyCount, 0);
   const nextStep = !isConnected
-    ? { title: isDemoMode ? 'Iniciá el MITTEN simulado' : 'Conectá MITTEN', description: isDemoMode ? 'La demo usa el mismo protocolo, sin comunicarse con hardware real.' : 'Usá el cable USB y seleccioná su puerto para comenzar.', action: isDemoMode ? 'Iniciar simulador' : 'Conectar MITTEN', kind: 'connect' as const }
+    ? { title: isDemoMode ? 'Iniciá el MITTEN simulado' : isRelayMode ? 'Conectá MITTEN por Wi-Fi' : 'Conectá MITTEN', description: isDemoMode ? 'La demo usa el mismo protocolo, sin comunicarse con hardware real.' : isRelayMode ? 'El guante debe estar encendido, vinculado a tu cuenta y con acceso a Internet.' : 'Usá el cable USB y seleccioná su puerto para comenzar.', action: isDemoMode ? 'Iniciar simulador' : isRelayMode ? 'Conectar por Wi-Fi' : 'Conectar MITTEN', kind: 'connect' as const }
     : gestureCount === 0
       ? { title: 'Creá tu primer gesto', description: 'Registrá un movimiento y escribí la frase que MITTEN pronunciará.', action: 'Crear gesto', href: '/gestures/new' }
       : missingAudioCount > 0
@@ -54,9 +56,10 @@ export function DashboardPage() {
       <section className="app-panel p-5" aria-labelledby="device-mode-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div><h2 id="device-mode-title" className="font-bold text-text">Tipo de conexión</h2><p className="mt-1 text-sm text-text-muted">Elegí explícitamente hardware o una demostración local. Nunca se presentan como equivalentes.</p></div>
-          <div className="inline-flex rounded-xl border border-border bg-mist p-1" role="group" aria-label="Tipo de conexión">
-            <button type="button" aria-pressed={deviceMode === 'hardware'} disabled={isConnected} onClick={() => setDeviceMode('hardware')} className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${deviceMode === 'hardware' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted'} disabled:opacity-50`}>Guante real</button>
-            <button type="button" aria-pressed={deviceMode === 'demo'} disabled={isConnected} onClick={() => setDeviceMode('demo')} className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${deviceMode === 'demo' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted'} disabled:opacity-50`}>Modo demostración</button>
+          <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-mist p-1" role="group" aria-label="Tipo de conexión">
+            <button type="button" aria-pressed={deviceMode === 'hardware'} disabled={isConnected} onClick={() => setDeviceMode('hardware')} className={`min-h-11 flex-1 sm:flex-none rounded-lg px-4 text-sm font-semibold ${deviceMode === 'hardware' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted'} disabled:opacity-50`}>Guante real</button>
+            <button type="button" aria-pressed={deviceMode === 'demo'} disabled={isConnected} onClick={() => setDeviceMode('demo')} className={`min-h-11 flex-1 sm:flex-none rounded-lg px-4 text-sm font-semibold ${deviceMode === 'demo' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted'} disabled:opacity-50`}>Modo demostración</button>
+            <button type="button" aria-pressed={deviceMode === 'relay'} disabled={isConnected} onClick={() => setDeviceMode('relay')} className={`min-h-11 flex-1 sm:flex-none rounded-lg px-4 text-sm font-semibold ${deviceMode === 'relay' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted'} disabled:opacity-50`}>Guante por Wi-Fi</button>
           </div>
         </div>
         {isDemoMode ? <Notice tone="warning" title="Simulación activa"><strong>No hay un guante físico conectado.</strong> Las muestras, el reinicio y el reconocimiento son generados por software para ensayar el recorrido.</Notice> : null}
@@ -88,7 +91,7 @@ export function DashboardPage() {
           ))}
         </ol>
         <Notice tone="warning" title="Antes de desconectar la computadora">
-          Copia cada MP3 descargado a <code>/mp3</code> en la microSD y comprueba que el número de pista coincida. La web no puede verificar ese paso físico.
+          Después de sincronizar el perfil, usá el panel «Audio en el guante» para enviar las pistas WAV a <code>/mitten_audio/audio/NNNN.wav</code> en la microSD.
         </Notice>
       </Panel>
 
@@ -102,6 +105,9 @@ export function DashboardPage() {
         ) : null}
         {isConnected && isDemoMode ? <div className="mt-5 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center"><Button variant="outline" onClick={() => restartDemoDevice().catch(() => undefined)}>Reiniciar dispositivo simulado</Button><Button variant="outline" onClick={() => simulateRecognition().catch(() => undefined)} disabled={!activeProfile?.gestureCount}>Simular reconocimiento</Button>{lastRecognition ? <p className="text-sm text-success" role="status">Reconocimiento simulado: gesto {lastRecognition.gestureId}, pista {lastRecognition.audioTrack}.</p> : <p className="text-sm text-text-muted">Sincroniza al menos un gesto antes de simular el reconocimiento.</p>}</div> : null}
       </Panel>
+
+      {isRelayMode && !isConnected ? <DevicePairingCard /> : null}
+      {isConnected ? <GloveAudioPanel /> : null}
     </div>
   );
 }

@@ -75,13 +75,13 @@ jobs:
             packages/contracts/dist/
 
       - name: Validate Cloudflare Pages build
-        if: github.ref == 'refs/heads/phase5a/production-prep'
         env:
           VITE_API_URL: https://mitten-api-staging.example.com/api
         run: |
           npm run build:pages
           test -f apps/web/dist/_headers
           test ! -e apps/web/dist/404.html
+          grep -q "wss://mitten-api-staging.example.com" apps/web/dist/_headers
 
   render-free:
     if: github.ref == 'refs/heads/phase5a/production-prep'

@@ -40,7 +40,7 @@ export function SyncPage() {
   const readiness = (() => {
     if (syncError) return { title: 'La sincronización no terminó', detail: 'Revisá el error y volvé a intentarlo. El perfil anterior sigue conservado.', tone: 'error' as const };
     if (isSyncing) return { title: 'Enviando biblioteca', detail: `${syncProgress.sent} de ${syncProgress.total} gestos enviados`, tone: 'primary' as const };
-    if (syncIsComplete) return { title: 'Perfil actualizado en MITTEN', detail: 'La biblioteca quedó guardada. Verificá por separado que los MP3 estén en la microSD.', tone: 'success' as const };
+    if (syncIsComplete) return { title: 'Perfil actualizado en MITTEN', detail: 'La biblioteca quedó guardada. Enviá los audios al guante desde el panel «Audio en el guante» en el Dashboard.', tone: 'success' as const };
     if (!isConnected) return { title: 'Falta conectar MITTEN', detail: 'Conectá el guante para consultar su estado y transferir la biblioteca.', tone: 'warning' as const };
     if (firmwareState !== 'IDLE') return { title: 'MITTEN está ocupado', detail: `Estado actual: ${getFirmwareStateLabel(firmwareState)}. Esperá antes de sincronizar.`, tone: 'warning' as const };
     if (overCapacity) return { title: 'La biblioteca supera la capacidad', detail: `MITTEN admite ${deviceInfo?.capabilities.maxGestures} gestos y la biblioteca tiene ${gestures.length}.`, tone: 'error' as const };
@@ -137,7 +137,7 @@ export function SyncPage() {
 
       <section className="app-panel p-5">
         <h2 className="font-semibold text-text">Audio para el uso autónomo</h2>
-        <p className="text-sm text-text-muted mt-2">La sincronización transfiere gestos y números de pista. Los archivos MP3 se copian por separado a <code>/mp3</code> en la microSD del DFPlayer.</p>
+        <p className="text-sm text-text-muted mt-2">La sincronización transfiere gestos y números de pista. Para cargar las voces a la microSD del guante, usá «Enviar al guante» desde el panel Audio en el guante en el Dashboard (convierte los MP3 a WAV automáticamente). También podés descargar un respaldo ZIP con los MP3 generados.</p>
         {missingAudio.length > 0 ? <Notice tone="error" title="Faltan MP3 para completar el paquete"><ul className="mt-2 list-disc pl-5">{missingAudio.map(track => <li key={track.audioTrack}><Link className="font-semibold underline" to={`/gestures/${gestures.find(gesture => gesture.audioTrack === track.audioTrack)?.id}`}>{track.name}</Link> · pista {String(track.audioTrack).padStart(4, '0')}</li>)}</ul></Notice> : null}
         <Button className="mt-4" variant="outline" onClick={handlePrepareMicroSd} disabled={isPreparingPackage || gestures.length === 0}>{isPreparingPackage ? 'Preparando…' : 'Preparar microSD'}</Button>
       </section>

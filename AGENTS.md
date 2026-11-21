@@ -12,7 +12,7 @@ El sistema utiliza:
 - Una aplicación web para configuración, gestión de gestos y comunicación con el guante.
 - Una API backend.
 - Una interfaz web React.
-- Generación de audio desde el backend. El objetivo oficial de reproducción autónoma es microSD SPI + MAX98357A por I²S; el firmware actual usa DFPlayer Mini por UART.
+- Generación de audio desde el backend (MP3). La reproducción autónoma V2 usa WAV PCM desde microSD por SPI y salida I²S al MAX98357A (`firmware/esp32/audio.py`), y la transferencia web `audio.*` convierte MP3→WAV en el navegador (`docs/audio-transfer.md`); la validación física sigue pendiente. Ver `docs/firmware-audio-migration.md`.
 
 El repositorio actual contiene una implementación anterior de MITTEN V1.
 
@@ -112,11 +112,11 @@ Responsable de:
 - Calibración de sensores.
 - Adquisición de muestras de gestos.
 - Reconocimiento local de gestos cuando sea necesario.
-- Comunicación del estado del dispositivo mediante el protocolo serie.
-- Recepción de comandos válidos desde el frontend vía Web Serial.
-- Reproducción local de la pista asociada a un gesto reconocido. La implementación SPI/I²S sigue pendiente.
+- Comunicación del estado del dispositivo mediante el protocolo V2 (USB Serial o Wi-Fi relay según `TRANSPORT_MODE`).
+- Recepción de comandos válidos desde el frontend vía Web Serial o relay WebSocket seguro (`/ws/device`).
+- Reproducción local de la pista asociada a un gesto reconocido mediante SPI/I²S: WAV PCM desde microSD al MAX98357A (`/mitten_audio/audio/NNNN.wav`). La integración aún no está validada físicamente; ver `docs/firmware-audio-migration.md`.
 
-El ESP32 no genera archivos de audio ni asigna `audioTrack`; sólo reproduce pistas previamente preparadas y sincronizadas.
+El ESP32 no genera archivos de audio ni asigna `audioTrack`; reproduce pistas WAV preparadas en la microSD (cargadas desde la web vía `audio.*` con `audio_store.py`, o copiadas manualmente). La sincronización de perfil (`sync.*`) y la carga de audio (`audio.*`) son flujos separados.
 
 El ESP32 no debe contener lógica de gestión de aplicación que pertenezca al backend.
 
@@ -124,9 +124,9 @@ El firmware ejecuta **MicroPython** en el ESP32. MicroPython es la tecnología s
 
 ---
 
-## Web Serial
+## Web Serial y Wi-Fi relay
 
-La comunicación entre la aplicación y el ESP32 se realiza mediante **Web Serial API desde el frontend React**.
+La comunicación entre la aplicación y el ESP32 utiliza **Web Serial API** (`TRANSPORT_MODE = "serial"`) o el transporte opcional **Wi-Fi relay (`wss://`)** vía backend (`TRANSPORT_MODE = "relay"`, `apps/api/src/ws/relay.ts`).
 
 - Web Serial es el único propietario del puerto serie en MITTEN V2.
 - NO existirá `monitor.py`.
@@ -152,7 +152,7 @@ Responsable de:
 - Gestión de metadatos de audio y asignación de `audioTrack`.
 
 El frontend solicita y coordina estas operaciones.
-El ESP32 no sintetiza voz. El objetivo es leer pistas preparadas desde microSD por SPI y entregar PCM por I²S al MAX98357A. El [plan de migración](docs/firmware-audio-migration.md) registra las decisiones pendientes.
+El ESP32 no sintetiza voz. Lee pistas WAV preparadas desde microSD por SPI y entrega PCM por I²S al MAX98357A; el navegador convierte cada MP3 a WAV y lo sube vía `audio.*` (`docs/audio-transfer.md`). El [plan de migración](docs/firmware-audio-migration.md) registra la implementación y la validación física pendiente.
 
 La dirección técnica confirmada para MITTEN V2 es:
 
@@ -195,7 +195,7 @@ El protocolo V2 está definido en `docs/protocol.md` (Protocol Version 2).
 
 Características principales:
 
-- Transporte: USB Serial 115200 baud, Web Serial API.
+- Transporte: USB Serial 115200 baud (Web Serial API) o Wi-Fi relay saliente `wss://` (`/ws/web`, `/ws/device`).
 - Framing: NDJSON UTF-8 delimitado por LF.
 - Envelopes: `request` (frontend→dispositivo), `response` (dispositivo→frontend), `event` (dispositivo→frontend).
 - Correlación: `id` por request, `syncId` por transacción de sincronización.
@@ -593,13 +593,13 @@ Debe mantenerse alineado con los documentos canónicos. Ante una contradicción,
 - Sincronización transaccional `sync.begin → sync.gesture × N → sync.commit/abort`.
 - La semántica de sincronización es reemplazo completo del perfil; `sync.gesture × N` es únicamente el transporte dentro de esa transacción.
 - El staging nunca sustituye al perfil activo antes de un `sync.commit` exitoso.
-- `state === SYNCING` implica que existe una transacción `activeSync`.
+- `state === SYNCING` mantiene `activeSync` distinto de `null` durante `sync.*`, y `activeSync === null` durante la carga de audio `audio.*`.
 - Reemplazo completo con conservación del perfil anterior ante abort, timeout o fallo.
 - `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - La calibración MPU6050 pertenece al estado/configuración local del dispositivo y no a `GestureData`.
 - `audioTrack` 1–50: independiente de `gesture.id`, asignación first-fit, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
-- El firmware actual con DFPlayer usa `/mp3/{audioTrack:04d}.mp3`; esa ruta no define el formato ni el nombre de las pistas para la arquitectura SPI/I²S.
-- `apps/api` genera o prepara los archivos MP3. El frontend coordina y el ESP32 únicamente reproduce.
+- El módulo legacy `dfplayer.py` fue retirado; el firmware V2 SPI/I²S reproduce `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono 16 kHz 16 bits).
+- `apps/api` genera o prepara los archivos MP3; el navegador los convierte a WAV y los transfiere al guante mediante `audio.*` (`docs/audio-transfer.md`), conservando también el respaldo ZIP MP3. La validación física en placa sigue pendiente.
 - `gesture.id` es inmutable.
 - `gesture.name` y `gesture.data` son editables; el MP3 puede regenerarse.
 - Editar un gesto no implica sincronización incremental.

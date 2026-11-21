@@ -1,6 +1,6 @@
 # Migración del audio autónomo del guante
 
-**Decisión aprobada:** el ESP32 lee pistas WAV PCM desde microSD por SPI y entrega PCM por I²S al MAX98357A y al parlante. Existe una implementación inicial en `firmware/esp32/audio.py`, integrada con el reconocimiento; **no está validada físicamente**. La transferencia web y la conversión MP3 quedan fuera de esta etapa.
+**Decisión aprobada:** el ESP32 lee pistas WAV PCM desde microSD por SPI y entrega PCM por I²S al MAX98357A y al parlante. La reproducción (`firmware/esp32/audio.py`), la recepción transaccional (`audio_store.py`, comandos `audio.*`) y la conversión MP3→WAV en el navegador (`docs/audio-transfer.md`) ya están integradas en software; **la validación física en placa sigue pendiente**.
 
 ## Punto de partida
 
@@ -8,7 +8,7 @@
 - El reconocimiento pasa `audioTrack` al reproductor desde `firmware/esp32/protocol/commands.py`. El rango lógico 1–50 se mantiene y se resuelve a `/mitten_audio/audio/{audioTrack:04d}.wav`. El protocolo V2 no cambia.
 - Se aceptan WAV RIFF PCM mono, 16 kHz, 16 bits. La reproducción entrega bloques de 512 bytes desde el ciclo de actualización; errores de audio no deben interrumpir protocolo, captura ni reconocimiento.
 - Si no se monta la tarjeta, el amplificador permanece deshabilitado y el firmware conserva los demás servicios; la reproducción queda no disponible hasta reiniciar.
-- La API genera MP3 y la web puede descargarlos. El paquete MP3 actual no acredita que los archivos estén en el guante. La sincronización V2 solo transmite el perfil y sus identificadores de pista; esta decisión no cambia el protocolo.
+- La API genera MP3 y la web permite descargar un respaldo ZIP o convertir cada pista a WAV en el navegador para subirla al guante vía `audio.*` (`docs/audio-transfer.md`). El paquete MP3 por sí solo no acredita que los archivos estén en el guante; `sync.*` sigue transmitiendo únicamente el perfil y sus identificadores de pista.
 
 ## Pinout provisional
 
@@ -30,7 +30,7 @@ Referencia: último esquemático informado. Antes de programar la configuración
 | --- | --- |
 | Formato y ruta | WAV PCM mono, 16 kHz, 16 bits; `/mitten_audio/audio/NNNN.wav`. No se incluye decodificación MP3. |
 | Reproducción | I²S TX por GPIO25/26/27 y lectura en bloques de 512 bytes distribuida entre ciclos de actualización. La latencia real depende del driver I²S y requiere medición física. |
-| Provisión | Los WAV se preparan y copian manualmente a microSD durante esta etapa. Conversión MP3→WAV y transferencia desde la web quedan para una fase posterior. |
+| Provisión | El navegador convierte los MP3 a WAV y los transfiere al guante mediante `audio.*` (`docs/audio-transfer.md`); la copia manual a `/mitten_audio/audio/NNNN.wav` o el ZIP MP3 de respaldo siguen disponibles. |
 | Asignación | `audioTrack` debe ser entero 1–50 y corresponde al archivo `audio/{audioTrack:04d}.wav`; ausencia o error no altera el identificador del gesto. |
 
 ## Resultados de verificación (2026-11-13)
@@ -77,6 +77,6 @@ El flujo de reconocimiento solicita la pista sin transmitir todo el archivo dent
 4. Medir duración de `capture_sample`, intervalo entre reconocimientos, latencia de `request_track` y tiempo máximo de lectura SD durante reproducción; verificar que captura y NDJSON mantienen sus plazos.
 5. Reproducir manualmente un WAV conocido mientras se observa la salida I²S y el parlante. La reproducción física continúa pendiente.
 
-La provisión desde la web y la conversión MP3→WAV quedan reservadas para una etapa posterior; no se modificó el protocolo ni se desplegó el firmware.
+La provisión desde la web (`audio.*`) y la conversión MP3→WAV ya están integradas en software (`docs/audio-transfer.md`); continúa pendiente la validación física de placa, microSD y parlante.
 
 **Riesgos principales:** GPIO incompatibles, alimentación insuficiente, buffers I²S sin datos, latencia del driver que afecte el loop, y desalineación entre el perfil y los archivos de tarjeta. El hito mínimo sigue siendo **un gesto y una pista reproducibles sin la computadora** y aún requiere prueba en la PCB.

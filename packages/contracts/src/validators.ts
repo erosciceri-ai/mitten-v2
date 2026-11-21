@@ -15,6 +15,12 @@
  */
 
 import {
+  AUDIO_CHUNK_MAX_BASE64_CHARS,
+  AUDIO_CHUNK_MAX_BYTES,
+  AUDIO_MAX_TRACK_BYTES,
+  AUDIO_MIN_TRACK_BYTES,
+  AUDIO_TRACK_MAX,
+  AUDIO_TRACK_MIN,
   CAPTURE_PHASES,
   CapturePhase,
   DeviceCapabilities,
@@ -238,6 +244,21 @@ export function validateProtocolV2Message(value: unknown): ValidationResult {
 
       case 'sync.abort':
         return validateSyncAbortPayload(obj.payload);
+
+      case 'audio.begin':
+        return validateAudioBeginPayload(obj.payload);
+
+      case 'audio.chunk':
+        return validateAudioChunkPayload(obj.payload);
+
+      case 'audio.commit':
+        return validateAudioCommitPayload(obj.payload);
+
+      case 'audio.abort':
+        return validateAudioAbortPayload(obj.payload);
+
+      case 'audio.status':
+        return validateAudioStatusPayload(obj.payload);
 
       default:
         return {
@@ -703,6 +724,106 @@ export function validateSyncAbortResult(result: unknown): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
+/* ---------- Audio upload validation ---------- */
+
+function isInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+const isAudioTrack = (value: unknown): value is number => isInRange(value, AUDIO_TRACK_MIN, AUDIO_TRACK_MAX);
+const isUint32 = (value: unknown): value is number => isInRange(value, 0, 0xffffffff);
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+function result(errors: string[]): ValidationResult {
+  return { valid: errors.length === 0, errors };
+}
+
+export function validateAudioBeginPayload(payload: unknown): ValidationResult {
+  if (!isRecord(payload)) return { valid: false, errors: ['Payload must be an object'] };
+  const errors: string[] = [];
+  if (!isAudioTrack(payload.audioTrack)) errors.push(`audioTrack must be an integer between ${AUDIO_TRACK_MIN} and ${AUDIO_TRACK_MAX}`);
+  if (!isInRange(payload.sizeBytes, AUDIO_MIN_TRACK_BYTES, AUDIO_MAX_TRACK_BYTES)) {
+    errors.push(`sizeBytes must be an integer between ${AUDIO_MIN_TRACK_BYTES} and ${AUDIO_MAX_TRACK_BYTES}`);
+  }
+  if (!isUint32(payload.crc32)) errors.push('crc32 must be an unsigned 32-bit integer');
+  return result(errors);
+}
+
+export function validateAudioBeginResult(value: unknown): ValidationResult {
+  if (!isRecord(value)) return { valid: false, errors: ['Result must be an object'] };
+  const errors: string[] = [];
+  if (!isAudioTrack(value.audioTrack)) errors.push('audioTrack must be a valid audio track');
+  if (!isNonNegativeInteger(value.offset)) errors.push('offset must be a non-negative integer');
+  if (!isPositiveInteger(value.chunkMaxBytes)) errors.push('chunkMaxBytes must be a positive integer');
+  if (!isPositiveInteger(value.idleTimeoutMs)) errors.push('idleTimeoutMs must be a positive integer');
+  return result(errors);
+}
+
+export function validateAudioChunkPayload(payload: unknown): ValidationResult {
+  if (!isRecord(payload)) return { valid: false, errors: ['Payload must be an object'] };
+  const errors: string[] = [];
+  if (!isAudioTrack(payload.audioTrack)) errors.push('audioTrack must be a valid audio track');
+  if (!isNonNegativeInteger(payload.offset)) errors.push('offset must be a non-negative integer');
+  const data = payload.data;
+  if (typeof data !== 'string' || data.length === 0 || data.length > AUDIO_CHUNK_MAX_BASE64_CHARS || !BASE64.test(data)) {
+    errors.push(`data must be canonical base64 of 1 to ${AUDIO_CHUNK_MAX_BYTES} bytes`);
+  }
+  return result(errors);
+}
+
+export function validateAudioChunkResult(value: unknown): ValidationResult {
+  if (!isRecord(value)) return { valid: false, errors: ['Result must be an object'] };
+  const errors: string[] = [];
+  if (!isAudioTrack(value.audioTrack)) errors.push('audioTrack must be a valid audio track');
+  if (!isNonNegativeInteger(value.offset)) errors.push('offset must be a non-negative integer');
+  return result(errors);
+}
+
+export function validateAudioCommitPayload(payload: unknown): ValidationResult {
+  if (!isRecord(payload)) return { valid: false, errors: ['Payload must be an object'] };
+  return result(isAudioTrack(payload.audioTrack) ? [] : ['audioTrack must be a valid audio track']);
+}
+
+export function validateAudioCommitResult(value: unknown): ValidationResult {
+  if (!isRecord(value)) return { valid: false, errors: ['Result must be an object'] };
+  const errors: string[] = [];
+  if (!isAudioTrack(value.audioTrack)) errors.push('audioTrack must be a valid audio track');
+  if (!isPositiveInteger(value.sizeBytes)) errors.push('sizeBytes must be a positive integer');
+  return result(errors);
+}
+
+export function validateAudioAbortPayload(payload: unknown): ValidationResult {
+  return isRecord(payload) ? { valid: true, errors: [] } : { valid: false, errors: ['Payload must be an object'] };
+}
+
+export function validateAudioAbortResult(value: unknown): ValidationResult {
+  if (!isRecord(value)) return { valid: false, errors: ['Result must be an object'] };
+  return result(value.aborted === true ? [] : ['aborted must be true']);
+}
+
+export function validateAudioStatusPayload(payload: unknown): ValidationResult {
+  if (!isRecord(payload)) return { valid: false, errors: ['Payload must be an object'] };
+  if (payload.audioTrack !== undefined && !isAudioTrack(payload.audioTrack)) {
+    return { valid: false, errors: ['audioTrack must be a valid audio track'] };
+  }
+  return { valid: true, errors: [] };
+}
+
+export function validateAudioStatusResult(value: unknown): ValidationResult {
+  if (!isRecord(value)) return { valid: false, errors: ['Result must be an object'] };
+  if (!Array.isArray(value.tracks) || value.tracks.length > AUDIO_TRACK_MAX) {
+    return { valid: false, errors: [`tracks must be an array of at most ${AUDIO_TRACK_MAX} entries`] };
+  }
+  const errors: string[] = [];
+  value.tracks.forEach((track: unknown, index: number) => {
+    if (!isRecord(track) || !isAudioTrack(track.audioTrack) || !isPositiveInteger(track.sizeBytes)
+      || (track.crc32 !== undefined && !isUint32(track.crc32))) {
+      errors.push(`tracks[${index}] must have audioTrack, sizeBytes and optional crc32`);
+    }
+  });
+  return result(errors);
+}
+
 /* ---------- Capture Progress Data Validation ---------- */
 
 export function validateCaptureProgressData(data: unknown): ValidationResult {
@@ -902,6 +1023,21 @@ export function validateResponseForCommand(command: string, response: unknown): 
 
       case 'sync.abort':
         return validateSyncAbortResult(obj.result);
+
+      case 'audio.begin':
+        return validateAudioBeginResult(obj.result);
+
+      case 'audio.chunk':
+        return validateAudioChunkResult(obj.result);
+
+      case 'audio.commit':
+        return validateAudioCommitResult(obj.result);
+
+      case 'audio.abort':
+        return validateAudioAbortResult(obj.result);
+
+      case 'audio.status':
+        return validateAudioStatusResult(obj.result);
 
       default:
         // For unknown commands, validate the result structurally (must be an object)

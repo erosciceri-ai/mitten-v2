@@ -19,7 +19,7 @@ const stages: Record<DemoStage, { label: string; detail: string }> = {
   },
   speaking: {
     label: 'Frase reconocida',
-    detail: 'El DFPlayer Mini reproduce la pista preparada desde la microSD.',
+    detail: 'El ESP32 reproduce la pista WAV desde la microSD por I²S (MAX98357A).',
   },
 };
 

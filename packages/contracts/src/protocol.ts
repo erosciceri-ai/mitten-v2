@@ -7,6 +7,21 @@ import {
   isValidRequestId,
 } from './types';
 import type {
+  AudioAbortPayload,
+  AudioAbortRequest,
+  AudioAbortResult,
+  AudioBeginPayload,
+  AudioBeginRequest,
+  AudioBeginResult,
+  AudioChunkPayload,
+  AudioChunkRequest,
+  AudioChunkResult,
+  AudioCommitPayload,
+  AudioCommitRequest,
+  AudioCommitResult,
+  AudioStatusPayload,
+  AudioStatusRequest,
+  AudioStatusResult,
   CaptureCompletedData,
   CaptureCompletedEvent,
   CaptureFailedData,
@@ -382,6 +397,46 @@ export function createSyncAbortRequest(id: string, payload: SyncAbortPayload): S
 }
 
 export function createSyncAbortResponse(id: string, result: SyncAbortResult): ResponseEnvelope<SyncAbortResult, 2> {
+  return createResponse(id, result);
+}
+
+export function createAudioBeginRequest(id: string, payload: AudioBeginPayload): AudioBeginRequest {
+  return createRequest(id, 'audio.begin', payload);
+}
+
+export function createAudioBeginResponse(id: string, result: AudioBeginResult): ResponseEnvelope<AudioBeginResult, 2> {
+  return createResponse(id, result);
+}
+
+export function createAudioChunkRequest(id: string, payload: AudioChunkPayload): AudioChunkRequest {
+  return createRequest(id, 'audio.chunk', payload);
+}
+
+export function createAudioChunkResponse(id: string, result: AudioChunkResult): ResponseEnvelope<AudioChunkResult, 2> {
+  return createResponse(id, result);
+}
+
+export function createAudioCommitRequest(id: string, payload: AudioCommitPayload): AudioCommitRequest {
+  return createRequest(id, 'audio.commit', payload);
+}
+
+export function createAudioCommitResponse(id: string, result: AudioCommitResult): ResponseEnvelope<AudioCommitResult, 2> {
+  return createResponse(id, result);
+}
+
+export function createAudioAbortRequest(id: string, payload: AudioAbortPayload): AudioAbortRequest {
+  return createRequest(id, 'audio.abort', payload);
+}
+
+export function createAudioAbortResponse(id: string, result: AudioAbortResult): ResponseEnvelope<AudioAbortResult, 2> {
+  return createResponse(id, result);
+}
+
+export function createAudioStatusRequest(id: string, payload: AudioStatusPayload): AudioStatusRequest {
+  return createRequest(id, 'audio.status', payload);
+}
+
+export function createAudioStatusResponse(id: string, result: AudioStatusResult): ResponseEnvelope<AudioStatusResult, 2> {
   return createResponse(id, result);
 }
 

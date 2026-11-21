@@ -16,7 +16,7 @@ const processSteps = [
   },
   {
     title: 'El guante reproduce la frase',
-    text: 'Al reconocer el gesto, el DFPlayer Mini reproduce desde la microSD la pista de audio asociada.',
+    text: 'Al reconocer el gesto, el ESP32 reproduce desde la microSD la pista WAV asociada mediante el amplificador MAX98357A.',
   },
 ];
 
@@ -64,7 +64,7 @@ function HeroSystemDiagram() {
         </g>
         <g className="hero-system__node hero-system__node--audio" transform="translate(355 290)">
           <rect width="116" height="72" rx="18" />
-          <text x="58" y="32">DFPlayer</text>
+          <text x="58" y="32">Audio I²S</text>
           <text x="58" y="52">reproduce</text>
         </g>
 
@@ -196,7 +196,7 @@ export function PublicHomePage() {
                   <li><span>ESP32</span><small>Control y reconocimiento</small></li>
                   <li><span>5 sensores flex</span><small>Flexión de los dedos</small></li>
                   <li><span>MPU6050</span><small>Orientación y movimiento</small></li>
-                  <li><span>DFPlayer Mini</span><small>Reproducción de MP3</small></li>
+                  <li><span>MAX98357A</span><small>Amplificador I²S (WAV PCM)</small></li>
                   <li><span>microSD y parlante</span><small>Audio disponible sin PC</small></li>
                 </ul>
               </article>

@@ -1,4 +1,14 @@
 import type {
+  AudioAbortPayload,
+  AudioAbortResult,
+  AudioBeginPayload,
+  AudioBeginResult,
+  AudioChunkPayload,
+  AudioChunkResult,
+  AudioCommitPayload,
+  AudioCommitResult,
+  AudioStatusPayload,
+  AudioStatusResult,
   ProtocolEnvelope,
   DeviceInfo,
   DeviceStatusResult,
@@ -21,6 +31,7 @@ import type {
   DeviceStateData,
 } from '@mitten/contracts';
 import {
+  AUDIO_CHUNK_MAX_BYTES,
   PROTOCOL_VERSION,
   FirmwareState,
   CapturePhase,
@@ -33,6 +44,12 @@ import {
   validateSyncGestureResult,
   validateSyncCommitResult,
   validateSyncAbortResult,
+  validateAudioAbortResult,
+  validateAudioBeginPayload,
+  validateAudioBeginResult,
+  validateAudioChunkResult,
+  validateAudioCommitResult,
+  validateAudioStatusResult,
   validateProtocolV2Message,
   validateGesture,
 } from '@mitten/contracts';
@@ -40,6 +57,16 @@ import { SerialTransport } from './SerialTransport';
 import type { DeviceTransport, DeviceTransportFactory, DeviceTransportHandlers } from './DeviceTransport';
 import { RequestManager } from './RequestManager';
 import type { Gesture, GestureData } from '../types';
+import { bytesToBase64, crc32 } from '../audio/gloveWav';
+
+export interface AudioUploadOptions {
+  /** Called after begin and after every confirmed chunk with the bytes the glove already stored. */
+  onProgress?: (sentBytes: number, totalBytes: number) => void;
+  signal?: AbortSignal;
+}
+
+/** Lost responses or offset mismatches tolerated per upload before giving up. */
+const MAX_AUDIO_RESUMES = 8;
 
 export interface DeviceServiceEvents {
   onStateChange: (state: FirmwareState) => void;
@@ -435,6 +462,82 @@ export class DeviceService {
     this.currentSyncId = null;
 
     return result;
+  }
+
+  async getAudioStatus(audioTrack?: number): Promise<AudioStatusResult> {
+    const payload: AudioStatusPayload = audioTrack === undefined ? {} : { audioTrack };
+    return this.audioRequest<AudioStatusPayload, AudioStatusResult>('audio.status', payload, validateAudioStatusResult);
+  }
+
+  /**
+   * Uploads a WAV (PCM mono 16 kHz 16-bit, see mp3ToGloveWav) to the glove microSD.
+   * The glove verifies size, CRC-32 and WAV header before publishing the track, so a failed
+   * upload never replaces a valid one. Lost responses and offset mismatches resume from the
+   * offset the glove reports.
+   */
+  async uploadAudio(audioTrack: number, wav: Uint8Array, options: AudioUploadOptions = {}): Promise<AudioCommitResult> {
+    const sizeBytes = wav.length;
+    const beginPayload: AudioBeginPayload = { audioTrack, sizeBytes, crc32: crc32(wav) };
+    const check = validateAudioBeginPayload(beginPayload);
+    if (!check.valid) throw new Error(check.errors.join('; '));
+
+    const begin = await this.audioRequest<AudioBeginPayload, AudioBeginResult>('audio.begin', beginPayload, validateAudioBeginResult);
+    const chunkBytes = Math.max(1, Math.min(begin.chunkMaxBytes, AUDIO_CHUNK_MAX_BYTES));
+    let offset = begin.offset;
+    let resumes = 0;
+    try {
+      options.onProgress?.(offset, sizeBytes);
+      while (offset < sizeBytes) {
+        if (options.signal?.aborted) throw new Error('Carga de audio cancelada');
+        const data = bytesToBase64(wav.subarray(offset, offset + chunkBytes));
+        try {
+          const chunk = await this.audioRequest<AudioChunkPayload, AudioChunkResult>(
+            'audio.chunk', { audioTrack, offset, data }, validateAudioChunkResult,
+          );
+          offset = chunk.offset;
+        } catch (error) {
+          const resumeAt = this.audioResumeOffset(error, offset, sizeBytes);
+          if (resumeAt === null || ++resumes > MAX_AUDIO_RESUMES) throw error;
+          offset = resumeAt;
+        }
+        options.onProgress?.(offset, sizeBytes);
+      }
+      return await this.audioRequest<AudioCommitPayload, AudioCommitResult>('audio.commit', { audioTrack }, validateAudioCommitResult);
+    } catch (error) {
+      await this.abortAudioUpload();
+      throw error;
+    }
+  }
+
+  async abortAudioUpload(): Promise<void> {
+    try {
+      await this.audioRequest<AudioAbortPayload, AudioAbortResult>('audio.abort', {}, validateAudioAbortResult);
+    } catch {
+      // Best effort: the glove may already be idle, or the link may be gone.
+    }
+  }
+
+  private async audioRequest<P extends Record<string, unknown>, R extends object>(
+    command: string,
+    payload: P,
+    validate: (result: unknown) => { valid: boolean; errors: string[] },
+  ): Promise<R> {
+    const { promise } = this.requestManager.sendRequest<P, R>(command, payload);
+    const result = await promise;
+    const validation = validate(result);
+    if (!validation.valid) throw new Error(`Invalid ${command} response: ${validation.errors.join(', ')}`);
+    return result;
+  }
+
+  /** Where to continue after a failed chunk, or null when the failure is not recoverable. */
+  private audioResumeOffset(error: unknown, current: number, total: number): number | null {
+    if (!(error instanceof Error)) return null;
+    const { code, details } = error as Error & { code?: string; details?: { offset?: unknown } };
+    if (code === ProtocolErrorCode.AUDIO_BAD_OFFSET) {
+      const offset = details?.offset;
+      return typeof offset === 'number' && Number.isInteger(offset) && offset >= 0 && offset <= total ? offset : null;
+    }
+    return error.message.startsWith('Request timeout:') ? current : null;
   }
 
   private clearSyncIdleTimer(): void {

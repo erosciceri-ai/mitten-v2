@@ -1,4 +1,4 @@
-# MITTEN V2 — Protocolo serie Web Serial
+# MITTEN V2 — Protocolo de comunicación (Web Serial y Wi-Fi relay)
 
 ## 1. Propósito
 
@@ -8,16 +8,16 @@ Este documento define la especificación técnica oficial de la comunicación en
 apps/web ↔ firmware/esp32
 ```
 
-mediante USB Serial y Web Serial API.
+mediante **USB Serial / Web Serial API** (`TRANSPORT_MODE = "serial"`) o mediante el **transporte opcional Wi-Fi relay sobre WebSocket seguro (`wss://`)** a través del backend (`TRANSPORT_MODE = "relay"`).
 
 La especificación debe permitir implementar de forma independiente y compatible:
 
-- el cliente Web Serial de `apps/web`;
+- el cliente de transporte (`SerialTransport` y `RelayTransport`) en `apps/web`;
 - el protocolo del firmware MicroPython en `firmware/esp32`;
 - los contratos correspondientes en `packages/contracts`;
 - el simulador ubicado en `tools/esp32-simulator`.
 
-Este documento define el protocolo observable en el puerto serie. No define:
+Este documento define el protocolo observable V2 (y el envoltorio mínimo de control del relay). No define:
 
 - la API HTTP;
 - la estructura matemática definitiva de un gesto;
@@ -104,7 +104,19 @@ La configuración inicial obligatoria es:
 | Parity | `none` |
 | Flow control | `none` |
 
-Web Serial es el único propietario del puerto. Ningún componente de UI, proceso auxiliar, bridge local o `monitor.py` puede abrir el mismo puerto en paralelo.
+Web Serial es el único propietario del puerto serie cuando se usa USB. Ningún componente de UI, proceso auxiliar, bridge local o `monitor.py` puede abrir el mismo puerto en paralelo.
+
+### 4.1.1. Transporte opcional Wi-Fi relay (`wss://`)
+
+Cuando el firmware corre con `TRANSPORT_MODE = "relay"`, la comunicación utiliza una conexión WebSocket segura saliente iniciada por el ESP32 hacia el backend, sin abrir puertos directos en la red local del usuario:
+
+- **Vinculación inicial y gestión de dispositivos:** la web autenticada solicita `POST /api/device/pairing` y obtiene un código temporal de 6 dígitos (TTL `10 minutos`, un solo uso, almacenado con HMAC en `device_pairing_codes`), que el usuario carga junto a las credenciales Wi-Fi (2,4 GHz) en el portal AP del ESP32 (`MITTEN-XXXX`, `http://192.168.4.1`). Cada dispositivo vinculado queda registrado en la tabla `devices` (hash SHA-256 del token y `jti`), y puede listarse con `GET /api/device` o revocarse individualmente con `DELETE /api/device/:id` (desconectando el socket activo con código `4003`).
+- **Endpoints WebSocket (`noServer`, `maxPayload = 16 KB`, `ping` cada `25 s`):**
+  - `/ws/device` (guante → backend): primer mensaje JSON `{"type":"pair","code":"123456"}` o `{"type":"auth","deviceToken":"<JWT>"}` (JWT firmado con `aud: "mitten-device"`, `kind: "device"`, `jti`, TTL `365 días`, validado contra `devices` y no válido como sesión web).
+  - `/ws/web` (navegador → backend): valida `Origin === FRONTEND_URL` en el upgrade y recibe como primer mensaje `{"type":"auth","token":"<JWT>"}`. Se admite una sola sesión web activa por cuenta.
+  - En producción exige TLS o proxy confiable (`TRUSTED_PROXY` verificando la IP/CIDR real del par TCP + `x-forwarded-proto: https`), además de límites por IP en upgrades (`429`) e intentos de vinculación (`4029`).
+- **Reenvío transparente y avisos propios:** una vez autenticados ambos extremos en la misma cuenta, cada mensaje de texto WebSocket contiene una línea NDJSON del Protocolo V2 y se reenvía sin alterarlo. Los mensajes propios del relay llevan `{"type":"relay","event":...}` (`ready`, `paired`, `device_online`, `device_offline`, `error`) y nunca se reenvían al otro extremo.
+- **Códigos de cierre del relay:** `4000` (sesión reemplazada), `4001` (sin autenticar dentro de `5000 ms`), `4003` (no autorizado), `4029` (demasiados intentos de vinculación).
 
 ### 4.2. Codificación
 
@@ -627,15 +639,10 @@ Campos:
 | `nextIndex` | integer | Próximo índice esperado. |
 
 Si nunca se sincronizó un perfil válido, `activeProfile` es `null`.
-Si `state === "SYNCING"`, `activeSync` DEBE ser distinto de `null`.
+Durante una sincronización de perfil (`sync.*`), si `state === "SYNCING"`, `activeSync` DEBE ser distinto de `null`.
+Durante una carga de audio (`audio.*`, sección 12.12), el dispositivo reutiliza el estado exclusivo `SYNCING` sin transacción de perfil activa, por lo que `activeSync` es `null` y la combinación `{"state":"SYNCING","activeSync":null}` es válida en ese flujo.
 
-La siguiente combinación es inválida:
-
-```json
-{"state":"SYNCING","activeSync":null}
-```
-
-Si el frontend recibe esa combinación después de un handshake compatible, debe tratarla como `INVALID_DEVICE_MESSAGE`.
+Fuera de una carga de audio activa, si se recibe `{"state":"SYNCING","activeSync":null}` durante una sincronización de perfil, el frontend DEBE rechazarlo como incoherente (`INVALID_DEVICE_MESSAGE`).
 
 ### 10.3. Comandos permitidos por estado
 
@@ -648,6 +655,11 @@ Si el frontend recibe esa combinación después de un handshake compatible, debe
 | `sync.gesture` | No | No | No | No | No | Sí | No |
 | `sync.commit` | No | No | No | No | No | Sí | No |
 | `sync.abort` | No | No | No | No | No | Sí | No |
+| `audio.begin` | No | No | No | Sí | No | No | No |
+| `audio.chunk` | No | No | No | No | No | Sí (carga de audio) | No |
+| `audio.commit` | No | No | No | No | No | Sí (carga de audio) | No |
+| `audio.abort` | No | No | No | No | No | Sí (carga de audio) | No |
+| `audio.status` | No | No | No | Sí | No | Sí (carga de audio) | No |
 
 Una operación exclusiva solicitada durante `CAPTURING` o `SYNCING` recibe `DEVICE_BUSY`. Una operación no permitida durante `INITIALIZING`, `CALIBRATING` o `ERROR` recibe `INVALID_STATE`.
 
@@ -931,7 +943,7 @@ Campos mínimos de `gesture`:
 |---|---|---|
 | `id` | integer | Entre `1` y `2147483647`; único dentro del perfil. |
 | `name` | string | Entre 1 y 60 puntos de código Unicode; sin caracteres de control. |
-| `audioTrack` | integer | Entre `1` y `50` en MITTEN V2. Asignado por el backend en creación (first-fit, inmutable). Convención local del firmware actual con DFPlayer (no parte del mensaje): `/mp3/{audioTrack:04d}.mp3`, reproducción mediante `playMp3Folder(audioTrack)`. |
+| `audioTrack` | integer | Entre `1` y `50` en MITTEN V2. Asignado por el backend en creación (first-fit, inmutable). Ruta local en la microSD del firmware SPI/I²S (no parte del mensaje): `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono 16 kHz 16 bits). |
 | `data` | object | Conforme a `docs/gesture-format.md`. |
 
 El nombre no es la identidad técnica del gesto. Dos nombres iguales no sustituyen la validación de IDs.
@@ -1111,6 +1123,38 @@ Después de reconectar:
 5. sólo muestra éxito si la revisión esperada quedó activa;
 6. de lo contrario reinicia la sincronización completa.
 
+### 12.12. Carga de audio (`audio.*`)
+
+El firmware reproduce pistas WAV desde la microSD (`/mitten_audio/audio/NNNN.wav`). El backend entrega MP3, así que **el navegador convierte** cada pista a WAV PCM mono, 16 kHz, 16 bits y la sube con estos comandos. Es una extensión aditiva de la versión 2: un firmware sin almacén de audio responde `UNKNOWN_COMMAND`, y así la web detecta que no está soportada.
+
+| Comando | Payload | Resultado |
+|---|---|---|
+| `audio.begin` | `audioTrack` (1–50), `sizeBytes` (45–524 288), `crc32` (uint32 de todo el WAV) | `audioTrack`, `offset: 0`, `chunkMaxBytes` (3072), `idleTimeoutMs` (30 000) |
+| `audio.chunk` | `audioTrack`, `offset`, `data` (base64 canónico de 1 a `chunkMaxBytes` bytes) | `audioTrack`, `offset` (siguiente esperado) |
+| `audio.commit` | `audioTrack` | `audioTrack`, `sizeBytes` |
+| `audio.abort` | `{}` | `{ "aborted": true }` |
+| `audio.status` | `{}` o `{ "audioTrack": n }` | `tracks`: lista de `{ audioTrack, sizeBytes }`; con `audioTrack`, también `crc32` |
+
+Reglas:
+
+1. `audio.begin` solo se acepta en `IDLE` y pasa el dispositivo a `SYNCING` (se emite `device.state`). Es excluyente con `capture.start` y `sync.*`: durante la carga cualquiera de ellos recibe `DEVICE_BUSY`, y el reconocimiento queda en pausa.
+2. Los fragmentos son estrictamente secuenciales. Ante un `offset` inesperado la respuesta es `AUDIO_BAD_OFFSET` con `details.offset`; el cliente reanuda desde ahí. Es también la forma de recuperarse de una response perdida.
+3. El firmware escribe en un archivo temporal y solo en `audio.commit` verifica tamaño, CRC-32 y cabecera WAV y lo publica con `rename`. Una carga fallida o abortada nunca reemplaza una pista válida.
+4. `audio.commit` con error de integridad o de formato descarta la carga y devuelve el dispositivo a `IDLE`. También vuelve a `IDLE` tras `audio.commit` exitoso, `audio.abort` y el vencimiento de `idleTimeoutMs` (sin evento adicional).
+5. Los campos fuera de rango (`audioTrack`, `sizeBytes`, `crc32`, `offset`, base64 no canónico) responden `INVALID_PAYLOAD`. `AUDIO_TOO_LARGE` se reserva para un fragmento que excede el tamaño declarado.
+6. Un mensaje `audio.chunk` mide como máximo unos 4,2 KB, dentro de `maxMessageBytes`.
+
+```json
+{"v":2,"type":"request","id":"audio-1","command":"audio.begin","payload":{"audioTrack":3,"sizeBytes":32044,"crc32":2553482130}}
+{"v":2,"type":"response","id":"audio-1","ok":true,"result":{"audioTrack":3,"offset":0,"chunkMaxBytes":3072,"idleTimeoutMs":30000}}
+{"v":2,"type":"event","event":"device.state","data":{"state":"SYNCING"}}
+{"v":2,"type":"request","id":"audio-2","command":"audio.chunk","payload":{"audioTrack":3,"offset":0,"data":"UklGRi..."}}
+{"v":2,"type":"response","id":"audio-2","ok":true,"result":{"audioTrack":3,"offset":3072}}
+{"v":2,"type":"request","id":"audio-3","command":"audio.commit","payload":{"audioTrack":3}}
+{"v":2,"type":"response","id":"audio-3","ok":true,"result":{"audioTrack":3,"sizeBytes":32044}}
+{"v":2,"type":"event","event":"device.state","data":{"state":"IDLE"}}
+```
+
 ---
 
 ## 13. Reconocimiento
@@ -1139,7 +1183,7 @@ Este evento es:
 El firmware:
 
 - reconoce usando el perfil local;
-- solicita localmente la reproducción (DFPlayer por UART en el firmware actual);
+- solicita localmente la reproducción WAV desde microSD por SPI/I²S (MAX98357A);
 - NO espera una respuesta del frontend;
 - NO bloquea el audio para emitir el evento;
 - puede omitir el evento si no existe una sesión compatible o el canal no puede enviarlo.
@@ -1291,6 +1335,17 @@ Después del handshake:
 | `SYNC_INCOMPLETE` | Se intentó commit sin todos los gestos. |
 | `SYNC_TIMEOUT` | Venció el timeout de inactividad de sincronización. |
 | `SYNC_FAILED` | Fallo de sincronización no representado por un código más específico. |
+| `AUDIO_INVALID_TRACK` | `audioTrack` fuera de 1–50 o sin carga para esa pista. |
+| `AUDIO_TOO_LARGE` | El tamaño declarado o un fragmento excede el máximo de 524 288 bytes. |
+| `AUDIO_BAD_CHUNK` | Fragmento vacío o mayor que `chunkMaxBytes`. |
+| `AUDIO_BAD_OFFSET` | `offset` distinto del esperado; `error.details.offset` indica dónde reanudar. |
+| `AUDIO_NO_UPLOAD` | No hay una carga de audio activa. |
+| `AUDIO_BUSY` | Hay una carga en curso o el guante está reproduciendo. |
+| `AUDIO_NO_SPACE` | No hay espacio suficiente en la microSD. |
+| `AUDIO_INTEGRITY` | El tamaño recibido o el CRC-32 no coinciden con lo declarado. |
+| `AUDIO_INVALID_WAV` | El archivo no es WAV PCM mono 16 kHz 16 bits. |
+| `AUDIO_UNAVAILABLE` | La microSD no está disponible o no se pudo habilitar la escritura. |
+| `AUDIO_IO` | Falló una lectura o escritura en la microSD. |
 | `CAPTURE_FAILED` | Fallo de captura no representado por un código más específico. |
 | `SENSOR_ERROR` | Falló la inicialización o lectura de sensores. |
 | `STORAGE_ERROR` | Falló una operación de almacenamiento. |
@@ -1834,11 +1889,11 @@ No son decisiones abiertas:
 - independencia entre `gesture.id` y `audioTrack`;
 - recuperación desde `ERROR` mediante reinicio del ESP32;
 - formato de gesto definido por `docs/gesture-format.md`.
-- `state === SYNCING` implica que `activeSync` es distinto de `null`;
+- `state === SYNCING` mantiene `activeSync !== null` durante `sync.*` y `activeSync === null` durante `audio.*`;
 
 ## 22. Resumen del contrato
 ```text
-Transporte      = USB Serial 115200, UTF-8, NDJSON + LF
+Transporte      = USB Serial 115200 (Web Serial) o Wi-Fi relay wss:// (/ws/web, /ws/device), UTF-8, NDJSON + LF
 Versión         = Protocol 2
 Frame máximo    = 8192 bytes
 Bootstrap       = device.handshake estable entre versiones
@@ -1853,6 +1908,6 @@ Commit          = timeout 10000 ms
 Persistencia    = perfil anterior válido hasta commit seguro
 Reconocimiento  = local; recognition.detected sólo informativo
 ERROR           = device.status permitido; recuperación mediante reinicio
-Audio           = backend prepara MP3; firmware solicita reproducción local por audioTrack
+Audio           = backend prepara MP3; el navegador lo convierte a WAV y lo sube con audio.* (12.12); firmware solicita reproducción local por audioTrack
 Errores         = códigos estables + texto diagnóstico
 Simulador       = mismo protocolo observable que firmware real
