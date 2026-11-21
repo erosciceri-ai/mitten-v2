@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { Button } from './ui/button';
 
 export function buildContactMailto(email: string, name: string, topic: string, message: string): string {
   const subject = `Consulta MITTEN · ${topic}`;
@@ -19,22 +20,36 @@ export function ContactComposer({ email }: { email: string }) {
   return (
     <form className="contact-form" onSubmit={handleSubmit}>
       <div className="contact-form__row">
-        <label>
+        <label htmlFor="contact-name">
           <span>Tu nombre</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" maxLength={80} />
+          <input
+            id="contact-name"
+            name="name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoComplete="name"
+            maxLength={80}
+          />
         </label>
-        <label>
+        <label htmlFor="contact-topic">
           <span>Motivo</span>
-          <select value={topic} onChange={(event) => setTopic(event.target.value)}>
+          <select
+            id="contact-topic"
+            name="topic"
+            value={topic}
+            onChange={(event) => setTopic(event.target.value)}
+          >
             <option>Consulta sobre el proyecto</option>
             <option>Solicitar una demostración</option>
             <option>Proponer una colaboración</option>
           </select>
         </label>
       </div>
-      <label>
+      <label htmlFor="contact-message">
         <span>Mensaje</span>
         <textarea
+          id="contact-message"
+          name="message"
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           required
@@ -46,7 +61,7 @@ export function ContactComposer({ email }: { email: string }) {
       </label>
       <div className="contact-form__footer">
         <p>Al continuar se abrirá tu aplicación de correo. MITTEN no guarda este mensaje.</p>
-        <button className="button button--light" type="submit">Preparar correo</button>
+        <Button variant="light" type="submit" className="shrink-0">Preparar correo</Button>
       </div>
     </form>
   );

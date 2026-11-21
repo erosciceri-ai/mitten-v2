@@ -74,8 +74,8 @@ describe('User Model', () => {
     const found = await findUserByEmail('test@example.com');
     expect(found).not.toBeNull();
     if (found) {
-      expect(verifyPassword(found, 'password123')).toBe(true);
-      expect(verifyPassword(found, 'wrong')).toBe(false);
+      expect(await verifyPassword(found, 'password123')).toBe(true);
+      expect(await verifyPassword(found, 'wrong')).toBe(false);
     }
   });
 
@@ -89,7 +89,7 @@ describe('User Model', () => {
     expect(googleUser.googleLinked).toBe(true);
     const stored = await findUserByGoogleSub('google-sub-1');
     expect(stored?.password_hash).toBeNull();
-    expect(stored && verifyPassword(stored, 'anything')).toBe(false);
+    expect(stored && await verifyPassword(stored, 'anything')).toBe(false);
 
     const passwordUser = await createUser({ email: 'link@example.com', password: 'password123' });
     await linkGoogleIdentity(passwordUser.id, 'google-sub-2');

@@ -2,7 +2,7 @@
 
 Esta guía prepara una demostración repetible de MITTEN sin guante físico. El modo demostración usa
 el dispatcher oficial de Protocol V2, pero las muestras y los reconocimientos son simulados. No
-valida sensores, ESP32, microSD, DFPlayer ni parlante.
+valida sensores, ESP32, microSD SPI, I²S, MAX98357A ni parlante.
 
 ## Preparación inicial
 
@@ -73,9 +73,9 @@ No marcar la demo como validada con hardware hasta completar y documentar cada p
 
 - [ ] Verificar orientación, rango y estabilidad de cada sensor flex y del MPU6050.
 - [ ] Confirmar calibración y captura con el guante colocado en distintas manos y sesiones.
-- [ ] Validar alimentación, masa común y niveles eléctricos del ESP32 y DFPlayer.
+- [ ] Validar alimentación, masa común y niveles eléctricos del ESP32, la microSD y el MAX98357A.
 - [ ] Formatear una microSD compatible, copiar el paquete y comprobar nombres/rutas reales.
-- [ ] Confirmar que cada gesto reproduce la pista correcta mediante DFPlayer y parlante.
+- [ ] Confirmar que cada gesto reproduce la pista correcta mediante la ruta SPI/I²S y el parlante; ver el [plan de migración](firmware-audio-migration.md).
 - [ ] Probar reinicio, pérdida de alimentación, reconexión USB y recuperación de errores.
 - [ ] Medir latencia y falsos positivos del reconocimiento en condiciones de uso reales.
 - [ ] Registrar firmware, cableado, componentes y resultados de la sesión física.

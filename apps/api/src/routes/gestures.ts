@@ -1,25 +1,28 @@
+import { audioChecksum } from '../services/audioStorage.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { validateBody, validateParams } from '../middleware/validation.js';
-import { createGestureSchema, updateGestureSchema, gestureIdParamSchema, paginationSchema } from '../utils/schemas.js';
+import { createGestureSchema, updateGestureSchema, gestureIdParamSchema } from '../utils/schemas.js';
 import {
   findAllGestures,
   findGestureById,
   createGesture,
   updateGesture,
   deleteGesture,
-  getGestureCount,
   generateGestureAudio,
   getGestureAudioInfo,
-  getGestureAudioFile,
+  getGestureAudio,
 } from '../models/Gesture.js';
+import { accountKey, jsonBody, limitConcurrent, limitRequests } from '../middleware/httpSecurity.js';
+import { config } from '../config/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const router = Router();
+const generateAudio = limitConcurrent(config.ttsConcurrency);
 
 // All gesture routes require authentication
-router.use(authMiddleware);
+router.use(authMiddleware, limitRequests(180, 60_000, accountKey));
 
 router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
@@ -39,7 +42,7 @@ router.get('/:id', validateParams(gestureIdParamSchema), asyncHandler(async (req
   res.json(gesture);
 }));
 
-router.post('/', validateBody(createGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', ...jsonBody('32kb'), validateBody(createGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const { name, data } = req.body;
 
@@ -54,7 +57,7 @@ router.post('/', validateBody(createGestureSchema), asyncHandler(async (req: Aut
   }
 }));
 
-router.put('/:id', validateParams(gestureIdParamSchema), validateBody(updateGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', validateParams(gestureIdParamSchema), ...jsonBody('32kb'), validateBody(updateGestureSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const id = parseInt(req.params.id, 10);
   const { name, data } = req.body;
@@ -80,7 +83,7 @@ router.delete('/:id', validateParams(gestureIdParamSchema), asyncHandler(async (
 }));
 
 // Audio generation endpoints
-router.post('/:id/audio', validateParams(gestureIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/audio', limitRequests(10, 60_000, accountKey), limitRequests(60, 60_000), ...jsonBody('1kb', false), validateParams(gestureIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   const id = parseInt(req.params.id, 10);
 
@@ -89,8 +92,13 @@ router.post('/:id/audio', validateParams(gestureIdParamSchema), asyncHandler(asy
     throw new AppError('Gesture not found', 404);
   }
 
+  const requestKey = req.get('Idempotency-Key');
+  if (requestKey !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(requestKey)) {
+    throw new AppError('Invalid Idempotency-Key', 400);
+  }
+
   try {
-    const result = await generateGestureAudio(userId, id);
+    const result = await generateAudio(() => generateGestureAudio(userId, id, requestKey));
     res.json({
       message: 'Audio generated successfully',
       trackNumber: result.trackNumber,
@@ -117,10 +125,27 @@ router.get('/:id/audio', validateParams(gestureIdParamSchema), asyncHandler(asyn
 }));
 
 router.get('/:id/audio/file', validateParams(gestureIdParamSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const file = await getGestureAudioFile(req.user!.userId, Number(req.params.id));
+  const file = await getGestureAudio(req.user!.userId, Number(req.params.id));
   if (!file) throw new AppError('Audio not found', 404);
   res.setHeader('Cache-Control', 'private, no-store');
-  await new Promise<void>((resolve, reject) => res.sendFile(file, error => error ? reject(error) : resolve()));
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.type('audio/mpeg');
+  const etag = '"' + audioChecksum(file) + '"';
+  res.setHeader('ETag', etag);
+  const ifRange = req.get('If-Range');
+  const range = !ifRange || ifRange === etag ? req.range(file.length, { combine: true }) : undefined;
+  if (range === -1) {
+    res.setHeader('Content-Range', 'bytes */' + file.length);
+    res.status(416).end();
+    return;
+  }
+  if (Array.isArray(range) && range.type === 'bytes' && range.length === 1) {
+    const [{ start, end }] = range;
+    res.setHeader('Content-Range', 'bytes ' + start + '-' + end + '/' + file.length);
+    res.status(206).send(file.subarray(start, end + 1));
+    return;
+  }
+  res.send(file);
 }));
 
 export default router;

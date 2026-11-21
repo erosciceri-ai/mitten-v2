@@ -33,6 +33,11 @@ export const PROTOCOL_COMMANDS = [
   'sync.gesture',
   'sync.commit',
   'sync.abort',
+  'audio.begin',
+  'audio.chunk',
+  'audio.commit',
+  'audio.abort',
+  'audio.status',
 ] as const;
 
 export type ProtocolCommand = typeof PROTOCOL_COMMANDS[number];
@@ -345,6 +350,82 @@ export interface SyncAbortResult {
   [key: string]: unknown;
 }
 
+// ============================================================================
+// Audio upload (WAV tracks for the glove microSD)
+// ============================================================================
+
+export const AUDIO_TRACK_MIN = 1;
+export const AUDIO_TRACK_MAX = 50;
+export const AUDIO_MIN_TRACK_BYTES = 45;
+export const AUDIO_MAX_TRACK_BYTES = 524_288;
+/** Raw bytes per audio.chunk; its base64 form is at most AUDIO_CHUNK_MAX_BASE64_CHARS characters. */
+export const AUDIO_CHUNK_MAX_BYTES = 3072;
+export const AUDIO_CHUNK_MAX_BASE64_CHARS = 4096;
+
+export interface AudioBeginPayload {
+  audioTrack: number;
+  sizeBytes: number;
+  crc32: number;
+  [key: string]: unknown;
+}
+
+export interface AudioBeginResult {
+  audioTrack: number;
+  offset: number;
+  chunkMaxBytes: number;
+  idleTimeoutMs: number;
+  [key: string]: unknown;
+}
+
+export interface AudioChunkPayload {
+  audioTrack: number;
+  offset: number;
+  data: string;
+  [key: string]: unknown;
+}
+
+export interface AudioChunkResult {
+  audioTrack: number;
+  offset: number;
+  [key: string]: unknown;
+}
+
+export interface AudioCommitPayload {
+  audioTrack: number;
+  [key: string]: unknown;
+}
+
+export interface AudioCommitResult {
+  audioTrack: number;
+  sizeBytes: number;
+  [key: string]: unknown;
+}
+
+export type AudioAbortPayload = Record<string, never>;
+
+export interface AudioAbortResult {
+  aborted: true;
+  [key: string]: unknown;
+}
+
+export interface AudioStatusPayload {
+  audioTrack?: number;
+  [key: string]: unknown;
+}
+
+export interface AudioTrackInfo {
+  audioTrack: number;
+  sizeBytes: number;
+  /** Only present when audio.status asked for one specific track. */
+  crc32?: number;
+  [key: string]: unknown;
+}
+
+export interface AudioStatusResult {
+  tracks: AudioTrackInfo[];
+  [key: string]: unknown;
+}
+
 export interface SyncFailedData {
   syncId: string;
   error: ProtocolError;
@@ -392,6 +473,19 @@ export enum ProtocolErrorCode {
   SYNC_TIMEOUT = 'SYNC_TIMEOUT',
   SYNC_FAILED = 'SYNC_FAILED',
   
+  // Audio upload errors
+  AUDIO_INVALID_TRACK = 'AUDIO_INVALID_TRACK',
+  AUDIO_TOO_LARGE = 'AUDIO_TOO_LARGE',
+  AUDIO_BAD_CHUNK = 'AUDIO_BAD_CHUNK',
+  AUDIO_BAD_OFFSET = 'AUDIO_BAD_OFFSET',
+  AUDIO_NO_UPLOAD = 'AUDIO_NO_UPLOAD',
+  AUDIO_BUSY = 'AUDIO_BUSY',
+  AUDIO_NO_SPACE = 'AUDIO_NO_SPACE',
+  AUDIO_INTEGRITY = 'AUDIO_INTEGRITY',
+  AUDIO_INVALID_WAV = 'AUDIO_INVALID_WAV',
+  AUDIO_UNAVAILABLE = 'AUDIO_UNAVAILABLE',
+  AUDIO_IO = 'AUDIO_IO',
+  
   // Capture errors
   CAPTURE_FAILED = 'CAPTURE_FAILED',
   
@@ -424,6 +518,17 @@ export const PROTOCOL_ERROR_CODES: readonly ProtocolErrorCode[] = [
   ProtocolErrorCode.SYNC_INCOMPLETE,
   ProtocolErrorCode.SYNC_TIMEOUT,
   ProtocolErrorCode.SYNC_FAILED,
+  ProtocolErrorCode.AUDIO_INVALID_TRACK,
+  ProtocolErrorCode.AUDIO_TOO_LARGE,
+  ProtocolErrorCode.AUDIO_BAD_CHUNK,
+  ProtocolErrorCode.AUDIO_BAD_OFFSET,
+  ProtocolErrorCode.AUDIO_NO_UPLOAD,
+  ProtocolErrorCode.AUDIO_BUSY,
+  ProtocolErrorCode.AUDIO_NO_SPACE,
+  ProtocolErrorCode.AUDIO_INTEGRITY,
+  ProtocolErrorCode.AUDIO_INVALID_WAV,
+  ProtocolErrorCode.AUDIO_UNAVAILABLE,
+  ProtocolErrorCode.AUDIO_IO,
   ProtocolErrorCode.CAPTURE_FAILED,
   ProtocolErrorCode.SENSOR_ERROR,
   ProtocolErrorCode.STORAGE_ERROR,
@@ -496,6 +601,11 @@ export type SyncBeginRequest = RequestEnvelope<'sync.begin', SyncBeginPayload, 2
 export type SyncGestureRequest = RequestEnvelope<'sync.gesture', SyncGesturePayload, 2>;
 export type SyncCommitRequest = RequestEnvelope<'sync.commit', SyncCommitPayload, 2>;
 export type SyncAbortRequest = RequestEnvelope<'sync.abort', SyncAbortPayload, 2>;
+export type AudioBeginRequest = RequestEnvelope<'audio.begin', AudioBeginPayload, 2>;
+export type AudioChunkRequest = RequestEnvelope<'audio.chunk', AudioChunkPayload, 2>;
+export type AudioCommitRequest = RequestEnvelope<'audio.commit', AudioCommitPayload, 2>;
+export type AudioAbortRequest = RequestEnvelope<'audio.abort', AudioAbortPayload, 2>;
+export type AudioStatusRequest = RequestEnvelope<'audio.status', AudioStatusPayload, 2>;
 
 export type ProtocolV2Request =
   | HandshakeRequest
@@ -504,7 +614,12 @@ export type ProtocolV2Request =
   | SyncBeginRequest
   | SyncGestureRequest
   | SyncCommitRequest
-  | SyncAbortRequest;
+  | SyncAbortRequest
+  | AudioBeginRequest
+  | AudioChunkRequest
+  | AudioCommitRequest
+  | AudioAbortRequest
+  | AudioStatusRequest;
 
 export type DeviceStateEvent = EventEnvelope<'device.state', DeviceStateData, 2>;
 export type CaptureProgressEvent = EventEnvelope<'capture.progress', CaptureProgressData, 2>;

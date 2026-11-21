@@ -46,27 +46,25 @@ La estructura general es:
                     │         apps/web          │
                     └──────────┬───────┬────────┘
                                │       │
-                       HTTP/JSON│       │Web Serial
-                               │       │
+                HTTP/JSON + WS │       │ Web Serial (USB)
+                   (/ws/web)   │       │
                                ▼       ▼
                 ┌──────────────────┐   ┌─────────────────────┐
                 │       API        │   │       ESP32         │
-                │ Node + Express   │   │    MicroPython      │
-                │    apps/api      │   │  firmware/esp32     │
-                └────────┬─────────┘   └──────────┬──────────┘
-                         │                        │
+                │ Node + Express   │◄──┤    MicroPython      │
+                │    apps/api      │WS │  firmware/esp32     │
+                └────────┬─────────┘saliente                 │
+                         │             └──────────┬──────────┘
                          ▼                        ▼
                 ┌──────────────────┐     ┌───────────────────┐
                 │ Base de datos    │     │ Sensores / Audio  │
                 │                  │     │ Flex + MPU6050     │
-                │ usuarios         │     │ DFPlayer Mini      │
+                │ usuarios         │     │ Audio SPI / I²S    │
                 │ gestos           │     │                   │
                 └──────────────────┘     └───────────────────┘
 ```
 
-La aplicación web actúa como intermediario entre el backend y el guante.
-
-El backend no se comunica directamente con el ESP32.
+La aplicación web coordina la comunicación con el guante por **Web Serial** (USB) o mediante el **relay WebSocket seguro** de la API (`/ws/web` ↔ `/ws/device`, con conexión saliente desde el ESP32). Durante el uso normal autónomo, el reconocimiento y la reproducción de audio en el guante no dependen de Internet ni del backend.
 
 ---
 
@@ -250,7 +248,7 @@ El frontend es responsable de:
 - consumir la API HTTP;
 - mostrar la biblioteca de gestos;
 - permitir crear, editar y eliminar gestos;
-- conectar con MITTEN mediante Web Serial;
+- conectar con MITTEN mediante Web Serial (USB) o `RelayTransport` sobre el relay WebSocket (`/ws/web` ↔ `/ws/device`);
 - realizar el handshake del dispositivo;
 - comprobar compatibilidad de protocolo;
 - iniciar capturas de gestos;
@@ -300,7 +298,8 @@ El backend es responsable de:
 - asignación de `audioTrack` mediante first-fit;
 - generación o preparación de los archivos MP3 asociados a los gestos;
 - mantenimiento de la relación entre gesto, `audioTrack` y archivo de audio;
-- proporcionar al frontend el perfil que debe sincronizarse.
+- proporcionar al frontend el perfil que debe sincronizarse;
+- vinculación y revocación de guantes por cuenta (`/api/device`) y relay WebSocket autenticado (`/ws/web` y `/ws/device`).
 
 La API no debe:
 
@@ -313,7 +312,7 @@ La API no debe:
 
 # 9. Persistencia
 
-La persistencia pertenece al backend.
+La persistencia pertenece al backend. La API selecciona SQLite local o PostgreSQL mediante configuración explícita. Ver el [esquema y los procedimientos operativos](persistence.md).
 
 Como mínimo deben existir conceptos equivalentes a:
 
@@ -366,7 +365,7 @@ Esto permite:
 
 # 11. Audio
 
-Cada gesto sincronizable posee una asociación con una pista del DFPlayer.
+Cada gesto sincronizable posee una asociación con una pista local identificada por `audioTrack`.
 
 Conceptualmente:
 
@@ -397,13 +396,11 @@ La asignación de audio debe manejarse mediante identificadores estables.
 - El MP3 asociado puede regenerarse manteniendo la misma pista.
 - Al borrar el gesto, su `audioTrack` queda libre y puede reutilizarse mediante first-fit.
 
-**Convención DFPlayer (resuelta):**
-- Carpeta física: `/mp3/` en la raíz de la microSD.
-- Nomenclatura: `{audioTrack:04d}.mp3` (p.ej. `0001.mp3`, `0017.mp3`, `0050.mp3`).
-- Reproducción: `playMp3Folder(audioTrack)` — selección explícita por número de pista dentro de `/mp3`, independiente del orden de copia en FAT.
-
-
-El mecanismo para preparar/transferir los archivos físicos a la microSD del DFPlayer es un proceso separado de la sincronización de datos (ver `docs/protocol.md` §12.5 y `docs/synchronization.md`).
+**Convención del firmware actual (microSD SPI + MAX98357A por I²S, DFPlayer retirado):**
+- Carpeta física: `/mitten_audio/audio/` en la microSD FAT32.
+- Nomenclatura: `{audioTrack:04d}.wav` (p.ej. `0001.wav`, `0017.wav`, `0050.wav`), formato WAV RIFF PCM mono, 16 kHz, 16 bits.
+- Reproducción: lectura incremental de bloques de 512 bytes por SPI hacia I²S (`firmware/esp32/audio.py`).
+- Carga desde la web: el navegador descarga el MP3 de la API, lo convierte a WAV (`apps/web/src/audio/gloveWav.ts`) y lo sube con `audio.*` hacia `firmware/esp32/audio_store.py` (`docs/audio-transfer.md`). Validación física en placa pendiente; véase el [plan de migración](firmware-audio-migration.md).
 
 ---
 
@@ -438,11 +435,11 @@ El firmware es responsable de:
 - almacenamiento de la biblioteca local;
 - captura de nuevos gestos;
 - reconocimiento;
-- control del DFPlayer;
-- reproducir mediante DFPlayer Mini el `audioTrack` asociado al gesto reconocido;
+- acceso a la microSD por SPI, recepción de pistas WAV (`firmware/esp32/audio_store.py`) y salida PCM por I²S (`firmware/esp32/audio.py`, implementados en software; pendiente validación física en PCB);
+- reproducir la pista local asociada al `audioTrack` del gesto reconocido;
 - no generar archivos MP3;
 - no asignar `audioTrack`;
-- comunicación Serial;
+- comunicación Serial (USB) y cliente WebSocket saliente opcional (`relay_transport.py`);
 - procesamiento de comandos recibidos;
 - envío de eventos y respuestas;
 - almacenamiento del perfil activo;
@@ -463,7 +460,7 @@ Flex 3 ─┤
 Flex 4 ─┼──► ESP32 ───► reconocimiento
 Flex 5 ─┤                    │
         │                    ▼
-MPU6050 ┘                DFPlayer
+MPU6050 ┘                audio SPI / I²S (audio.py, pendiente validación en PCB)
                              │
                              ▼
                           Parlante
@@ -481,15 +478,14 @@ El ESP32 procesa estas señales para determinar el gesto realizado.
 
 # 15. Comunicación ESP32 ↔ aplicación
 
-La conexión entre el navegador y MITTEN utiliza:
+La conexión entre el navegador y MITTEN utiliza cualquiera de los dos transportes soportados por Protocol Version 2:
 
 ```text
-USB Serial
-115200 baud
-Web Serial API
+Modo USB:   USB Serial · 115200 baud · Web Serial API
+Modo Wi-Fi: RelayTransport · wss:// (/ws/web ↔ /ws/device)
 ```
 
-La aplicación web es responsable de abrir y cerrar la conexión.
+La aplicación web es responsable de abrir y cerrar la sesión de comunicación, y el ESP32 inicia la conexión saliente hacia `/ws/device` cuando opera en modo relay.
 
 Protocol Version 2 utiliza los siguientes límites y timeouts:
 
@@ -661,7 +657,7 @@ Frontend
    │
    │ valida datos
    │
-   │ Web Serial
+   │ Web Serial o Relay WS (/ws/web ↔ /ws/device)
    ▼
 ESP32
    │
@@ -776,13 +772,13 @@ gesto reconocido
 audioTrack
    │
    ▼
-DFPlayer
+Audio local (microSD SPI → PCM por I²S → MAX98357A; implementado en audio.py, pendiente validación en PCB)
 ```
 Mientras el dispositivo está conectado mediante una sesión compatible, un reconocimiento exitoso puede notificarse mediante el evento `recognition.detected`.
 
 Este evento es informativo y no forma parte del camino crítico de reproducción.
 
-El ESP32 reconoce el gesto y ordena la reproducción al DFPlayer localmente sin esperar respuesta del frontend.
+El ESP32 reconoce el gesto y reproduce localmente la pista WAV desde microSD por SPI/I²S (`firmware/esp32/audio.py`) sin esperar respuesta del frontend (validación física en placa pendiente; el módulo legacy DFPlayer por UART fue retirado).
 
 Esto evita que el guante necesite conexión constante con:
 
@@ -852,17 +848,17 @@ Los estados oficiales de Protocol Version 2 son:
 | `CALIBRATING` | El dispositivo calibra los sensores necesarios. |
 | `IDLE` | No hay una operación exclusiva; puede aceptar captura o sincronización. |
 | `CAPTURING` | Existe una captura de gesto en curso. |
-| `SYNCING` | Existe una transacción de sincronización en staging. |
+| `SYNCING` | Existe una transacción de sincronización de perfil (`sync.*`) o una transferencia de audio WAV (`audio.*`) en curso. |
 | `ERROR` | Un fallo impide operar con seguridad. En Protocol Version 2 la recuperación requiere reiniciar el ESP32. |
 
-Si el dispositivo informa `state === "SYNCING"`, debe existir una transacción activa y `activeSync` debe ser distinto de `null`.
+Si el dispositivo informa `state === "SYNCING"` durante una sincronización de perfil (`sync.*`), `activeSync` debe ser distinto de `null`; durante una carga de audio WAV del navegador al guante (`audio.*`), el dispositivo también informa `state === "SYNCING"` pero mantiene `activeSync === null` (ver `docs/protocol.md`, secciones 10.2 y 21.3).
 
 Durante `ERROR`, `device.handshake` y `device.status` siguen disponibles.
 Los comandos funcionales se rechazan con `INVALID_STATE`.
 Protocol Version 2 no define `device.reset`.
 Después de reiniciar, el dispositivo comienza nuevamente en `INITIALIZING`.
 
-`DISCONNECTED` no es un estado del firmware. Es un estado local del frontend cuando no existe una sesión Web Serial válida.
+`DISCONNECTED` no es un estado del firmware. Es un estado local del frontend cuando no existe una sesión activa de Web Serial o de `RelayTransport` (`/ws/web` ↔ `/ws/device`).
 
 `RECOGNIZING` **no es un estado oficial**. El reconocimiento normal ocurre localmente mientras el dispositivo está `IDLE` y puede notificarse mediante el evento `recognition.detected` (ver `docs/protocol.md`, secciones 9 y 13).
 
@@ -915,25 +911,15 @@ firmware/esp32
  └── implementación compatible con la especificación del protocolo
 ```
 
-No debe existir:
+No debe existir dependencia de código desde `apps/api` hacia `apps/web`, ni desde `firmware/esp32` hacia módulos internos de `apps/api` o `apps/web`:
 
 ```text
-apps/api → apps/web
+apps/api ↛ apps/web
+firmware ↛ apps/web
+firmware ↛ apps/api (en modo predeterminado TRANSPORT_MODE = "serial")
 ```
 
-ni:
-
-```text
-firmware → apps/api
-```
-
-ni:
-
-```text
-firmware → apps/web
-```
-
-El ESP32 conoce únicamente el protocolo con el que se comunica.
+En el modo predeterminado `TRANSPORT_MODE = "serial"`, el ESP32 no realiza conexiones hacia el backend y se comunica únicamente por USB Serial. En el modo opcional `TRANSPORT_MODE = "relay"`, `relay_transport.py` abre una conexión WebSocket saliente hacia `/ws/device` únicamente como túnel de transporte para tramas de Protocol Version 2.
 
 ---
 
@@ -946,8 +932,8 @@ El ESP32 conoce únicamente el protocolo con el que se comunica.
                 │                                 │
                 ▼                                 ▼
        ┌─────────────────┐               ┌─────────────────┐
-       │     Web App     │──── HTTP ─────►│       API       │
-       │                 │◄───────────────│                 │
+       │     Web App     │── HTTP / WS ─►│       API       │
+       │                 │◄──────────────│                 │
        └────────┬────────┘               └────────┬────────┘
                 │                                 │
                 │                                 ▼
@@ -955,7 +941,7 @@ El ESP32 conoce únicamente el protocolo con el que se comunica.
                 │                         │    Database     │
                 │                         └─────────────────┘
                 │
-                │ Web Serial / USB
+                │ Web Serial (USB) o Relay WS (/ws/web ↔ /ws/device)
                 │
                 ▼
        ┌─────────────────┐
@@ -966,7 +952,7 @@ El ESP32 conoce únicamente el protocolo con el que se comunica.
         │                    │
         ▼                    ▼
    ┌─────────┐          ┌─────────┐
-   │ Sensores│          │DFPlayer │
+   │ Sensores│          │Audio local│
    └─────────┘          └────┬────┘
                              │
                              ▼
@@ -992,7 +978,7 @@ biblioteca local
    ↓
 reconocimiento
    ↓
-DFPlayer
+Audio local (microSD SPI → PCM por I²S → MAX98357A; implementado en audio.py, pendiente validación en PCB)
    ↓
 audio
 ```
@@ -1124,17 +1110,17 @@ Agregar información opcional compatible no necesariamente requiere una nueva ve
 
 # 35. Seguridad
 
-Las credenciales y tokens pertenecen al entorno web/backend.
+Las credenciales de usuario y los tokens de sesión web pertenecen al entorno web/backend.
 
-No deben almacenarse permanentemente en el ESP32 salvo que una futura arquitectura lo requiera explícitamente.
+En el modo predeterminado `TRANSPORT_MODE = "serial"`, el ESP32 no realiza conexiones al backend ni almacena ningún token. En el modo opcional `TRANSPORT_MODE = "relay"`, `relay_transport.py` se conecta de forma saliente a `/ws/device` y almacena en `relay.json` únicamente un JWT revocable y acotado al dispositivo (`aud: "mitten-device"`, `kind: "device"`), obtenido al canjear un código de vinculación de un solo uso.
 
-El ESP32 no necesita conocer:
+El ESP32 nunca almacena ni necesita conocer:
 
-- contraseña del usuario;
-- JWT;
-- credenciales de base de datos.
+- contraseñas del usuario;
+- JWT de sesión web (`aud: "mitten-api"`);
+- credenciales de base de datos o almacenamiento externo.
 
-La autorización de acceso a la biblioteca se realiza antes de que el frontend entregue el perfil al dispositivo.
+La autorización de acceso a la biblioteca se realiza antes de que el frontend entregue el perfil al dispositivo, y cualquier guante vinculado puede revocarse individualmente desde la cuenta (`DELETE /api/device/:id`).
 
 ---
 
@@ -1169,9 +1155,9 @@ Este documento no define:
 - diseño mecánico del guante;
 - carcasa;
 - posición física de componentes;
-- mecanismo definitivo de transferencia de archivos de audio.
+- detalles eléctricos definitivos tras validación en placa.
 
-El formato físico de la microSD para DFPlayer **sí está definido** en la sección 11: carpeta `/mp3/`, archivos `{audioTrack:04d}.mp3`, reproducción vía `playMp3Folder(audioTrack)`.
+La sección 11 documenta la convención vigente `/mitten_audio/audio/{audioTrack:04d}.wav` (microSD SPI + I²S) y la transferencia desde el navegador (`docs/audio-transfer.md`).
 
 El protocolo serie completo mensaje por mensaje **sí está definido** en `docs/protocol.md`.
 
@@ -1187,11 +1173,17 @@ A partir de esta arquitectura existen o deberían existir los siguientes documen
 docs/
 ├── requirements.md
 ├── architecture.md
-├── protocol.md          ← EXISTE (canónico)
-├── gesture-format.md    ← EXISTE (canónico)
-├── synchronization.md   ← EXISTE (persistencia atómica ESP32)
-├── calibration.md       ← PENDIENTE (offsets MPU, rangos flex)
-└── development.md       ← PENDIENTE (guía desarrollo, testing)
+├── protocol.md                 ← EXISTE (canónico)
+├── gesture-format.md           ← EXISTE (canónico)
+├── synchronization.md          ← EXISTE (persistencia atómica ESP32)
+├── audio-transfer.md           ← EXISTE (carga WAV navegador → guante vía audio.*)
+├── firmware-audio-migration.md ← EXISTE (audio autónomo microSD SPI + I²S)
+├── persistence.md              ← EXISTE (SQLite / PostgreSQL y migraciones)
+├── audio-storage.md            ← EXISTE (almacenamiento MP3 local / S3)
+├── deployment.md               ← EXISTE (build, nginx y límites operativos)
+├── deployment/phase5.md        ← EXISTE (staging Cloudflare Pages + Render + Neon)
+├── development.md              ← EXISTE (guía de desarrollo y pruebas)
+└── calibration.md              ← PENDIENTE (offsets MPU, rangos flex)
 ```
 
 `protocol.md` define exactamente la comunicación entre frontend y ESP32 (autoridad canónica).
@@ -1216,8 +1208,8 @@ Jerarquía de autoridad:
 
 | Componente | Responsabilidad principal |
 |---|---|
-| `apps/web` | Interfaz, API client y conexión Web Serial |
-| `apps/api` | Usuarios, autenticación, biblioteca de gestos, persistencia, asignación de `audioTrack` y preparación de MP3 |
+| `apps/web` | Interfaz, API client y transporte con el guante (Web Serial USB y `RelayTransport` por `/ws/web`) |
+| `apps/api` | Usuarios, autenticación, biblioteca de gestos, persistencia, asignación de `audioTrack`, preparación de MP3, vinculación/revocación de dispositivos (`/api/device`) y relay WebSocket (`/ws/web`, `/ws/device`) |
 | `firmware/esp32` | Sensores, reconocimiento, almacenamiento local y audio |
 | `packages/contracts` | Implementación compartida de tipos, esquemas, validadores y fixtures alineados con los documentos canónicos |
 | `tools/esp32-simulator` | Simular comportamiento lógico del ESP32 |

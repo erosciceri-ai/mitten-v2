@@ -12,7 +12,7 @@ El sistema utiliza:
 - Una aplicación web para configuración, gestión de gestos y comunicación con el guante.
 - Una API backend.
 - Una interfaz web React.
-- Generación de audio desde el backend y reproducción local en el dispositivo mediante DFPlayer Mini.
+- Generación de audio desde el backend (MP3). La reproducción autónoma V2 usa WAV PCM desde microSD por SPI y salida I²S al MAX98357A (`firmware/esp32/audio.py`), y la transferencia web `audio.*` convierte MP3→WAV en el navegador (`docs/audio-transfer.md`); la validación física sigue pendiente. Ver `docs/firmware-audio-migration.md`.
 
 El repositorio actual contiene una implementación anterior de MITTEN V1.
 
@@ -87,6 +87,19 @@ mitten/
 │   ├── protocol.md
 │   ├── gesture-format.md
 │   ├── synchronization.md
+│   ├── audio-transfer.md
+│   ├── audio-storage.md
+│   ├── persistence.md
+│   ├── firmware-audio-migration.md
+│   ├── deployment.md
+│   ├── deployment/
+│   │   └── phase5.md
+│   ├── development.md
+│   ├── software-validation.md
+│   ├── demo-software-mp3.md
+│   ├── google-authentication.md
+│   ├── branding/
+│   │   └── BRAND.md
 │   └── README.md
 │
 ├── AGENTS.md
@@ -112,11 +125,11 @@ Responsable de:
 - Calibración de sensores.
 - Adquisición de muestras de gestos.
 - Reconocimiento local de gestos cuando sea necesario.
-- Comunicación del estado del dispositivo mediante el protocolo serie.
-- Recepción de comandos válidos desde el frontend vía Web Serial.
-- Reproducción local del MP3 asociado a un gesto reconocido mediante DFPlayer Mini.
+- Comunicación del estado del dispositivo mediante el protocolo V2 (USB Serial o Wi-Fi relay según `TRANSPORT_MODE`).
+- Recepción de comandos válidos desde el frontend vía Web Serial o relay WebSocket seguro (`/ws/device`).
+- Reproducción local de la pista asociada a un gesto reconocido mediante SPI/I²S: WAV PCM desde microSD al MAX98357A (`/mitten_audio/audio/NNNN.wav`). La integración aún no está validada físicamente; ver `docs/firmware-audio-migration.md`.
 
-El ESP32 no genera archivos de audio ni asigna `audioTrack`; sólo reproduce pistas previamente preparadas y sincronizadas.
+El ESP32 no genera archivos de audio ni asigna `audioTrack`; reproduce pistas WAV preparadas en la microSD (cargadas desde la web vía `audio.*` con `audio_store.py`, o copiadas manualmente). La sincronización de perfil (`sync.*`) y la carga de audio (`audio.*`) son flujos separados.
 
 El ESP32 no debe contener lógica de gestión de aplicación que pertenezca al backend.
 
@@ -124,9 +137,9 @@ El firmware ejecuta **MicroPython** en el ESP32. MicroPython es la tecnología s
 
 ---
 
-## Web Serial
+## Web Serial y Wi-Fi relay
 
-La comunicación entre la aplicación y el ESP32 se realiza mediante **Web Serial API desde el frontend React**.
+La comunicación entre la aplicación y el ESP32 utiliza **Web Serial API** (`TRANSPORT_MODE = "serial"`) o el transporte opcional **Wi-Fi relay (`wss://`)** vía backend (`TRANSPORT_MODE = "relay"`, `apps/api/src/ws/relay.ts`).
 
 - Web Serial es el único propietario del puerto serie en MITTEN V2.
 - NO existirá `monitor.py`.
@@ -150,20 +163,22 @@ Responsable de:
 - Lógica de aplicación relacionada con sincronización.
 - Generación o preparación de archivos MP3 asociados a los gestos.
 - Gestión de metadatos de audio y asignación de `audioTrack`.
+- Almacenamiento de audio local o en S3 compatible (`AudioStorage`, `AUDIO_STORAGE_PROVIDER=local|s3`).
+- Vinculación, listado y revocación de dispositivos (`POST /api/device/pairing`, `GET /api/device`, `DELETE /api/device/:id`).
+- Relay WebSocket bidireccional entre la aplicación web y el ESP32 (`/ws/web`, `/ws/device`).
 
 El frontend solicita y coordina estas operaciones.
-El ESP32 no genera audio; únicamente reproduce archivos MP3 previamente preparados desde la microSD mediante DFPlayer Mini.
+El ESP32 no sintetiza voz. Lee pistas WAV preparadas desde microSD por SPI y entrega PCM por I²S al MAX98357A; el navegador convierte cada MP3 a WAV y lo sube vía `audio.*` (`docs/audio-transfer.md`). El [plan de migración](docs/firmware-audio-migration.md) registra la implementación y la validación física pendiente.
 
 La dirección técnica confirmada para MITTEN V2 es:
 
 - **Node.js**
 - **Express**
 - **TypeScript**
-- **SQLite**
+- **SQLite** (`DB_PROVIDER=sqlite` para desarrollo local y pruebas) y **PostgreSQL** (`DB_PROVIDER=postgres` para staging y producción en Neon/Render)
+- **Almacenamiento de audio local o S3 compatible** (`AUDIO_STORAGE_PROVIDER=local|s3`)
 
-SQLite es suficiente para el alcance actual del proyecto.
-
-No introducir PostgreSQL, MongoDB, Redis, microservicios o infraestructura cloud compleja sin una necesidad futura demostrada.
+El frontend se despliega como SPA estática en Cloudflare Pages y la API en Render con PostgreSQL (Neon) y almacenamiento de objetos S3 compatible. No introducir MongoDB, Redis, microservicios o infraestructura adicional fuera de este alcance sin una necesidad futura demostrada.
 
 ---
 
@@ -195,7 +210,7 @@ El protocolo V2 está definido en `docs/protocol.md` (Protocol Version 2).
 
 Características principales:
 
-- Transporte: USB Serial 115200 baud, Web Serial API.
+- Transporte: USB Serial 115200 baud (Web Serial API) o Wi-Fi relay saliente `wss://` (`/ws/web`, `/ws/device`).
 - Framing: NDJSON UTF-8 delimitado por LF.
 - Envelopes: `request` (frontend→dispositivo), `response` (dispositivo→frontend), `event` (dispositivo→frontend).
 - Correlación: `id` por request, `syncId` por transacción de sincronización.
@@ -264,18 +279,26 @@ La siguiente sincronización continúa siendo un reemplazo completo del perfil.
 
 Evita un único archivo grande de MicroPython.
 
-El firmware debe separar progresivamente responsabilidades tales como:
+El firmware debe separar progresivamente responsabilidades siguiendo la estructura real de `firmware/esp32/`:
 
 ```text
 main.py
+hardware.py
+hardware_config.py
 sensors.py
-imu.py
-calibration.py
-gestures.py
 recognition.py
-protocol.py
-storage.py
+audio.py
+audio_store.py
+wifi_manager.py
+relay_transport.py
+diag_wifi_audio.py
 config.py
+isrg_root_x1.der
+capture/
+protocol/
+storage/
+error/
+utils/
 ```
 
 No dividas archivos solo por estética.
@@ -557,11 +580,17 @@ Prefiere un sistema simple y correcto sobre uno impresionante pero innecesariame
 
 | Documento | Autoridad | Qué define |
 |---|---|---|
-| `docs/protocol.md` | **Canónica** | Wire protocol: transporte, handshake, estados, captura, sincronización, errores, ejemplos. |
+| `docs/protocol.md` | **Canónica** | Wire protocol: transporte, handshake, estados, captura, sincronización, `audio.*`, errores, ejemplos. |
 | `docs/gesture-format.md` | **Canónica** | Formato `data`: esquema, unidades, validación, `maxMessageBytes`. |
 | `docs/requirements.md` | Requisitos | Qué debe hacer el sistema, criterios de aceptación. |
 | `docs/architecture.md` | Arquitectura | Componentes, responsabilidades, flujos alto nivel. |
 | `docs/synchronization.md` | Sincronización | Flujo transaccional de sincronización de gestos. |
+| `docs/audio-transfer.md` | Transferencia de audio | Flujo `audio.*`, conversión MP3→WAV en navegador y verificación en microSD. |
+| `docs/persistence.md` | Persistencia backend | Abstracción `DatabaseClient`, soporte dual SQLite/PostgreSQL y migraciones. |
+| `docs/audio-storage.md` | Almacenamiento de audio | Abstracción `AudioStorage` (`local` y `s3`) y configuración de bucket. |
+| `docs/firmware-audio-migration.md` | Audio en firmware | Migración de DFPlayer a microSD SPI + MAX98357A I²S y validación física pendiente. |
+| `docs/deployment.md` | Despliegue | Topología de despliegue (Cloudflare Pages, Render, Neon, S3) y variables de entorno. |
+| `docs/deployment/phase5.md` | Runbook Fase 5 | Guía operativa paso a paso para puesta en marcha de producción y pruebas de humo. |
 | `docs/README.md` | Índice | Jerarquía de autoridad y docs legacy. |
 
 `packages/contracts` es la implementación compartida de contratos, tipos y validaciones usada por web, API y simulador, y referencia ejecutable para firmware.
@@ -593,13 +622,13 @@ Debe mantenerse alineado con los documentos canónicos. Ante una contradicción,
 - Sincronización transaccional `sync.begin → sync.gesture × N → sync.commit/abort`.
 - La semántica de sincronización es reemplazo completo del perfil; `sync.gesture × N` es únicamente el transporte dentro de esa transacción.
 - El staging nunca sustituye al perfil activo antes de un `sync.commit` exitoso.
-- `state === SYNCING` implica que existe una transacción `activeSync`.
+- `state === SYNCING` mantiene `activeSync` distinto de `null` durante `sync.*`, y `activeSync === null` durante la carga de audio `audio.*`.
 - Reemplazo completo con conservación del perfil anterior ante abort, timeout o fallo.
 - `data.version = 1`: 7 dimensiones, `samples`, `summary.min/max/mean`, `sampleCount`, `captureDurationMs`, `samplingPeriodMs`.
 - La calibración MPU6050 pertenece al estado/configuración local del dispositivo y no a `GestureData`.
 - `audioTrack` 1–50: independiente de `gesture.id`, asignación first-fit, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
-- DFPlayer usa `/mp3/{audioTrack:04d}.mp3`.
-- `apps/api` genera o prepara los archivos MP3. El frontend coordina y el ESP32 únicamente reproduce.
+- El módulo legacy `dfplayer.py` fue retirado; el firmware V2 SPI/I²S reproduce `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono 16 kHz 16 bits).
+- `apps/api` genera o prepara los archivos MP3; el navegador los convierte a WAV y los transfiere al guante mediante `audio.*` (`docs/audio-transfer.md`), conservando también el respaldo ZIP MP3. La validación física en placa sigue pendiente.
 - `gesture.id` es inmutable.
 - `gesture.name` y `gesture.data` son editables; el MP3 puede regenerarse.
 - Editar un gesto no implica sincronización incremental.

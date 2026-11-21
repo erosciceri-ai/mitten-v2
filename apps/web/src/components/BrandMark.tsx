@@ -4,6 +4,7 @@ interface BrandMarkProps {
   to?: string;
   surface?: 'dark' | 'light';
   variant?: 'navigation' | 'signature' | 'isotype';
+  showVersion?: boolean;
   className?: string;
 }
 
@@ -24,9 +25,11 @@ export function BrandMark({
   to = '/',
   surface = 'dark',
   variant = 'navigation',
+  showVersion = variant !== 'signature',
   className = '',
 }: BrandMarkProps) {
-  const label = to === '/app' ? 'MITTEN, ir al panel' : 'MITTEN, ir al inicio';
+  const versionSuffix = showVersion ? ' V2.1' : '';
+  const label = to === '/app' ? `MITTEN${versionSuffix}, ir al panel` : `MITTEN${versionSuffix}, ir al inicio`;
   const asset = brandAssets[surface][variant];
 
   return (
@@ -39,7 +42,7 @@ export function BrandMark({
       {variant === 'navigation' ? (
         <img className="brand-mark__mobile-asset" src={brandAssets[surface].isotype} alt="" aria-hidden="true" />
       ) : null}
-      {variant !== 'signature' ? <span className="brand-mark__version">V2.1</span> : null}
+      {showVersion ? <span className="brand-mark__version">V2.1</span> : null}
     </Link>
   );
 }

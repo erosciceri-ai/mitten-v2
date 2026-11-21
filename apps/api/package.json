@@ -6,25 +6,30 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc && node -e \"require('fs').copyFileSync('src/db/schema.sql', 'dist/db/schema.sql')\"",
+    "build": "tsc && node -e \"require('fs').copyFileSync('src/db/schema.sql', 'dist/db/schema.sql'); require('fs').cpSync('src/db/postgres', 'dist/db/postgres', { recursive: true })\"",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "audio:maintenance": "tsx src/services/audioMaintenance.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:import-sqlite": "tsx src/db/importSqlite.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1167.0",
     "@mitten/contracts": "file:../../packages/contracts",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
     "express": "^4.19.0",
-    "express-validator": "^7.1.0",
+    "express-rate-limit": "^8.7.4",
     "google-auth-library": "^10.9.1",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.2",
+    "pg": "^8.23.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
-    "zod": "^3.23.0"
+    "ws": "^8.18.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -32,7 +37,9 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "@types/sqlite3": "^3.1.11",
+    "@types/ws": "^8.5.12",
     "tsx": "^4.19.0",
     "typescript": "^5.3.0",
     "vitest": "^4.1.11"

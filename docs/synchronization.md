@@ -355,7 +355,7 @@ La semántica externa exacta de estos errores y sus responses pertenece a `docs/
 | `docs/protocol.md` | §12 | Protocolo de sincronización (wire format, transacciones, códigos de error). |
 | `docs/gesture-format.md` | §3, §7.4 | Esquema `data`, formato `gestures.json`, referencia a este doc. |
 | `docs/requirements.md` | §14, §24 | REQ-PER-001/004/005, decisión cerrada de persistencia. |
-| `docs/architecture.md` | §11, §38 | Convención DFPlayer, `synchronization.md` como documento existente. |
+| `docs/architecture.md` | §11, §38 | Convención del firmware actual y objetivo SPI/I²S, `synchronization.md` como documento existente. |
 
 ---
 

@@ -1,4 +1,4 @@
-import { config, validateConfig } from '../config/index.js';
+import { config, jwtLifetimeSeconds } from '../config/index.js';
 import jwt from 'jsonwebtoken';
 import { findUserById } from '../models/User.js';
 
@@ -13,13 +13,18 @@ export interface JWTPayload {
 }
 
 export function generateToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  validateConfig();
-  return jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'] });
+  if (config.jwtSecret.length < 32) throw new Error('Invalid JWT signing configuration');
+  return jwt.sign(payload, config.jwtSecret, { algorithm: 'HS256', expiresIn: jwtLifetimeSeconds(config.jwtExpiresIn) });
 }
 
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, config.jwtSecret) as JWTPayload;
+    if (config.jwtSecret.length < 32) return null;
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
+    if (typeof payload !== 'object' || !Number.isSafeInteger(payload.userId) || payload.userId < 1 ||
+        typeof payload.email !== 'string' || !Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) ||
+        payload.iat! >= payload.exp!) return null;
+    return { userId: payload.userId, email: payload.email, iat: payload.iat, exp: payload.exp };
   } catch {
     return null;
   }
@@ -28,7 +33,7 @@ export function verifyToken(token: string): JWTPayload | null {
 export function extractTokenFromHeader(authHeader: string | undefined): string | null {
   if (!authHeader) return null;
   const parts = authHeader.split(' ');
-  if (parts.length !== 2 || parts[0] !== 'Bearer') return null;
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') return null;
   return parts[1];
 }
 

@@ -95,6 +95,7 @@ vi.mock('../../serial/DeviceService', () => {
 
 describe('DeviceContext', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockDeviceServiceInstance._resetHandlers();
 
@@ -157,6 +158,8 @@ describe('DeviceContext', () => {
         {device.syncError && <span data-testid="sync-error">{device.syncError}</span>}
         {device.connectionError && <span data-testid="connection-error">{device.connectionError}</span>}
         {device.capturedGestureData && <span data-testid="captured-data">data</span>}
+        <span data-testid="capturing">{String(device.isCapturing)}</span>
+        <span data-testid="syncing">{String(device.isSyncing)}</span>
       </div>
     );
   };
@@ -167,6 +170,18 @@ describe('DeviceContext', () => {
   };
 
   describe('connection', () => {
+    it('defaults to relay (Wi-Fi) mode and restores hardware (USB) when stored', () => {
+      renderProvider();
+      expect(getTestDevice().deviceMode).toBe('relay');
+      expect(getTestDevice().isRelayMode).toBe(true);
+
+      cleanup();
+      sessionStorage.setItem('mitten_device_mode', 'hardware');
+      renderProvider();
+      expect(getTestDevice().deviceMode).toBe('hardware');
+      expect(getTestDevice().isRelayMode).toBe(false);
+    });
+
     it('should initialize with disconnected state', () => {
       renderProvider();
       expect(screen.getByTestId('status').textContent).toBe('disconnected');
@@ -569,6 +584,42 @@ describe('DeviceContext', () => {
       unmount();
 
       expect(mockDeviceServiceInstance.disconnect).toHaveBeenCalled();
+    });
+
+    it('clears in-flight capture and sync flags when disconnected abruptly', async () => {
+      renderProvider();
+      const device = getTestDevice();
+
+      await act(async () => {
+        await device.connect();
+      });
+      await act(async () => {
+        await device.startCapture();
+      });
+      expect(screen.getByTestId('capturing').textContent).toBe('true');
+
+      act(() => {
+        mockDeviceServiceInstance._triggerOnConnectionStatusChange('disconnected', null, null);
+      });
+
+      expect(screen.getByTestId('capturing').textContent).toBe('false');
+      expect(screen.getByTestId('syncing').textContent).toBe('false');
+    });
+
+    it('localizes Web Serial unsupported errors into Spanish', async () => {
+      mockDeviceServiceInstance.connect.mockRejectedValueOnce(new Error('Web Serial API is not supported in this browser'));
+      renderProvider();
+      const device = getTestDevice();
+
+      await act(async () => {
+        try {
+          await device.connect();
+        } catch {
+          // expected
+        }
+      });
+
+      expect(screen.getByTestId('connection-error').textContent).toContain('Este navegador no admite Web Serial por USB');
     });
   });
 });

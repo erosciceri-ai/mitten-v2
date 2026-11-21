@@ -6,14 +6,15 @@ Guante electrónico wearable que traduce gestos de mano a audio hablado.
 
 Una vez configurado y sincronizado, MITTEN puede reconocer gestos y reproducir el audio asociado sin depender de la PC, el navegador, el frontend ni el backend.
 
-La aplicación web se comunica directamente con el ESP32 mediante Web Serial API usando el protocolo serie MITTEN V2.
+La aplicación web se comunica con el ESP32 mediante **Web Serial API** (USB) o mediante el transporte opcional **Wi-Fi relay (`wss://`)** a través de la API backend usando el protocolo MITTEN V2.
 
 - 5 sensores flex para medir la flexión de los dedos
 - MPU6050 para orientación y movimiento de la mano
 - ESP32 con MicroPython como firmware
-- DFPlayer Mini para reproducción autónoma de MP3 desde microSD
+- MicroSD por SPI y MAX98357A por I²S para reproducción WAV autónoma (implementado en software; validación física pendiente)
+- Carga de audio desde el navegador (`audio.*` con conversión MP3→WAV) y portal de provisión Wi-Fi
 - Aplicación web (React + Vite + TypeScript)
-- API backend (Node.js + Express + TypeScript + SQLite), responsable también de preparar/generar el audio
+- API backend (Node.js + Express + TypeScript + SQLite/PostgreSQL), TTS y relay WebSocket (`/ws/web`, `/ws/device`)
 
 ## Estructura del repositorio
 
@@ -22,7 +23,7 @@ mitten/
 ├── .github/             # CI y actualizaciones automatizadas
 ├── apps/
 │   ├── web/           # React + Vite + TypeScript
-│   └── api/           # Node.js + Express + TypeScript + SQLite
+│   └── api/           # Node.js + Express + TypeScript + SQLite / PostgreSQL
 ├── firmware/
 │   └── esp32/         # MicroPython
 ├── packages/
@@ -35,8 +36,14 @@ mitten/
 │   ├── protocol.md
 │   ├── gesture-format.md
 │   ├── synchronization.md
+│   ├── audio-transfer.md
+│   ├── audio-storage.md
+│   ├── persistence.md
+│   ├── firmware-audio-migration.md
+│   ├── deployment.md
+│   ├── deployment/
+│   │   └── phase5.md
 │   ├── development.md
-│   ├── legacy/          # Documentación histórica de MITTEN V1
 │   └── README.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md
@@ -52,7 +59,7 @@ MITTEN V2.1 puede demostrarse por software sin el guante físico:
 - La portada pública explica el objetivo, alcance, hardware, software y recorrido del gesto.
 - La aplicación permite registro, autenticación, biblioteca de gestos, captura y sincronización.
 - La suite integral recorre registro, captura simulada, persistencia, sincronización, reinicio,
-  reconocimiento y la trama UART destinada al DFPlayer.
+  reconocimiento y solicitud de la pista WAV correspondiente del reproductor SPI/I²S. El [plan de migración](docs/firmware-audio-migration.md) y [`docs/audio-transfer.md`](docs/audio-transfer.md) describen la arquitectura de audio y la validación física pendiente.
 
 El simulador oficial usa NDJSON por `stdin/stdout`. No se conecta directamente a la interfaz web
 ni reemplaza Web Serial. La demostración conceptual de la portada tampoco mide precisión real.
@@ -133,7 +140,7 @@ npm run test:e2e   # Recorrido completo de navegador con simulador y MP3 fixture
   un MP3. Para voz argentina local, ejecutá `npm run tts:setup`; consulta
   [`docs/demo-software-mp3.md`](docs/demo-software-mp3.md). ElevenLabs sigue disponible como
   adaptador opcional.
-- **Hardware:** el recorrido físico debe validarse en el ESP32, sensores, MPU6050, DFPlayer Mini,
+- **Hardware:** el recorrido físico debe validarse en el ESP32, sensores, MPU6050, microSD SPI, MAX98357A por I²S,
   microSD y parlante reales antes de afirmar que el prototipo completo está certificado.
 
 ## Privacidad y datos locales
@@ -146,9 +153,15 @@ contacto abre el cliente de correo del visitante y MITTEN no almacena el mensaje
 
 Consulta `docs/README.md` para la jerarquía documental.
 Documentos principales:
-- `docs/protocol.md`: protocolo serie V2.
+- `docs/protocol.md`: protocolo serie y relay V2.
 - `docs/gesture-format.md`: formato canónico de los datos de gestos.
 - `docs/synchronization.md`: sincronización transaccional y persistencia atómica.
+- `docs/audio-transfer.md`: transferencia de audio (`audio.*`), conversión MP3→WAV y verificación en microSD.
+- `docs/persistence.md`: capa de persistencia backend dual SQLite / PostgreSQL.
+- `docs/audio-storage.md`: almacenamiento de audio local o en S3 compatible (`AudioStorage`).
+- `docs/firmware-audio-migration.md`: arquitectura de audio SPI/I²S en firmware y validación física pendiente.
+- `docs/deployment.md`: topología de despliegue (Cloudflare Pages, Render, Neon, S3) y variables de entorno.
+- `docs/deployment/phase5.md`: runbook operativo de puesta en marcha y smoke tests de Fase 5.
 - `docs/requirements.md`: requisitos funcionales y criterios de aceptación.
 - `docs/architecture.md`: arquitectura general del sistema.
 - `docs/software-validation.md`: alcance y evidencia de la validación sin hardware.

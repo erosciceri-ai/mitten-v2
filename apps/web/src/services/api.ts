@@ -38,6 +38,15 @@ async function getAuthToken(): Promise<string | null> {
   return localStorage.getItem('auth_token');
 }
 
+/** Same token as the REST client, read synchronously (used by the Wi-Fi relay transport). */
+export function getStoredAuthToken(): string | null {
+  return localStorage.getItem('auth_token');
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -102,8 +111,34 @@ export async function linkGoogleAccount(credential: string): Promise<{ user: Use
   });
 }
 
+export interface PairedDevice {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  online: boolean;
+}
+
+/** Código de 6 dígitos (vence a los 10 min) para vincular el guante desde su portal Wi-Fi. */
+export async function createDevicePairingCode(): Promise<{ code: string; expiresInSeconds: number }> {
+  return request('/device/pairing', { method: 'POST' });
+}
+
+export async function getDevices(): Promise<{ devices: PairedDevice[] }> {
+  return request<{ devices: PairedDevice[] }>('/device');
+}
+
+export async function revokeDevice(id: string): Promise<void> {
+  await request<void>(`/device/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getCurrentUser(): Promise<User> {
-  return request<User>('/auth/me');
+  const user = await request<User>('/auth/me', { signal: AbortSignal.timeout(10_000) });
+  if (!Number.isSafeInteger(user?.id) || typeof user.email !== 'string') throw new ApiUnavailableError();
+  return user;
 }
 
 export async function exportAccountData(): Promise<AccountExport> {
@@ -158,7 +193,7 @@ export async function downloadAudioPackage(): Promise<Blob> {
   return request<Blob>('/audio/package', {}, true);
 }
 
-export async function getReadiness(): Promise<{ status: 'ready' | 'degraded'; services: { api: string; sqlite: string; tts: { provider: string; available: boolean; message?: string } } }> {
+export async function getReadiness(): Promise<{ status: 'ready' | 'degraded'; services?: { api: string; sqlite: string; tts: { provider: string; available: boolean } } }> {
   return request('/ready');
 }
 

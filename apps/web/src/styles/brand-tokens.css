@@ -1,0 +1,39 @@
+/* MITTEN V1.2 Official Dark-First Design Tokens (WCAG AA) */
+:root {
+  --mitten-navy: #0b0f1a;
+  --mitten-panel: #101d30;
+  --mitten-panel-raised: #16263d;
+  --mitten-panel-subtle: #14243a;
+  --mitten-blue: #1695f4;
+  --mitten-blue-deep: #126bff;
+  --mitten-cyan: #00d3dd;
+  --mitten-cyan-mid: #02c7e8;
+  --mitten-violet: #7a5cff;
+
+  --mitten-gradient: linear-gradient(
+    100deg,
+    #126bff 0%,
+    #1695f4 43%,
+    #02c7e8 76%,
+    #00d3dd 100%
+  );
+  --mitten-cta-gradient: linear-gradient(
+    100deg,
+    #1d7dff 0%,
+    #1695f4 42%,
+    #02c7e8 76%,
+    #00d3dd 100%
+  );
+  --mitten-gradient-soft: linear-gradient(
+    100deg,
+    rgb(18 107 255 / 0.2),
+    rgb(0 211 221 / 0.08)
+  );
+
+  --color-placeholder: #8ca1ba;
+  --color-link: #68dfff;
+  --color-primary-text: #68dfff;
+  --color-border-strong: #38506f;
+  --color-syncing: #38e4ee;
+  --color-syncing-light: #0d2b38;
+}

@@ -1,9 +1,15 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { DeviceService } from '../serial/DeviceService';
 import { DemoTransport, type DemoDeviceControls } from '../serial/DemoTransport';
+import { RelayTransport, relayUrlFromApiBase } from '../serial/RelayTransport';
+import type { AudioUploadOptions } from '../serial/DeviceService';
+import { getApiBaseUrl, getStoredAuthToken } from '../services/api';
+import { localizeDeviceError } from '../utils/devicePresentation';
+import { useOptionalAuth } from './AuthContext';
 import {
   FirmwareState,
 } from '../types';
+import type { AudioCommitResult, AudioStatusResult } from '@mitten/contracts';
 import type {
   DeviceInfo,
   CapturePhase,
@@ -15,38 +21,42 @@ import type {
   ConnectionStatus,
 } from '../types';
 
+export type DeviceMode = 'hardware' | 'demo' | 'relay';
+
 interface DeviceContextValue {
-  deviceMode: 'hardware' | 'demo';
-  setDeviceMode: (mode: 'hardware' | 'demo') => void;
+  deviceMode: DeviceMode;
+  setDeviceMode: (mode: DeviceMode) => void;
   isDemoMode: boolean;
+  /** Glove connected through the backend relay (Wi-Fi) instead of USB. */
+  isRelayMode: boolean;
   // Connection state
   connectionStatus: ConnectionStatus;
   deviceInfo: DeviceInfo | null;
   connectionError: string | null;
   isConnected: boolean;
   isHandshakeValid: boolean;
-  
+
   // Device state
   firmwareState: FirmwareState;
   activeProfile: ActiveProfileInfo | null;
   activeSync: ActiveSyncInfo | null;
-  
+
   // Capture state
   isCapturing: boolean;
   capturePhase: CapturePhase | null;
   captureProgress: number;
   captureError: string | null;
   capturedGestureData: GestureData | null;
-  
+
   // Sync state
   isSyncing: boolean;
   syncProgress: { sent: number; total: number };
   syncError: string | null;
   syncIsComplete: boolean;
-  
+
   // Recognition
   lastRecognition: RecognitionDetectedData | null;
-  
+
   // Actions
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -56,7 +66,9 @@ interface DeviceContextValue {
   abortSync: () => Promise<void>;
   restartDemoDevice: () => Promise<void>;
   simulateRecognition: (gestureId?: number) => Promise<boolean>;
-  
+  uploadAudio: (audioTrack: number, wav: Uint8Array, options?: AudioUploadOptions) => Promise<AudioCommitResult>;
+  getAudioStatus: (audioTrack?: number) => Promise<AudioStatusResult>;
+
   // State resetters
   clearCaptureState: () => void;
   clearSyncState: () => void;
@@ -67,40 +79,43 @@ interface DeviceContextValue {
 const DeviceContext = createContext<DeviceContextValue | null>(null);
 
 export function DeviceProvider({ children }: { children: ReactNode }) {
-  const [deviceMode, setDeviceModeState] = useState<'hardware' | 'demo'>(() =>
-    sessionStorage.getItem('mitten_device_mode') === 'demo' ? 'demo' : 'hardware'
-  );
+  const auth = useOptionalAuth();
+  const [deviceMode, setDeviceModeState] = useState<DeviceMode>(() => {
+    const stored = sessionStorage.getItem('mitten_device_mode');
+    return stored === 'demo' || stored === 'hardware' ? stored : 'relay';
+  });
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [firmwareState, setFirmwareState] = useState<FirmwareState>(FirmwareState.INITIALIZING);
   const [activeProfile, setActiveProfile] = useState<ActiveProfileInfo | null>(null);
   const [activeSync, setActiveSync] = useState<ActiveSyncInfo | null>(null);
-  
+
   // Capture state
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturePhase, setCapturePhase] = useState<CapturePhase | null>(null);
   const [captureProgress, setCaptureProgress] = useState(0);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [capturedGestureData, setCapturedGestureData] = useState<GestureData | null>(null);
-  
+
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ sent: 0, total: 0 });
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncIsComplete, setSyncIsComplete] = useState(false);
-  
+
   // Recognition
   const [lastRecognition, setLastRecognition] = useState<RecognitionDetectedData | null>(null);
-  
+
   const deviceServiceRef = useRef<DeviceService | null>(null);
   const isMountedRef = useRef(true);
   const syncGeneration = useRef(0);
+  const wasAuthenticatedRef = useRef(Boolean(auth?.isAuthenticated));
 
   // Initialize device service
   useEffect(() => {
     isMountedRef.current = true;
-    
+
     const service = new DeviceService({
       onStateChange: (state) => {
         if (isMountedRef.current) {
@@ -108,11 +123,21 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         }
       },
       onConnectionStatusChange: (status, info, error) => {
-        if (status === "disconnected" || status === "error") syncGeneration.current++;
+        if (status === 'disconnected' || status === 'error') {
+          syncGeneration.current++;
+        }
         if (isMountedRef.current) {
           setConnectionStatus(status);
           setDeviceInfo(info);
-          setConnectionError(error);
+          setConnectionError(error ? localizeDeviceError(error) : null);
+          if (status === 'disconnected' || status === 'error') {
+            setIsCapturing(false);
+            setCapturePhase(null);
+            setCaptureProgress(0);
+            setIsSyncing(false);
+            setActiveSync(null);
+            setSyncProgress({ sent: 0, total: 0 });
+          }
         }
       },
       onCaptureProgress: (data) => {
@@ -135,7 +160,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           setIsCapturing(false);
           setCapturePhase(null);
           setCaptureProgress(0);
-          setCaptureError(data.error.message);
+          setCaptureError(localizeDeviceError(data.error.message));
         }
       },
       onSyncProgress: (sent, total) => {
@@ -157,7 +182,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         syncGeneration.current++;
         if (isMountedRef.current) {
           setIsSyncing(false);
-          setSyncError(error.message);
+          const rawMessage = (error as { message?: string; error?: { message?: string } })?.message
+            ?? (error as { error?: { message?: string } })?.error?.message;
+          setSyncError(rawMessage ? localizeDeviceError(rawMessage) : null);
           setActiveSync(null);
         }
       },
@@ -168,7 +195,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       },
       onError: (error) => {
         if (isMountedRef.current) {
-          setConnectionError(error.message);
+          setConnectionError(localizeDeviceError(error.message));
         }
       },
       onDeviceError: (code, message, details) => {
@@ -176,19 +203,26 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
           console.error(`Device error [${code}]:`, message, details);
         }
       },
-    }, deviceMode === 'demo' ? handlers => new DemoTransport(handlers) : undefined);
-    
+    }, deviceMode === 'demo'
+      ? handlers => new DemoTransport(handlers)
+      : deviceMode === 'relay'
+        ? handlers => new RelayTransport(handlers, {
+            url: relayUrlFromApiBase(getApiBaseUrl(), window.location),
+            getToken: getStoredAuthToken,
+          })
+        : undefined);
+
     deviceServiceRef.current = service;
-    
+
     return () => {
       isMountedRef.current = false;
       service.disconnect().catch(console.error);
     };
   }, [deviceMode]);
 
-  const setDeviceMode = useCallback((mode: 'hardware' | 'demo') => {
+  const setDeviceMode = useCallback((mode: DeviceMode) => {
     if (connectionStatus !== 'disconnected' && connectionStatus !== 'error') {
-      throw new Error('Desconecta el dispositivo antes de cambiar de modo');
+      throw new Error('Desconectá el dispositivo antes de cambiar de modo');
     }
     sessionStorage.setItem('mitten_device_mode', mode);
     setConnectionError(null);
@@ -198,7 +232,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const connect = useCallback(async () => {
     const service = deviceServiceRef.current;
     if (!service) throw new Error('Device service not initialized');
-    
+
     setConnectionError(null);
     try {
       const info = await service.connect();
@@ -207,15 +241,16 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       setActiveProfile(info.activeProfile as ActiveProfileInfo | null);
       setActiveSync(info.activeSync as ActiveSyncInfo | null);
     } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : 'Connection failed');
-      throw error;
+      const localized = localizeDeviceError(error instanceof Error ? error.message : 'Connection failed');
+      setConnectionError(localized);
+      throw new Error(localized);
     }
   }, []);
 
   const disconnect = useCallback(async () => {
     const service = deviceServiceRef.current;
     if (!service) return;
-    
+
     await service.disconnect();
     setDeviceInfo(null);
     setFirmwareState(FirmwareState.INITIALIZING);
@@ -230,37 +265,48 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     setSyncProgress({ sent: 0, total: 0 });
     setSyncError(null);
     setSyncIsComplete(false);
+    setLastRecognition(null);
   }, []);
+
+  // Automatically disconnect active device/relay/demo when signing out.
+  useEffect(() => {
+    const currentlyAuthenticated = Boolean(auth?.isAuthenticated);
+    if (wasAuthenticatedRef.current && !currentlyAuthenticated) {
+      void disconnect().catch(() => undefined);
+    }
+    wasAuthenticatedRef.current = currentlyAuthenticated;
+  }, [auth?.isAuthenticated, disconnect]);
 
   const getStatus = useCallback(async () => {
     const service = deviceServiceRef.current;
     if (!service) throw new Error('Device service not initialized');
-    
+
     try {
       const status = await service.getStatus();
       setFirmwareState(status.state);
       setActiveProfile(status.activeProfile as ActiveProfileInfo | null);
       setActiveSync(status.activeSync as ActiveSyncInfo | null);
     } catch (error) {
-      setConnectionError(error instanceof Error ? error.message : 'Failed to get status');
-      throw error;
+      const localized = localizeDeviceError(error instanceof Error ? error.message : 'Failed to get status');
+      setConnectionError(localized);
+      throw new Error(localized);
     }
   }, []);
 
   const startCapture = useCallback(async () => {
     const service = deviceServiceRef.current;
     if (!service) throw new Error('Device service not initialized');
-    
+
     setIsCapturing(true);
     setCaptureError(null);
     setCaptureProgress(0);
     setCapturedGestureData(null);
-    
+
     try {
       await service.startCapture();
     } catch (error) {
       setIsCapturing(false);
-      setCaptureError(error instanceof Error ? error.message : 'Capture failed');
+      setCaptureError(localizeDeviceError(error instanceof Error ? error.message : 'Capture failed'));
       throw error;
     }
   }, []);
@@ -268,21 +314,20 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const startSync = useCallback(async (profileId: string, profileRevision: string, gestures: Gesture[]) => {
     const service = deviceServiceRef.current;
     if (!service) throw new Error('Device service not initialized');
-    
+
     if (gestures.length > (deviceInfo?.capabilities.maxGestures || 50)) {
       throw new Error(`Too many gestures (${gestures.length}). Maximum is ${deviceInfo?.capabilities.maxGestures || 50}`);
     }
-    
+
     const generation = ++syncGeneration.current;
     setIsSyncing(true);
     setSyncError(null);
     setSyncIsComplete(false);
     setSyncProgress({ sent: 0, total: gestures.length });
-    
+
     const syncId = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    
+
     try {
-      // Start sync transaction
       await service.startSync(syncId, profileId, profileRevision, gestures.length);
       setActiveSync({
         syncId,
@@ -292,21 +337,17 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         receivedCount: 0,
         nextIndex: 0,
       });
-      
-      // Send each gesture
+
       for (let i = 0; i < gestures.length; i++) {
         if (generation !== syncGeneration.current) return;
         await service.sendGesture(syncId, i, gestures[i]);
       }
-      
-      // Commit sync
+
       if (generation !== syncGeneration.current) return;
       await service.commitSync(syncId);
-      
     } catch (error) {
       setIsSyncing(false);
-      setSyncError(error instanceof Error ? error.message : 'Sync failed');
-      // Try to abort on error
+      setSyncError(localizeDeviceError(error instanceof Error ? error.message : 'Sync failed'));
       try {
         await service.abortSync(syncId);
       } catch {
@@ -319,12 +360,12 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const abortSync = useCallback(async () => {
     const service = deviceServiceRef.current;
     if (!service || !activeSync) return;
-    
+
     syncGeneration.current++;
     try {
       await service.abortSync(activeSync.syncId);
     } catch (error) {
-      setSyncError(error instanceof Error ? error.message : 'Abort failed');
+      setSyncError(localizeDeviceError(error instanceof Error ? error.message : 'Abort failed'));
       throw error;
     }
     setIsSyncing(false);
@@ -349,6 +390,18 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     if (!service || deviceMode !== 'demo') throw new Error('El reconocimiento simulado sólo está disponible en modo demostración');
     return (service.getTransport() as unknown as DemoDeviceControls).recognize(gestureId);
   }, [deviceMode]);
+
+  const uploadAudio = useCallback((audioTrack: number, wav: Uint8Array, options?: AudioUploadOptions) => {
+    const service = deviceServiceRef.current;
+    if (!service) return Promise.reject(new Error('Device service not initialized'));
+    return service.uploadAudio(audioTrack, wav, options);
+  }, []);
+
+  const getAudioStatus = useCallback((audioTrack?: number) => {
+    const service = deviceServiceRef.current;
+    if (!service) return Promise.reject(new Error('Device service not initialized'));
+    return service.getAudioStatus(audioTrack);
+  }, []);
 
   const clearCaptureState = useCallback(() => {
     setCaptureError(null);
@@ -375,6 +428,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     deviceMode,
     setDeviceMode,
     isDemoMode: deviceMode === 'demo',
+    isRelayMode: deviceMode === 'relay',
+    uploadAudio,
+    getAudioStatus,
     connectionStatus,
     deviceInfo,
     connectionError,

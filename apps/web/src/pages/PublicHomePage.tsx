@@ -1,7 +1,13 @@
+import { Menu, X } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { ContactComposer } from '../components/ContactComposer';
 import { ProjectDemo } from '../components/ProjectDemo';
+import { Button } from '../components/ui/button';
+import { StatusBadge } from '../components/ui/mitten-ui';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isWebSerialSupported } from '../utils/devicePresentation';
 
 const contactEmail = import.meta.env.VITE_CONTACT_EMAIL?.trim();
 
@@ -16,28 +22,60 @@ const processSteps = [
   },
   {
     title: 'El guante reproduce la frase',
-    text: 'Al reconocer el gesto, el DFPlayer Mini reproduce desde la microSD la pista de audio asociada.',
+    text: 'Al reconocer el gesto, el ESP32 reproduce desde la microSD la pista WAV asociada mediante el amplificador MAX98357A.',
+  },
+];
+
+const connectionModes = [
+  {
+    name: 'Guante por Wi-Fi',
+    tag: 'Principal',
+    tone: 'primary' as const,
+    text: 'Modo recomendado para el uso diario. Se vincula a tu cuenta con un código de un solo uso y funciona desde celular o computadora en cualquier navegador moderno.',
+  },
+  {
+    name: 'Guante por USB',
+    tag: 'Respaldo local',
+    tone: 'neutral' as const,
+    text: 'Conexión directa por cable mediante Web Serial en Chrome o Edge de escritorio. Útil en aulas, ferias o entornos sin Wi-Fi 2.4 GHz ni acceso a Internet.',
+  },
+  {
+    name: 'Modo demostración',
+    tag: 'Sin hardware',
+    tone: 'warning' as const,
+    text: 'Simulador integrado del ESP32 con el mismo protocolo V2 para probar captura, sincronización, carga de audio y reconocimiento sin placa física.',
   },
 ];
 
 const faqs = [
   {
-    question: '¿MITTEN necesita una computadora para funcionar?',
-    answer: 'La computadora se usa para configurar, capturar y sincronizar. Después, el reconocimiento y la reproducción de audio ocurren localmente en el guante.',
+    question: '¿MITTEN necesita una computadora o Internet para funcionar?',
+    answer: 'La aplicación web —desde el celular por Wi-Fi o desde una computadora— solo se usa para configurar, capturar, enviar audios y sincronizar. Después, el reconocimiento y la reproducción de voz ocurren localmente en el guante sin Internet ni PC.',
   },
   {
     question: '¿Todos deben aprender los mismos gestos?',
     answer: 'No. Cada persona construye su propia biblioteca y decide qué movimientos y frases quiere conservar.',
   },
   {
-    question: '¿Funciona en cualquier navegador?',
-    answer: 'La conexión directa usa Web Serial, una tecnología con disponibilidad limitada. La aplicación debe abrirse en un navegador compatible y desde un sitio seguro HTTPS.',
+    question: '¿Cómo se conecta el guante y en qué navegadores funciona?',
+    answer: 'Por defecto se conecta mediante Guante por Wi-Fi, que usa WebSocket estándar y funciona en cualquier navegador moderno, incluidos celulares. Si no tenés Wi-Fi 2.4 GHz o conexión a Internet, podés usar el respaldo Guante por USB (Web Serial en Chrome o Edge de escritorio por HTTPS) o ensayar en Modo demostración.',
+  },
+  {
+    question: '¿Cómo se cargan las voces en la microSD del guante?',
+    answer: 'Cada gesto genera su frase con síntesis de voz (TTS). Desde el panel «Audio en el guante», tu navegador la convierte automáticamente a WAV PCM 16 kHz mono y la envía al guante sin sacar la microSD; también podés descargar un respaldo ZIP.',
   },
   {
     question: '¿Es un dispositivo médico?',
     answer: 'No. MITTEN V2.1 es un prototipo funcional educativo. Su efectividad clínica todavía no fue establecida.',
   },
 ];
+
+const sectionLinks = [
+  { href: '#funcionamiento', label: 'Cómo funciona' },
+  { href: '#tecnologia', label: 'Tecnología' },
+  { href: '#demostracion', label: 'Demostración' },
+  { href: '#contacto', label: 'Contacto' },
+] as const;
 
 function HeroSystemDiagram() {
   return (
@@ -48,7 +86,7 @@ function HeroSystemDiagram() {
         <path className="hero-system__orbit" d="M71 320C154 369 277 377 376 318C446 276 475 193 437 120" />
         <circle className="hero-system__signal" cx="71" cy="320" r="7" />
 
-        <g className="hero-system__brand" aria-label="Isotipo oficial MITTEN">
+        <g className="hero-system__brand">
           <image href="/brand/06_isotipo_gradiente.svg" x="82" y="126" width="190" height="173" />
         </g>
 
@@ -64,7 +102,7 @@ function HeroSystemDiagram() {
         </g>
         <g className="hero-system__node hero-system__node--audio" transform="translate(355 290)">
           <rect width="116" height="72" rx="18" />
-          <text x="58" y="32">DFPlayer</text>
+          <text x="58" y="32">Audio I²S</text>
           <text x="58" y="52">reproduce</text>
         </g>
 
@@ -81,9 +119,12 @@ function HeroSystemDiagram() {
 }
 
 export function PublicHomePage() {
-  const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
-  const hasSecureContext = typeof window !== 'undefined' && window.isSecureContext;
-  const browserReady = hasWebSerial && hasSecureContext;
+  const auth = useOptionalAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const browserReady = isWebSerialSupported();
+  const isAuthenticated = Boolean(auth?.isAuthenticated);
+  const appPath = isAuthenticated ? '/app' : '/login';
+  const appActionLabel = isAuthenticated ? 'Ir al panel' : 'Abrir la aplicación';
 
   return (
     <div className="public-site">
@@ -93,13 +134,48 @@ export function PublicHomePage() {
         <div className="public-container public-header__inner">
           <BrandMark />
           <nav className="public-nav" aria-label="Navegación del proyecto">
-            <a href="#funcionamiento">Cómo funciona</a>
-            <a href="#tecnologia">Tecnología</a>
-            <a href="#demostracion">Demostración</a>
-            <a href="#contacto">Contacto</a>
+            {sectionLinks.map((item) => (
+              <a key={item.href} href={item.href}>{item.label}</a>
+            ))}
           </nav>
-          <Link className="button button--compact button--outline" to="/login">Abrir la aplicación</Link>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={appPath}>{appActionLabel}</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="min-[901px]:hidden"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="public-mobile-nav"
+              aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+            >
+              {mobileMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+            </Button>
+          </div>
         </div>
+        {mobileMenuOpen ? (
+          <nav
+            id="public-mobile-nav"
+            aria-label="Menú móvil del proyecto"
+            className="border-t border-border bg-surface px-4 py-3 min-[901px]:hidden"
+          >
+            <div className="flex flex-col gap-1">
+              {sectionLinks.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-text hover:bg-mist"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          </nav>
+        ) : null}
       </header>
 
       <main id="contenido">
@@ -109,8 +185,12 @@ export function PublicHomePage() {
               <h1>Cada gesto tiene algo que decir.</h1>
               <p className="hero-lead">MITTEN es un guante inteligente de comunicación que reconoce gestos configurados y reproduce sus mensajes de voz sin depender de una computadora durante el uso cotidiano.</p>
               <div className="hero-actions">
-                <a className="button button--primary" href="#funcionamiento">Descubrir MITTEN</a>
-                <Link className="button button--quiet" to="/login">Configurar mi guante</Link>
+                <Button asChild size="lg">
+                  <a href="#funcionamiento">Descubrir MITTEN</a>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link to={appPath}>{isAuthenticated ? 'Ir al panel' : 'Configurar mi guante'}</Link>
+                </Button>
               </div>
               <p className="hero-note">Prototipo funcional educativo · MITTEN V2.1</p>
             </div>
@@ -124,14 +204,14 @@ export function PublicHomePage() {
           </div>
           <div className="public-container browser-check" role="status">
             <span className={`browser-check__icon ${browserReady ? 'browser-check__icon--ready' : ''}`} aria-hidden="true">
-              {browserReady ? '✓' : '!'}
+              {browserReady ? '✓' : 'i'}
             </span>
             <div>
-              <strong>{browserReady ? 'Este navegador puede conectar MITTEN' : 'La conexión necesita un navegador compatible'}</strong>
+              <strong>{browserReady ? 'Este navegador admite Wi-Fi y respaldo por USB' : 'Listo para conectar por Wi-Fi · USB requiere navegador compatible'}</strong>
               <span>
                 {browserReady
-                  ? 'Web Serial y el contexto seguro están disponibles.'
-                  : 'Usá un navegador con Web Serial y abrí la aplicación mediante HTTPS para conectar el guante.'}
+                  ? 'Podés configurar MITTEN por Wi-Fi desde cualquier dispositivo o conectarlo por cable USB mediante Web Serial.'
+                  : 'Podés usar Guante por Wi-Fi y Modo demostración desde este navegador (incluido celular). El respaldo por cable USB requiere Chrome o Edge en escritorio por HTTPS.'}
               </span>
             </div>
           </div>
@@ -174,6 +254,21 @@ export function PublicHomePage() {
                 </li>
               ))}
             </ol>
+
+            <div className="mt-10 border-t border-border pt-8">
+              <h3 className="text-lg font-bold text-text">Tres formas de conectar el guante</h3>
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {connectionModes.map((mode) => (
+                  <article key={mode.name} className="rounded-2xl border border-border bg-surface p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-base font-bold text-text">{mode.name}</h4>
+                      <StatusBadge tone={mode.tone}>{mode.tag}</StatusBadge>
+                    </div>
+                    <p className="mt-2.5 text-sm leading-6 text-text-muted">{mode.text}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -196,7 +291,7 @@ export function PublicHomePage() {
                   <li><span>ESP32</span><small>Control y reconocimiento</small></li>
                   <li><span>5 sensores flex</span><small>Flexión de los dedos</small></li>
                   <li><span>MPU6050</span><small>Orientación y movimiento</small></li>
-                  <li><span>DFPlayer Mini</span><small>Reproducción de MP3</small></li>
+                  <li><span>MAX98357A</span><small>Amplificador I²S (WAV PCM)</small></li>
                   <li><span>microSD y parlante</span><small>Audio disponible sin PC</small></li>
                 </ul>
               </article>
@@ -209,11 +304,11 @@ export function PublicHomePage() {
                 </div>
                 <h3>En la aplicación</h3>
                 <ul>
-                  <li><span>React + TypeScript</span><small>Interfaz y Web Serial</small></li>
-                  <li><span>Node.js + Express</span><small>API y lógica de aplicación</small></li>
-                  <li><span>SQLite</span><small>Usuarios y bibliotecas</small></li>
-                  <li><span>MicroPython</span><small>Firmware modular del ESP32</small></li>
-                  <li><span>Protocolo V2</span><small>NDJSON transaccional</small></li>
+                  <li><span>React + TypeScript</span><small>Interfaz, WebSocket relay y Web Serial</small></li>
+                  <li><span>Node.js + Express</span><small>API REST, relay Wi-Fi y síntesis TTS</small></li>
+                  <li><span>SQLite / PostgreSQL</span><small>Cuentas, guantes vinculados y bibliotecas</small></li>
+                  <li><span>Conversión WAV local</span><small>MP3 a WAV PCM 16 kHz en el navegador</small></li>
+                  <li><span>MicroPython + Protocolo V2</span><small>Firmware modular y NDJSON transaccional</small></li>
                 </ul>
               </article>
             </div>
@@ -227,13 +322,17 @@ export function PublicHomePage() {
             <div className="section-heading">
               <h2 id="capability-title">Preparar el guante sin ocultar lo importante.</h2>
               <p>La interfaz acompaña la conexión, el aprendizaje y la sincronización, mostrando siempre el estado real de MITTEN.</p>
-              <Link className="text-link" to="/login">Entrar al panel de configuración</Link>
+              <Link className="text-link" to={appPath}>
+                {isAuthenticated ? 'Ir al panel de configuración' : 'Entrar al panel de configuración'}
+              </Link>
             </div>
             <ul className="capability-list">
               <li><strong>Biblioteca personal</strong><span>Creá, editá, buscá y eliminá gestos propios.</span></li>
-              <li><strong>Captura guiada</strong><span>Registrá el movimiento directamente desde el guante.</span></li>
-              <li><strong>Audio asociado</strong><span>Prepará y revisá la frase que reproducirá cada gesto.</span></li>
-              <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo sin perder el anterior ante un fallo.</span></li>
+              <li><strong>Captura guiada</strong><span>Registrá el movimiento directamente desde el guante por Wi-Fi o USB.</span></li>
+              <li><strong>Voces directas a la microSD</strong><span>Generá frases por TTS, convertilas a WAV en tu navegador y subilas al guante sin retirar la tarjeta (con respaldo ZIP).</span></li>
+              <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo de forma transaccional sin perder el anterior ante un fallo.</span></li>
+              <li><strong>Guantes vinculados por cuenta</strong><span>Vinculá el guante por Wi-Fi con códigos de un solo uso y revocá el acceso cuando quieras desde tu cuenta.</span></li>
+              <li><strong>Simulador integrado</strong><span>Ensayá todo el recorrido en Modo demostración antes de conectar un guante físico.</span></li>
             </ul>
           </div>
         </section>
@@ -278,7 +377,7 @@ export function PublicHomePage() {
           <p>MITTEN V2.1 · Prototipo funcional educativo.</p>
           <div className="public-footer__links">
             <Link to="/privacidad">Privacidad</Link>
-            <Link to="/login">Acceder a la aplicación</Link>
+            <Link to={appPath}>{isAuthenticated ? 'Ir al panel' : 'Acceder a la aplicación'}</Link>
           </div>
         </div>
       </footer>

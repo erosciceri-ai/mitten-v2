@@ -24,7 +24,7 @@ class StreamTransport:
 
 
 class UartStreamTransport(StreamTransport):
-    """Adapter around one protocol UART; DFPlayer will use a separate UART."""
+    """Adapter around the protocol UART; local audio uses SPI and I2S."""
 
     def __init__(self, uart):
         self._uart = uart
@@ -51,12 +51,12 @@ async def _yield_ms(milliseconds):
         await asyncio.sleep(milliseconds / 1000.0)
 
 
-async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, dfplayer=None):
+async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=None, audio_player=None):
     """Own the byte transport; dispatcher owns the single runtime service graph."""
     parser = NdjsonParser()
     def emit(envelope):
         transport.write(serialize_envelope(envelope))
-    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, dfplayer=dfplayer)
+    dispatcher = FirmwareDispatcher(emit=emit, sensor_manager=sensor_manager, audio_player=audio_player)
     dispatcher.startup()
     pending_since = None
     iterations = 0
@@ -88,15 +88,55 @@ async def main_loop(transport, max_iterations=None, sleep_ms=1, sensor_manager=N
             if error is not None and dispatcher.handshake_compatible:
                 emit(ErrorHandler.from_parse_error(error))
         dispatcher.update(now)
+        if audio_player is not None:
+            try:
+                audio_player.update(now)
+            except Exception:
+                # Audio errors must not stop protocol, capture, or recognition processing.
+                pass
         await _yield_ms(sleep_ms)
     return dispatcher
 
 
+# "relay": WebSocket vía Wi-Fi (default). "serial": Web Serial por USB (respaldo local).
+TRANSPORT_MODE = "relay"
+
+
+async def _run(transport, sensors, player, board=None):
+    """Wi-Fi corre como tarea aparte; sin red el guante sigue reconociendo y reproduciendo."""
+    from wifi_manager import WifiManager, CONNECTED, resolve_ap_password
+    ap_password = resolve_ap_password(board)
+    if TRANSPORT_MODE == "relay":
+        from relay_transport import RelayTransport, RELAY_URL
+        relay_url = (board.get("relay_url") if isinstance(board, dict) else None) or RELAY_URL
+        relay = RelayTransport(lambda: wifi.state == CONNECTED, url=relay_url)
+        wifi = WifiManager(ap_password=ap_password, on_form=relay.handle_form)
+        asyncio.create_task(wifi.run())
+        asyncio.create_task(relay.run())
+        transport = relay
+    else:
+        wifi = WifiManager(ap_password=ap_password)
+        asyncio.create_task(wifi.run())
+    await main_loop(transport, sensor_manager=sensors, audio_player=player)
+
+
 def main():
+    import os
     from hardware import create_hardware
     from hardware_config import BOARD
     transport, sensors, player = create_hardware(BOARD)
-    asyncio.run(main_loop(transport, sensor_manager=sensors, dfplayer=player))
+    try:
+        # UART0 is also the MicroPython REPL on the board's USB serial bridge.
+        # Give that port exclusively to the NDJSON protocol before Web Serial connects.
+        # En modo relay el REPL queda disponible: el protocolo no usa el UART.
+        if TRANSPORT_MODE != "relay":
+            os.dupterm(None)
+        asyncio.run(_run(transport, sensors, player, board=BOARD))
+    finally:
+        try:
+            player.deinitialize()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@ export interface TTSProvider {
 }
 export type ProcessExecutor = (command: string, args: string[], options: { stdin: string; timeoutMs: number }) => Promise<void>;
 
+export const MAX_MP3_BYTES = 1024 * 1024;
+
 const helperPath = resolve(fileURLToPath(new URL('../../tools/piper_synthesize.py', import.meta.url)));
 
 export function getAudioFilePath(userId: number, trackNumber: number): string {
@@ -25,12 +27,11 @@ export function getAudioFilePath(userId: number, trackNumber: number): string {
 
 export function validateMp3(audio: Buffer): void {
   const hasHeader = audio.subarray(0, 3).toString() === 'ID3' || (audio[0] === 0xff && (audio[1] & 0xe0) === 0xe0);
-  if (audio.length < 128 || !hasHeader) throw new AppError('TTS provider returned invalid MP3 audio', 502);
+  if (audio.length < 128 || audio.length > MAX_MP3_BYTES || !hasHeader) throw new AppError('TTS provider returned invalid MP3 audio', 502);
 }
 
 export const executeProcess: ProcessExecutor = (command, args, { stdin, timeoutMs }) => new Promise((resolvePromise, reject) => {
-  const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
-  let stderr = '';
+  const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'] });
   let settled = false;
   const finish = (error?: Error) => {
     if (settled) return;
@@ -39,9 +40,9 @@ export const executeProcess: ProcessExecutor = (command, args, { stdin, timeoutM
     error ? reject(error) : resolvePromise();
   };
   const timer = setTimeout(() => { child.kill(); finish(new AppError(`Piper exceeded its ${timeoutMs}ms timeout`, 504)); }, timeoutMs);
-  child.stderr.on('data', chunk => { if (stderr.length < 4000) stderr += String(chunk); });
-  child.once('error', error => finish(new AppError(`Could not start Piper: ${error.message}`, 503)));
-  child.once('exit', code => code === 0 ? finish() : finish(new AppError(`Piper failed${stderr.trim() ? `: ${stderr.trim()}` : ` with exit code ${code}`}`, 502)));
+  child.once('error', () => finish(new AppError('Could not start Piper', 503)));
+  child.once('exit', code => code === 0 ? finish() : finish(new AppError('Piper failed', 502)));
+  child.stdin.on('error', () => finish(new AppError('Could not send input to Piper', 502)));
   child.stdin.end(stdin, 'utf8');
 });
 
@@ -70,7 +71,21 @@ class ElevenLabsTTSProvider implements TTSProvider {
     });
     if (!response.ok) throw new AppError(`TTS provider returned HTTP ${response.status}`, 502);
     if (!response.headers.get('content-type')?.includes('audio/mpeg')) throw new AppError('TTS provider did not return MP3 audio', 502);
-    const audio = Buffer.from(await response.arrayBuffer());
+    const reader = response.body?.getReader();
+    if (!reader) throw new AppError('TTS provider returned no audio', 502);
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_MP3_BYTES) {
+        await reader.cancel();
+        throw new AppError('TTS provider returned oversized audio', 502);
+      }
+      chunks.push(value);
+    }
+    const audio = Buffer.concat(chunks, size);
     validateMp3(audio);
     return { audio, provider: this.name };
   }
@@ -97,7 +112,7 @@ export class PiperTTSProvider implements TTSProvider {
     try {
       await this.runProcess(this.executable, [helperPath, '--model', this.model, '--output', output], { stdin: text, timeoutMs: this.timeoutMs });
       const outputStat = await stat(output).catch(() => null);
-      if (!outputStat?.isFile()) throw new AppError('Piper did not create an MP3 file', 502);
+      if (!outputStat?.isFile() || outputStat.size > MAX_MP3_BYTES) throw new AppError('Piper did not create an MP3 file', 502);
       const audio = await readFile(output);
       validateMp3(audio);
       return { audio, provider: this.name };

@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: mitten-api-staging
+    runtime: docker
+    plan: free
+    branch: phase5a/production-prep
+    autoDeployTrigger: "off"
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_PROVIDER
+        value: postgres
+      - key: DB_TLS
+        value: verify-full
+      - key: AUDIO_STORAGE_PROVIDER
+        value: s3
+      - key: FRONTEND_URL
+        sync: false
+      - key: TRUSTED_PROXY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AUDIO_S3_ENDPOINT
+        sync: false
+      - key: AUDIO_S3_REGION
+        sync: false
+      - key: AUDIO_S3_BUCKET
+        sync: false
+      - key: AUDIO_S3_ACCESS_KEY_ID
+        sync: false
+      - key: AUDIO_S3_SECRET_ACCESS_KEY
+        sync: false

@@ -6,6 +6,7 @@ import type { FormErrors } from '../types';
 import { BrandMark } from '../components/BrandMark';
 import { GoogleSignInButton, isGoogleSignInConfigured } from '../components/GoogleSignInButton';
 import { Button } from '../components/ui/button';
+import { FormField } from '../components/ui/field';
 
 export function RegisterPage() {
   const { register, loginWithGoogle, isLoading } = useAuth();
@@ -22,7 +23,7 @@ export function RegisterPage() {
     try {
       await loginWithGoogle(credential);
       showToast({ type: 'success', message: 'Cuenta creada correctamente' });
-      navigate('/app');
+      navigate('/app', { replace: true });
     } finally {
       setIsSubmitting(false);
     }
@@ -30,9 +31,9 @@ export function RegisterPage() {
 
   const validate = () => {
     const newErrors: FormErrors = {};
-    if (!email) newErrors.email = 'Email es requerido';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Email inválido';
-    if (!password) newErrors.password = 'Contraseña es requerida';
+    if (!email.trim()) newErrors.email = 'El correo electrónico es requerido';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) newErrors.email = 'Ingresá un correo electrónico válido';
+    if (!password) newErrors.password = 'La contraseña es requerida';
     else if (password.length < 8) newErrors.password = 'La contraseña debe tener al menos 8 caracteres';
     if (password !== confirmPassword) newErrors.confirmPassword = 'Las contraseñas no coinciden';
     setErrors(newErrors);
@@ -45,9 +46,9 @@ export function RegisterPage() {
 
     setIsSubmitting(true);
     try {
-      await register({ email, password });
+      await register({ email: email.trim(), password });
       showToast({ type: 'success', message: 'Cuenta creada correctamente' });
-      navigate('/app');
+      navigate('/app', { replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al registrar';
       if (message.includes('already exists')) {
@@ -63,7 +64,7 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="auth-shell min-h-screen flex items-center justify-center px-4 py-10">
+    <main id="main-content" className="auth-shell min-h-screen flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="auth-panel bg-surface rounded-xl border border-border p-7 sm:p-8">
           <div className="text-center mb-8">
@@ -83,19 +84,17 @@ export function RegisterPage() {
             </>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
             {errors.form && (
               <div className="p-3 rounded-md bg-error-light border border-error text-error text-sm" role="alert">
                 {errors.form}
               </div>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text mb-1">
-                Email
-              </label>
+            <FormField id="register-email" label="Email" error={errors.email}>
               <input
-                id="email"
+                id="register-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -106,15 +105,17 @@ export function RegisterPage() {
                 aria-invalid={Boolean(errors.email)}
                 aria-describedby={errors.email ? 'register-email-error' : undefined}
               />
-              {errors.email && <p id="register-email-error" className="mt-1 text-sm text-error" role="alert">{errors.email}</p>}
-            </div>
+            </FormField>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-text mb-1">
-                Contraseña
-              </label>
+            <FormField
+              id="register-password"
+              label="Contraseña"
+              error={errors.password}
+              helpText="Usá al menos 8 caracteres."
+            >
               <input
-                id="password"
+                id="register-password"
+                name="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -125,19 +126,12 @@ export function RegisterPage() {
                 aria-invalid={Boolean(errors.password)}
                 aria-describedby={errors.password ? 'register-password-error' : 'register-password-help'}
               />
-              {errors.password ? (
-                <p id="register-password-error" className="mt-1 text-sm text-error" role="alert">{errors.password}</p>
-              ) : (
-                <p id="register-password-help" className="mt-1 text-sm text-text-muted">Usá al menos 8 caracteres.</p>
-              )}
-            </div>
+            </FormField>
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-text mb-1">
-                Confirmar contraseña
-              </label>
+            <FormField id="register-confirm" label="Confirmar contraseña" error={errors.confirmPassword}>
               <input
-                id="confirmPassword"
+                id="register-confirm"
+                name="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -148,8 +142,7 @@ export function RegisterPage() {
                 aria-invalid={Boolean(errors.confirmPassword)}
                 aria-describedby={errors.confirmPassword ? 'register-confirm-error' : undefined}
               />
-              {errors.confirmPassword && <p id="register-confirm-error" className="mt-1 text-sm text-error" role="alert">{errors.confirmPassword}</p>}
-            </div>
+            </FormField>
 
             <Button
               type="submit"
@@ -164,19 +157,19 @@ export function RegisterPage() {
           <div className="mt-6 text-center">
             <p className="text-text-muted">
               ¿Ya tenés cuenta?{' '}
-              <Link to="/login" className="text-primary hover:underline font-medium">
+              <Link to="/login" className="inline-flex min-h-11 items-center font-medium text-primary-text hover:underline">
                 Iniciá sesión
               </Link>
             </p>
           </div>
         </div>
 
-        <div className="mt-6 text-center text-sm text-text-muted">
-          <Link to="/" className="hover:underline">Conocer el proyecto</Link>
-          <span aria-hidden="true"> · </span>
-          <Link to="/privacidad" className="hover:underline">Privacidad</Link>
+        <div className="mt-6 flex items-center justify-center gap-3 text-sm text-text-muted">
+          <Link to="/" className="inline-flex min-h-11 items-center px-2 text-primary-text hover:underline">Conocer el proyecto</Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/privacidad" className="inline-flex min-h-11 items-center px-2 text-primary-text hover:underline">Privacidad</Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

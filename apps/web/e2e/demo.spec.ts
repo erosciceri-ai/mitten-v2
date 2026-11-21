@@ -1,13 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { registerAccount, test } from './fixtures';
 
 test('registro, captura, audio, sincronización, reinicio y reconocimiento simulados', async ({ page }) => {
   const email = `demo-${Date.now()}@example.com`;
-  await page.goto('/register');
-  await page.getByLabel('Email', { exact: true }).fill(email);
-  await page.getByLabel('Contraseña', { exact: true }).fill('demo-password-123');
-  await page.getByLabel('Confirmar contraseña', { exact: true }).fill('demo-password-123');
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Abrir la aplicación' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole('link', { name: 'Registrate' }).click();
+  await expect(page).toHaveURL(/\/register$/);
+  await registerAccount(page, email, 'demo-password-123');
 
   await page.getByRole('button', { name: 'Modo demostración' }).click();
   await expect(page.getByText('No hay un guante físico conectado.')).toBeVisible();
@@ -33,5 +34,14 @@ test('registro, captura, audio, sincronización, reinicio y reconocimiento simul
   await page.getByRole('link', { name: 'Panel', exact: true }).click();
   await page.getByRole('button', { name: 'Reiniciar dispositivo simulado' }).click();
   await page.getByRole('button', { name: 'Simular reconocimiento' }).click();
-  await expect(page.getByText(/Reconocimiento simulado: gesto/)).toBeVisible();
+  await expect(page.getByText(/Reconocimiento simulado: «Necesito agua» \(pista \d+\)/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Salir de la cuenta' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Contraseña', { exact: true }).fill('demo-password-123');
+  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await page.goto('/gestures');
+  await expect(page.getByText('Necesito agua', { exact: true })).toBeVisible();
 });

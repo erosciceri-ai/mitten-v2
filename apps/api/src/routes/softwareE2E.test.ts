@@ -7,7 +7,7 @@ import { resolve, join } from 'node:path';
 import { validateGestureData, validateProtocolV2Message, type Gesture } from '@mitten/contracts';
 import app from '../index.js';
 
-it('registers → captures → persists → syncs → restarts firmware → recognizes → writes DFPlayer track', async () => {
+it('registers → captures → persists → syncs → restarts firmware → recognizes → requests the matching WAV track', async () => {
   const workspace=await mkdtemp(join(tmpdir(),'mitten-device-e2e-'));
   const fixture=resolve('../../firmware/esp32/tests/software_device.py');
   const device=(action:string,input?:unknown) => {
@@ -41,8 +41,7 @@ it('registers → captures → persists → syncs → restarts firmware → reco
     expect(reboot.profile).toBe('rev1');
     expect(validateProtocolV2Message(reboot.event).valid).toBe(true);
     expect(reboot.event.data).toEqual({gestureId:gesture.id,audioTrack:gesture.audioTrack});
-    expect(reboot.uart[3]).toBe(0x12);
-    expect(reboot.uart[5]*256+reboot.uart[6]).toBe(gesture.audioTrack);
+    expect(reboot.audioTracks).toEqual([gesture.audioTrack]);
   } finally {
     await new Promise<void>((resolve,reject)=>server.close(e=>e ? reject(e) : resolve()));
     await rm(workspace,{recursive:true,force:true});

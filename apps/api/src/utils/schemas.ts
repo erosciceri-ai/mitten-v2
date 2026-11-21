@@ -4,13 +4,14 @@ import { AppError } from '../middleware/errorHandler.js';
 
 // Auth schemas
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email format'),
+  email: z.email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
 });
 
 export const registerSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  email: z.email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters')
+    .refine(value => Buffer.byteLength(value) <= 72, 'Password must be at most 72 UTF-8 bytes'),
 });
 
 export const googleCredentialSchema = z.object({
@@ -38,12 +39,6 @@ export const gestureIdParamSchema = z.object({
   id: z.coerce.number().int().positive('Gesture ID must be a positive integer'),
 });
 
-// Query schemas
-export const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
-});
-
 // Types
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -51,4 +46,3 @@ export type GoogleCredentialInput = z.infer<typeof googleCredentialSchema>;
 export type CreateGestureInput = z.infer<typeof createGestureSchema>;
 export type UpdateGestureInput = z.infer<typeof updateGestureSchema>;
 export type GestureIdParam = z.infer<typeof gestureIdParamSchema>;
-export type PaginationQuery = z.infer<typeof paginationSchema>;

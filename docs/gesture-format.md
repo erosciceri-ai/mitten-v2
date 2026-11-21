@@ -37,9 +37,7 @@ Un gesto completo está compuesto por dos partes independientes:
 |---|---|---|
 | `id` | integer | 1–2147483647; único dentro del perfil/usuario. Asignado por el backend. |
 | `name` | string | 1–60 **puntos de código Unicode**; sin caracteres de control (U+0000–U+001F, U+007F). El nombre visible no es identidad técnica. |
-| `audioTrack` | integer | 1–50 en Protocol Version 2; asignado por el backend mediante first-fit; independiente de `gesture.id`; inmutable mientras exista el gesto; reutilizable después de eliminarlo. Convención DFPlayer: `/mp3/{audioTrack:04d}.mp3`. |
-
-2.
+| `audioTrack` | integer | 1–50 en Protocol Version 2; asignado por el backend mediante first-fit; independiente de `gesture.id`; inmutable mientras exista el gesto; reutilizable después de eliminarlo. Ruta local del firmware SPI/I²S (no parte del mensaje): `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono 16 kHz 16 bits). |
 
 Estos campos **nunca** forman parte de `data`. Viajan en el envoltorio del protocolo (`sync.gesture` para sincronización; `capture.completed` devuelve solo `requestId` y `data`; los metadatos completos `id`, `name`, `audioTrack` se asignan en el backend y viajan en `sync.gesture`). Ver `docs/protocol.md`, secciones 11.5 y 12.5.
 
@@ -180,8 +178,8 @@ Pueden ajustarse posteriormente mediante pruebas con el hardware real.
 | Capa | Qué valida | Acción si falla |
 |---|---|---|
 | **Protocolo** (`capture.completed`) | `data` es objeto; claves mínimas presentes | Frontend rechaza con `GESTURE_INVALID` local |
-| **Frontend** (antes de POST `/gestos`) | Esquema completo (Zod/Valibot); rangos; consistencia de `name` y `data` | Muestra error al usuario; no envía al backend |
-| **Backend** (POST `/gestos`) | Re-valida esquema completo de `name` y `data`; asigna `id` único; asigna `audioTrack` first-fit dentro de 1–50; genera o prepara el MP3 asociado | HTTP 400 con `GESTURE_INVALID` cuando corresponde |
+| **Frontend** (antes de POST `/api/gestures`) | Esquema completo (Zod/Valibot); rangos; consistencia de `name` y `data` | Muestra error al usuario; no envía al backend |
+| **Backend** (POST `/api/gestures`) | Re-valida esquema completo de `name` y `data`; asigna `id` único; asigna `audioTrack` first-fit dentro de 1–50; genera o prepara el MP3 asociado | HTTP 400 con `GESTURE_INVALID` cuando corresponde |
 | **Firmware** (`sync.gesture`) | Esquema completo; capacidad; IDs duplicados | Responde `GESTURE_INVALID` o `DUPLICATE_GESTURE_ID` |
 | **Simulador** | Mismas reglas que firmware | Fixtures compartidas con `packages/contracts` |
 
@@ -201,11 +199,11 @@ La representación concreta en SQLite, los nombres de columnas y cualquier metad
 - conservación de metadatos;
 - posibilidad de reconstruir el gesto para sincronización.
 
-SQLite está confirmado como tecnología de persistencia para MITTEN V2; el esquema concreto de tablas, columnas y representación interna de `data` es decisión de implementación del backend y no forma parte de este contrato.
+El backend admite SQLite local y PostgreSQL. El esquema de tablas, columnas y representación interna de `data` pertenece a la implementación del backend.
 
 ### 7.2. Frontend → Backend (HTTP)
 
-POST `/api/gestos`:
+POST `/api/gestures`:
 
 El body debe contener al menos los datos necesarios del gesto:
 
@@ -311,7 +309,7 @@ Los offsets pertenecen al estado/configuración local del dispositivo y NO forma
 Rango `1..50`, asignación first-fit por el backend, independiente de `gesture.id`, inmutable mientras exista el gesto y reutilizable después de eliminarlo.
 
 **Audio:**  
-`apps/api` genera o prepara el MP3 asociado al gesto. El frontend coordina y el ESP32 únicamente reproduce mediante DFPlayer Mini.
+`apps/api` genera o prepara el MP3 asociado al gesto. El navegador convierte cada MP3 a WAV PCM mono 16 kHz 16 bits y lo transfiere al guante con los comandos `audio.*` (`docs/audio-transfer.md`). El ESP32 reproduce localmente `/mitten_audio/audio/{audioTrack:04d}.wav` desde microSD SPI mediante MAX98357A por I²S (validación física pendiente; ver [migración](firmware-audio-migration.md)).
 
 **Sincronización:**  
 Editar `name`, `data` o regenerar un MP3 no implica sincronización incremental. La siguiente sincronización continúa siendo un reemplazo completo del perfil.

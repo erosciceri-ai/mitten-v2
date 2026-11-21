@@ -1,10 +1,17 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
+import { Button } from '../components/ui/button';
+import { useOptionalAuth } from '../context/AuthContext';
 
 const contactEmail = import.meta.env.VITE_CONTACT_EMAIL?.trim();
 
 export function PrivacyPage() {
+  const auth = useOptionalAuth();
+  const isAuthenticated = Boolean(auth?.isAuthenticated);
+  const backPath = isAuthenticated ? '/app' : '/';
+  const backLabel = isAuthenticated ? 'Volver al panel' : 'Volver al proyecto';
+
   useEffect(() => {
     const previousTitle = document.title;
     document.title = 'Privacidad — MITTEN V2.1';
@@ -16,8 +23,10 @@ export function PrivacyPage() {
       <a className="skip-link" href="#privacy-content">Saltar al contenido</a>
       <header className="legal-header">
         <div className="public-container legal-header__inner">
-          <BrandMark />
-          <Link className="button button--compact button--outline" to="/">Volver al proyecto</Link>
+          <BrandMark to={backPath} />
+          <Button asChild variant="outline" size="sm">
+            <Link to={backPath}>{backLabel}</Link>
+          </Button>
         </div>
       </header>
 

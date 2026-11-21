@@ -5,38 +5,93 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from '../config/index.js';
 
-let database: Promise<Database> | null = null;
-let transactions: Promise<unknown> = Promise.resolve();
+import { migratePostgres, openPostgres, postgresConnection, postgresTransaction, PostgresStartupError } from './postgres.js';
+
+export interface DatabaseConnection {
+  get: Database['get'];
+  all: Database['all'];
+  run(sql: string, ...values: unknown[]): Promise<{ changes?: number }>;
+  exec(sql: string): Promise<void>;
+  lockUser(id: number): Promise<void>;
+}
+
+let sqlite: Promise<Database> | null = null;
+let postgres: Promise<ReturnType<typeof openPostgres>> | null = null;
+let sqliteOperations: Promise<unknown> = Promise.resolve();
 const schema = () => readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'schema.sql'), 'utf8');
 
-export function getDatabase(): Promise<Database> {
-  if (!database) database = (async () => {
+function openSQLite(): Promise<Database> {
+  if (!sqlite) sqlite = (async () => {
     if (config.dbPath !== ':memory:') mkdirSync(dirname(config.dbPath), { recursive: true });
     const db = await open({ filename: config.dbPath, driver: sqlite3.Database });
     try {
       await db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
       await runMigrations(db);
       return db;
-    } catch (error) { await db.close(); database = null; throw error; }
-  })();
-  return database;
+    } catch (error) { await db.close(); throw error; }
+  })().catch(error => { sqlite = null; throw error; });
+  return sqlite;
+}
+
+function postgresPool() {
+  if (!postgres) postgres = (async () => {
+    let pool: ReturnType<typeof openPostgres>;
+    try {
+      pool = openPostgres(config.databaseUrl, config.dbTls, config.dbPoolMax, config.nodeEnv === 'production');
+    } catch (error) {
+      throw new PostgresStartupError('POSTGRES_CONFIG', error);
+    }
+    try { await migratePostgres(pool); return pool; }
+    catch (error) { await pool.end(); throw error; }
+  })().catch(error => { postgres = null; throw error; });
+  return postgres;
+}
+
+function queueSQLite<T>(action: () => Promise<T>): Promise<T> {
+  const operation = sqliteOperations.then(action);
+  sqliteOperations = operation.catch(() => undefined);
+  return operation;
+}
+
+function sqliteConnection(db: Database, execute: <T>(action: () => Promise<T>) => Promise<T>): DatabaseConnection {
+  return {
+    get: (sql, ...values) => execute(() => db.get(sql, ...values)),
+    all: (sql, ...values) => execute(() => db.all(sql, ...values)),
+    run: (sql, ...values) => execute(() => db.run(sql, ...values)),
+    exec: sql => execute(async () => { await db.exec(sql); }),
+    lockUser: async () => { /* BEGIN IMMEDIATE already reserves the SQLite writer. */ },
+  };
+}
+
+export async function getDatabase(): Promise<DatabaseConnection> {
+  if (config.dbProvider === 'postgres') return postgresConnection(await postgresPool());
+  if (config.dbProvider !== 'sqlite') throw new Error('DB_PROVIDER must be sqlite or postgres');
+  return sqliteConnection(await openSQLite(), queueSQLite);
 }
 
 export async function closeDatabase(): Promise<void> {
-  await transactions;
-  if (database) { const db = await database; database = null; await db.close(); }
+  await sqliteOperations;
+  if (sqlite) { const db = await sqlite; sqlite = null; await db.close(); }
+  if (postgres) { const pool = await postgres; postgres = null; await pool.end(); }
 }
 
-// A single SQLite connection must not interleave asynchronous transactions.
-export function runInTransaction<T>(action: (db: Database) => Promise<T>): Promise<T> {
-  const operation = transactions.then(async () => {
-    const db = await getDatabase();
+export async function runInTransaction<T>(action: (db: DatabaseConnection) => Promise<T>): Promise<T> {
+  if (config.dbProvider === 'postgres') {
+    return postgresTransaction(await postgresPool(), client => action(postgresConnection(client)));
+  }
+  if (config.dbProvider !== 'sqlite') throw new Error('DB_PROVIDER must be sqlite or postgres');
+  return queueSQLite(async () => {
+    const db = await openSQLite();
     await db.exec('BEGIN IMMEDIATE');
-    try { const result = await action(db); await db.exec('COMMIT'); return result; }
-    catch (error) { await db.exec('ROLLBACK'); throw error; }
+    try {
+      const result = await action(sqliteConnection(db, operation => operation()));
+      await db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      await db.exec('ROLLBACK');
+      throw error;
+    }
   });
-  transactions = operation.catch(() => undefined);
-  return operation;
 }
 
 export async function initializeDatabase(db: Database): Promise<void> { await runMigrations(db); }
@@ -44,7 +99,7 @@ export async function initializeDatabase(db: Database): Promise<void> { await ru
 export async function runMigrations(db: Database): Promise<void> {
   const version = await db.get<{ user_version: number }>('PRAGMA user_version');
   let currentVersion = version?.user_version ?? 0;
-  if (currentVersion > 2) throw new Error('Database schema is newer than this API');
+  if (currentVersion > 4) throw new Error('Database schema is newer than this API');
 
   if (currentVersion < 1) {
     const sql = schema();
@@ -122,5 +177,29 @@ export async function runMigrations(db: Database): Promise<void> {
       await db.exec('PRAGMA user_version=2; COMMIT;');
     } catch (error) { await db.exec('ROLLBACK'); throw error; }
     finally { await db.exec('PRAGMA foreign_keys=ON;'); }
+  }
+
+  if (currentVersion < 3) {
+    await db.exec('BEGIN IMMEDIATE');
+    try {
+      const version = await db.get<{ user_version: number }>('PRAGMA user_version');
+      if (version!.user_version < 3) {
+        await db.exec(readFileSync(new URL('postgres/002-audio-storage.sql', import.meta.url), 'utf8'));
+        await db.exec('PRAGMA user_version=3');
+      }
+      await db.exec('COMMIT');
+    } catch (error) { await db.exec('ROLLBACK'); throw error; }
+  }
+
+  if (currentVersion < 4) {
+    await db.exec('BEGIN IMMEDIATE');
+    try {
+      const version = await db.get<{ user_version: number }>('PRAGMA user_version');
+      if (version!.user_version < 4) {
+        await db.exec(readFileSync(new URL('postgres/003-devices.sql', import.meta.url), 'utf8'));
+        await db.exec('PRAGMA user_version=4');
+      }
+      await db.exec('COMMIT');
+    } catch (error) { await db.exec('ROLLBACK'); throw error; }
   }
 }

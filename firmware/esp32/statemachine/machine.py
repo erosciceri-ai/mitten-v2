@@ -24,6 +24,10 @@ _TRANSITIONS = {
     (STATE_SYNCING, STATE_IDLE, "sync.commit"),
     (STATE_SYNCING, STATE_IDLE, "sync.abort"),
     (STATE_SYNCING, STATE_IDLE, "sync.failed"),
+    (STATE_IDLE, STATE_SYNCING, "audio.begin"),
+    (STATE_SYNCING, STATE_IDLE, "audio.commit"),
+    (STATE_SYNCING, STATE_IDLE, "audio.abort"),
+    (STATE_SYNCING, STATE_IDLE, "audio.failed"),
 }
 
 

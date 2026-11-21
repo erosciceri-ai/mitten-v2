@@ -1,5 +1,10 @@
 import {
+  AUDIO_CHUNK_MAX_BYTES,
   ActiveProfileInfo,
+  AudioBeginPayload,
+  AudioChunkPayload,
+  AudioCommitPayload,
+  AudioStatusPayload,
   FirmwareState,
   Gesture,
   PROTOCOL_VERSION,
@@ -10,6 +15,11 @@ import {
   SyncBeginPayload,
   SyncCommitPayload,
   SyncGesturePayload,
+  createAudioAbortResponse,
+  createAudioBeginResponse,
+  createAudioChunkResponse,
+  createAudioCommitResponse,
+  createAudioStatusResponse,
   createCaptureCompletedEvent,
   createCaptureFailedEvent,
   createCaptureStartResponse,
@@ -28,6 +38,11 @@ import {
   isProtocolCommand,
   isProtocolVersionCompatible,
   isValidSyncId,
+  validateAudioAbortPayload,
+  validateAudioBeginPayload,
+  validateAudioChunkPayload,
+  validateAudioCommitPayload,
+  validateAudioStatusPayload,
   validateGesture,
   validateGestureData,
   validateHandshakeRequestPayload,
@@ -46,6 +61,49 @@ const MAX_GESTURES = 50;
 const MAX_MESSAGE_BYTES = 8192;
 const CAPTURE_OPERATION_TIMEOUT_MS = 15_000;
 const SYNC_IDLE_TIMEOUT_MS = 10_000;
+const AUDIO_IDLE_TIMEOUT_MS = 30_000;
+
+let crcTable: Uint32Array | null = null;
+function crc32(bytes: Uint8Array): number {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** Same rule as firmware/esp32/audio.py: canonical PCM mono 16 kHz 16-bit WAV. */
+function wavProblem(bytes: Uint8Array): string | null {
+  if (bytes.length < 44) return 'The file is shorter than a WAV header';
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (offset: number) => String.fromCharCode(...bytes.subarray(offset, offset + 4));
+  if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE' || tag(12) !== 'fmt ') return 'Not a RIFF/WAVE file';
+  if (view.getUint16(20, true) !== 1 || view.getUint16(22, true) !== 1
+    || view.getUint32(24, true) !== 16_000 || view.getUint16(34, true) !== 16) {
+    return 'WAV must be PCM mono 16 kHz 16-bit';
+  }
+  if (tag(36) !== 'data' || 44 + view.getUint32(40, true) > bytes.length) return 'Invalid WAV data chunk';
+  return null;
+}
+
+interface AudioUploadState {
+  track: number;
+  sizeBytes: number;
+  crc32: number;
+  offset: number;
+  bytes: Uint8Array;
+}
+
+interface StoredAudioTrack {
+  sizeBytes: number;
+  crc32: number;
+}
 
 type EnvelopeEmitter = (envelope: ProtocolEnvelope) => void;
 type Delay = (milliseconds: number) => Promise<void>;
@@ -99,6 +157,11 @@ export class SimulatorDispatcher {
 
   // Sync idle timeout timer
   private syncIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Audio tracks written to the simulated microSD (persist across restarts) and the upload in progress
+  private readonly audioTracks = new Map<number, StoredAudioTrack>();
+  private audioUpload: AudioUploadState | null = null;
+  private audioIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly emit: EnvelopeEmitter,
@@ -170,6 +233,13 @@ export class SimulatorDispatcher {
         return this.handleSyncCommit(envelope);
       case 'sync.abort':
         return this.handleSyncAbort(envelope);
+      case 'audio.begin':
+      case 'audio.chunk':
+      case 'audio.commit':
+      case 'audio.abort':
+      case 'audio.status':
+        this.handleAudio(envelope);
+        return undefined;
       default:
         this.emitUnknownCommand(envelope);
         return undefined;
@@ -188,6 +258,7 @@ export class SimulatorDispatcher {
   /** Reboots the simulated firmware while retaining its committed profile. */
   restart(): void {
     this.clearSyncIdleTimer();
+    this.discardAudioUpload();
     this.handshakeCompatible = false;
     this.activeCaptureRequestId = null;
     this.activeSync = null;
@@ -627,6 +698,144 @@ export class SimulatorDispatcher {
     this.clearSyncIdleTimer();
     this.activeSync = null;
     this.state.finishSync();
+  }
+
+  private audioError(id: string, code: ProtocolErrorCode, message: string, details?: Record<string, unknown>): void {
+    this.emit(createErrorResponse(id, code, message, details));
+  }
+
+  private handleAudio(request: RequestEnvelope<string, object>): void {
+    const command = request.command;
+    const current = this.state.current;
+    const exclusive = current === FirmwareState.CAPTURING || current === FirmwareState.SYNCING;
+    const stateError = (): void => (exclusive
+      ? this.audioError(request.id, ProtocolErrorCode.DEVICE_BUSY, 'Another exclusive operation is in progress')
+      : this.audioError(request.id, ProtocolErrorCode.INVALID_STATE, `${command} is not allowed in state ${current}`));
+
+    if (command === 'audio.begin') {
+      if (current !== FirmwareState.IDLE) return stateError();
+    } else if (command === 'audio.status') {
+      if (current !== FirmwareState.IDLE && !this.audioUpload) return stateError();
+    } else if (!this.audioUpload) {
+      if (exclusive) return stateError();
+      return this.audioError(request.id, ProtocolErrorCode.AUDIO_NO_UPLOAD, 'There is no active audio upload');
+    }
+
+    const validation = ({
+      'audio.begin': validateAudioBeginPayload,
+      'audio.chunk': validateAudioChunkPayload,
+      'audio.commit': validateAudioCommitPayload,
+      'audio.abort': validateAudioAbortPayload,
+      'audio.status': validateAudioStatusPayload,
+    } as Record<string, (payload: unknown) => { valid: boolean; errors: string[] }>)[command](request.payload);
+    if (!validation.valid) {
+      return this.audioError(request.id, ProtocolErrorCode.INVALID_PAYLOAD, `Invalid ${command} payload`, { errors: validation.errors });
+    }
+
+    switch (command) {
+      case 'audio.begin': return this.audioBegin(request.id, request.payload as AudioBeginPayload);
+      case 'audio.chunk': return this.audioChunk(request.id, request.payload as AudioChunkPayload);
+      case 'audio.commit': return this.audioCommit(request.id, request.payload as AudioCommitPayload);
+      case 'audio.abort':
+        this.discardAudioUpload();
+        this.emit(createAudioAbortResponse(request.id, { aborted: true }));
+        this.state.finishSync();
+        return;
+      default: return this.audioStatus(request.id, request.payload as AudioStatusPayload);
+    }
+  }
+
+  private audioBegin(id: string, payload: AudioBeginPayload): void {
+    this.audioUpload = {
+      track: payload.audioTrack,
+      sizeBytes: payload.sizeBytes,
+      crc32: payload.crc32,
+      offset: 0,
+      bytes: new Uint8Array(payload.sizeBytes),
+    };
+    this.emit(createAudioBeginResponse(id, {
+      audioTrack: payload.audioTrack,
+      offset: 0,
+      chunkMaxBytes: AUDIO_CHUNK_MAX_BYTES,
+      idleTimeoutMs: AUDIO_IDLE_TIMEOUT_MS,
+    }));
+    this.state.startSync();
+    this.startAudioIdleTimer();
+  }
+
+  private audioChunk(id: string, payload: AudioChunkPayload): void {
+    const upload = this.audioUpload!;
+    if (payload.audioTrack !== upload.track) {
+      return this.audioError(id, ProtocolErrorCode.AUDIO_NO_UPLOAD, 'There is no active audio upload for that track');
+    }
+    if (payload.offset !== upload.offset) {
+      return this.audioError(id, ProtocolErrorCode.AUDIO_BAD_OFFSET, 'Unexpected offset', { offset: upload.offset });
+    }
+    const raw = Uint8Array.from(atob(payload.data), char => char.charCodeAt(0));
+    if (raw.length > AUDIO_CHUNK_MAX_BYTES) {
+      return this.audioError(id, ProtocolErrorCode.AUDIO_BAD_CHUNK, 'Chunk too large', { maxBytes: AUDIO_CHUNK_MAX_BYTES });
+    }
+    if (upload.offset + raw.length > upload.sizeBytes) {
+      return this.audioError(id, ProtocolErrorCode.AUDIO_TOO_LARGE, 'The chunk exceeds the declared size');
+    }
+    upload.bytes.set(raw, upload.offset);
+    upload.offset += raw.length;
+    this.startAudioIdleTimer();
+    this.emit(createAudioChunkResponse(id, { audioTrack: upload.track, offset: upload.offset }));
+  }
+
+  private audioCommit(id: string, payload: AudioCommitPayload): void {
+    const upload = this.audioUpload!;
+    if (payload.audioTrack !== upload.track) {
+      return this.audioError(id, ProtocolErrorCode.AUDIO_NO_UPLOAD, 'There is no active audio upload for that track');
+    }
+    const fail = (code: ProtocolErrorCode, message: string): void => {
+      this.discardAudioUpload();
+      this.audioError(id, code, message);
+      this.state.finishSync();
+    };
+    if (upload.offset !== upload.sizeBytes || crc32(upload.bytes) !== upload.crc32) {
+      return fail(ProtocolErrorCode.AUDIO_INTEGRITY, 'The size or CRC32 does not match');
+    }
+    const problem = wavProblem(upload.bytes);
+    if (problem) return fail(ProtocolErrorCode.AUDIO_INVALID_WAV, problem);
+    this.audioTracks.set(upload.track, { sizeBytes: upload.sizeBytes, crc32: upload.crc32 });
+    this.discardAudioUpload();
+    this.emit(createAudioCommitResponse(id, { audioTrack: payload.audioTrack, sizeBytes: upload.sizeBytes }));
+    this.state.finishSync();
+  }
+
+  private audioStatus(id: string, payload: AudioStatusPayload): void {
+    const wanted = payload.audioTrack;
+    const tracks = [...this.audioTracks.entries()]
+      .filter(([track]) => wanted === undefined || track === wanted)
+      .sort(([a], [b]) => a - b)
+      .map(([audioTrack, info]) => (wanted === undefined
+        ? { audioTrack, sizeBytes: info.sizeBytes }
+        : { audioTrack, sizeBytes: info.sizeBytes, crc32: info.crc32 }));
+    this.emit(createAudioStatusResponse(id, { tracks }));
+  }
+
+  private startAudioIdleTimer(): void {
+    this.clearAudioIdleTimer();
+    this.audioIdleTimer = setTimeout(() => {
+      if (!this.audioUpload) return;
+      this.discardAudioUpload();
+      this.state.finishSync();
+    }, AUDIO_IDLE_TIMEOUT_MS);
+    (this.audioIdleTimer as unknown as { unref?: () => void })?.unref?.();
+  }
+
+  private clearAudioIdleTimer(): void {
+    if (this.audioIdleTimer !== null) {
+      clearTimeout(this.audioIdleTimer);
+      this.audioIdleTimer = null;
+    }
+  }
+
+  private discardAudioUpload(): void {
+    this.clearAudioIdleTimer();
+    this.audioUpload = null;
   }
 
   private startSyncIdleTimer(): void {

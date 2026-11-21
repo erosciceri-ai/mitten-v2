@@ -395,17 +395,17 @@ const Waves: React.FC<WavesProps> = ({
         backgroundColor,
         ...style
       }}
-      className={`absolute top-0 left-0 w-full h-full overflow-hidden ${className}`}
+      className={`pointer-events-none absolute top-0 left-0 w-full h-full overflow-hidden ${className}`}
       aria-hidden="true"
     >
       <div
-        className="absolute top-0 left-0 bg-[#e59a42] rounded-full w-[0.5rem] h-[0.5rem] motion-reduce:hidden"
+        className="pointer-events-none absolute top-0 left-0 bg-signal/70 rounded-full w-[0.5rem] h-[0.5rem] motion-reduce:hidden"
         style={{
           transform: 'translate3d(calc(var(--x) - 50%), calc(var(--y) - 50%), 0)',
           willChange: 'transform'
         }}
       />
-      <canvas ref={canvasRef} className="block w-full h-full" />
+      <canvas ref={canvasRef} className="pointer-events-none block w-full h-full" />
     </div>
   );
 };

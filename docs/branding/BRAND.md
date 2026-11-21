@@ -51,13 +51,12 @@ Los SVG están trazados: no requieren ni deben intentar cargar tipografías para
 ## Implementación en el monorepo
 - Plataforma actual: React + Vite + TypeScript, con shadcn/ui potencialmente inicializado. **Inspeccionar estado real del repositorio antes de modificar.**
 - Los archivos de referencia y este documento pueden permanecer en `docs/branding/`. Los SVG/PNG listos para servirse ya están en `apps/web/public/brand/`.
-- Integrar el sistema cromático en el mecanismo real de estilos (tokens CSS/Tailwind/shadcn si existen). `tokens.reference.css` es solo referencia; no se importa automáticamente.
+- Integrar el sistema cromático en el mecanismo real de estilos (`apps/web/src/styles/brand-tokens.css` y Tailwind).
 - Empezar por logo en navegación, favicon, pantalla de acceso y layout principal existente. Adaptar gradualmente botones, superficies, estados y formularios sin alterar flujos.
 - **No** modificar firmware, protocolo, paquetes de contratos, API, autenticación, base de datos, comunicación Web Serial ni algoritmos de reconocimiento salvo petición explícita.
 - Mantener rutas y pruebas existentes; no añadir funciones ficticias ni pantallas de producto inventadas.
 - Revisar `AGENTS.md` si existe; no reemplazarlo ni ampliarlo sin motivo. Documentar lo implementado y lo pendiente.
 
 ## Validación y versiones
-- Los contornos de V1.2 fueron aprobados por el usuario. La reconstrucción vectorial procede de una lámina raster y el degradado es aproximado; no afirmar identidad RGB absoluta.
+- Los contornos de V1.2 fueron aprobados por el usuario. La reconstrucción vectorial procede de una lámina raster (`referencias/lamina_aprobada.jpg`) y el degradado es aproximado; no afirmar identidad RGB absoluta.
 - Antes de publicar, verificar assets, build, lint/tests pertinentes, responsive, contraste y tamaños; no afirmar que se pasó una validación que no se ejecutó.
-- Material histórico: `referencias/Manual_Maestro_v1_0.md` e `Identidad_Verbal_v1_0.md`. Las referencias antiguas a logos V1.0 no sustituyen a los nuevos SVG V1.2.

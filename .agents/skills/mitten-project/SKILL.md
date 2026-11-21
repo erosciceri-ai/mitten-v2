@@ -33,13 +33,18 @@ Si algo aquí contradice a un documento canónico, **manda el documento**.
 | Documento | Governa |
 |---|---|
 | `AGENTS.md` | Reglas persistentes del repositorio: stack cerrado, responsabilidades por subsistema, prohibido (reescritura masiva, `git reset --hard`, `monitor.py`, secrets commiteados, deps sin justificar). |
-| `docs/protocol.md` | **Protocolo serie observable** (Protocol Version 2): framing NDJSON, envelopes, handshake, máquina de estados, captura, sincronización, códigos de error, límites. Canónico. |
+| `docs/protocol.md` | **Protocolo serie/relay observable** (Protocol Version 2): framing NDJSON, envelopes, handshake, máquina de estados, captura, sincronización, comandos `audio.*`, códigos de error, límites. Canónico. |
 | `docs/gesture-format.md` | **Formato de los gestos**: esquema `data` (`version = 1`, 7 dimensiones, `samples`, `summary`, metadatos), unidades, validación, `maxMessageBytes`. Canónico. |
 | `docs/synchronization.md` | **Persistencia y sincronización interna del ESP32**: staging, commit atómico, recuperación en boot, garantías transaccionales. |
+| `docs/audio-transfer.md` | **Transferencia de audio (`audio.*`)**: conversión MP3→WAV en el navegador, carga por chunks base64, verificación SHA-256 y manifiesto en microSD. |
+| `docs/persistence.md` | **Persistencia backend**: abstracción `DatabaseClient`, soporte dual SQLite (`DB_PROVIDER=sqlite`) / PostgreSQL (`DB_PROVIDER=postgres`) y migraciones `001`–`003`. |
+| `docs/audio-storage.md` | **Almacenamiento de audio backend**: abstracción `AudioStorage` (`AUDIO_STORAGE_PROVIDER=local|s3`) y configuración de bucket S3 compatible. |
+| `docs/firmware-audio-migration.md` | **Audio en firmware**: reproducción WAV por microSD SPI + MAX98357A I²S, retiro de DFPlayer y estado de validación física pendiente. |
+| `docs/deployment.md` | **Despliegue de producción**: topología (Cloudflare Pages, Render, Neon, S3), variables de entorno y checklist de release. |
+| `docs/deployment/phase5.md` | **Runbook de Fase 5**: guía operativa paso a paso para puesta en marcha de producción y pruebas de humo. |
 | `docs/architecture.md` | **Límites y responsabilidades entre subsistemas**: qué puede depender de qué, quién es fuente de verdad, flujos de alto nivel, límites de confianza. |
 | `docs/requirements.md` | **Requisitos del producto**: REQ-\*\*\*, criterios CA-\*\*\*, restricciones y fuera de alcance. Responde el *qué*, no el *cómo*. |
 | `docs/README.md` | Índice y regla de desempate entre documentos. |
-| `docs/legacy/mitten-v1-plan.docx` | Diseño de MITTEN V1. **Sólo referencia histórica.** No define requisitos ni arquitectura de V2. |
 
 **Regla de desempate** (`docs/README.md`): dentro de su ámbito, el documento especializado manda.
 No apliques `requirements.md` como si fuera arquitectura, ni `architecture.md` como si fuera protocolo.
@@ -48,11 +53,13 @@ No apliques `requirements.md` como si fuera arquitectura, ni `architecture.md` c
 
 | Tarea | Documentos mínimos |
 |---|---|
-| Tocar framing, envelopes, handshake, estados, sync por serial, códigos de error | `protocol.md` + `AGENTS.md` |
+| Tocar framing, envelopes, handshake, estados, sync por serial/relay, códigos de error | `protocol.md` + `AGENTS.md` |
 | Tocar `data` de un gesto, `samples`, `summary`, unidades, validación de gesture | `gesture-format.md` + `protocol.md` (sólo handshake/capabilities) |
 | Tocar persistencia del perfil en el ESP32, staging, commit, recuperación | `synchronization.md` + `protocol.md` §12 |
-| Tocar rutas HTTP, auth, autorización, esquema de BD, límites de negocio | `architecture.md` §8 + `requirements.md` (REQ-BAC/REQ-USR/REQ-SEG) + `gesture-format.md` (qué se persiste) |
-| Tocar la capa Web Serial del frontend | `protocol.md` (todo) + `architecture.md` §6 + `requirements.md` REQ-SER |
+| Tocar carga de audio al guante (`audio.*`), conversión WAV o reproducción SPI/I²S | `audio-transfer.md` + `protocol.md` §12.12 + `firmware-audio-migration.md` |
+| Tocar rutas HTTP, auth, autorización, esquema de BD, almacenamiento de audio, límites de negocio | `architecture.md` §8 + `persistence.md` + `audio-storage.md` + `requirements.md` (REQ-BAC/REQ-USR/REQ-SEG) + `gesture-format.md` |
+| Tocar la capa de transporte del frontend (Web Serial / Wi-Fi relay / Demo) | `protocol.md` (todo) + `architecture.md` §6 + `requirements.md` REQ-SER |
+| Tocar despliegue, variables de entorno de producción o smoke tests de release | `deployment.md` + `deployment/phase5.md` + `persistence.md` + `audio-storage.md` |
 | Tocar el simulador | `protocol.md` — el simulador debe ser indistinguible del firmware real |
 | Agregar o cambiar un mensaje/estado/error del protocolo | `protocol.md` + **bump de `PROTOCOL_VERSION`** + actualizar `packages/contracts` |
 
@@ -67,9 +74,11 @@ No apliques `requirements.md` como si fuera arquitectura, ni `architecture.md` c
   claro.
 - **Preserva los cambios existentes del usuario.** Antes de editar, `git status` y `git diff`. Nunca
   `git reset --hard`, `git checkout --`, `git clean -fd` ni descartar trabajo no commiteado.
-- **No introduzcas infraestructura.** Stack cerrado: MicroPython (firmware), Node+Express+TypeScript+
-  **SQLite** (API), React+Vite+TypeScript (web). Nada de PostgreSQL, MongoDB, Redis, microservicios,
-  Wi-Fi ESP32↔backend, bridge local ni `monitor.py`.
+- **No introduzcas infraestructura fuera del alcance aprobado.** Stack cerrado: MicroPython (firmware),
+  Node+Express+TypeScript con **SQLite o PostgreSQL** (`DB_PROVIDER=sqlite|postgres`) y almacenamiento de audio
+  **local o S3 compatible** (`AUDIO_STORAGE_PROVIDER=local|s3`) en la API, React+Vite+TypeScript (web), y
+  transporte dual **Web Serial USB** (`TRANSPORT_MODE="serial"`) o **Wi-Fi relay opcional** vía `/ws/web` y
+  `/ws/device` (`TRANSPORT_MODE="relay"`). Nada de MongoDB, Redis, microservicios, bridge local ni `monitor.py`.
 - **No cambies configuración ni instales dependencias** sin explicar antes qué problema resuelve y por
   qué el proyecto no tiene ya algo equivalente.
 - **No commitees secretos.** Nunca `.env`, tokens, JWT secrets, contraseñas, API keys.
@@ -109,14 +118,16 @@ Reglas de validación específicas:
 - **Simulador**: `npm run build --workspace=tools/esp32-simulator && npm run simulator`. Ojo: `npm run
   simulator` de la raíz ejecuta `dist/` (puede estar stale); para probar el fuente usa
   `npm run dev --workspace=tools/esp32-simulator`.
-- **Backend**: usa `sqlite`/`sqlite3`, migraciones transaccionales y el mismo SQL en producción
-  y pruebas. Con `NODE_ENV=test`, la base siempre es `:memory:` y el audio usa un directorio
-  temporal, aunque se herede `DB_PATH`. Ejecuta las pruebas de migración, rollback y first-fit.
+- **Backend**: soporta ejecución dual SQLite (`DB_PROVIDER=sqlite`) y PostgreSQL (`DB_PROVIDER=postgres`),
+  migraciones transaccionales `001`–`003`, almacenamiento de audio `AudioStorage` (`local` o `s3`),
+  endpoints de dispositivos (`/api/device`) y relay WebSocket (`/ws/web`, `/ws/device`). Con `NODE_ENV=test`
+  y `DB_PROVIDER=sqlite`, la base siempre es `:memory:` y el audio usa un directorio temporal, aunque se
+  herede `DB_PATH`. Ejecuta las pruebas de migración, rollback, first-fit, pairing y relay.
 - **Firmware**: el núcleo y los drivers inyectables tienen tests en CPython/pytest:
   `python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider`.
   Cada prueba usa almacenamiento temporal. Esto no sustituye las pruebas de MicroPython,
   periféricos, memoria y cortes de alimentación en la placa real.
-- **Frontend**: `apps/web` tiene `test` (vitest) y `build` (tsc + vite build) en su `package.json`; tests cubren SerialTransport y RequestManager.
+- **Frontend**: `apps/web` tiene `test` (vitest) y `build` (tsc + vite build) en su `package.json`; los tests cubren `SerialTransport`, `RelayTransport`, `DemoTransport`, `RequestManager`, `DevicePairingCard`, `PairedDevicesPanel`, `GloveAudioPanel`, `ConnectionBanner` y `gloveWav`, además de la suite E2E con Playwright (`npm run test:e2e`).
 
 ## 4. Paralelismo
 
@@ -146,11 +157,9 @@ Distinguí siempre entre:
 ## 6. Estado actual del repo (verificar, no asumir)
 
 - `packages/contracts` y `tools/esp32-simulator`: implementados, con tests, commiteados.
-- `apps/api`: Express/TypeScript y SQLite, tests Vitest; confirmar cambios pendientes con Git.
-- `apps/web`: React/Vite/TypeScript, tests Vitest de transporte y servicios.
-- `firmware/esp32`: núcleo modular, captura, sincronización recuperable, baseline V1 y drivers
-  ADC/I2C/UART inyectables. `hardware_config.example.py` enumera los datos físicos pendientes;
-  no asumir GPIO ni atenuación. El provider TTS `mock` no produce audio ni lo marca listo.
+- `apps/api`: Express/TypeScript con soporte dual SQLite/PostgreSQL (`DB_PROVIDER=sqlite|postgres`), migraciones `001`–`003`, `AudioStorage` (`local|s3`), `/api/device` y WebSocket relay (`/ws/web`, `/ws/device`), con tests Vitest; confirmar cambios pendientes con Git.
+- `apps/web`: React/Vite/TypeScript, tests Vitest (`SerialTransport`, `RelayTransport`, `DemoTransport`, `RequestManager`, `DevicePairingCard`, `PairedDevicesPanel`, `GloveAudioPanel`, `ConnectionBanner`, `gloveWav`) y suite E2E Playwright.
+- `firmware/esp32`: núcleo modular, captura, sincronización recuperable, baseline V1, almacenamiento WAV (`audio_store.py`), reproductor SPI/I²S (`audio.py`), provisión Wi-Fi (`wifi_manager.py`), transporte relay (`relay_transport.py`) y drivers ADC/I2C/UART inyectables. `hardware_config.example.py` enumera los datos físicos pendientes; no asumir GPIO ni atenuación. El provider TTS `mock` no produce audio ni lo marca listo.
 
 Trabaja en una rama breve creada desde `main`. Para tareas paralelas, usa un worktree temporal por
 rama y retíralo después de integrar el cambio.

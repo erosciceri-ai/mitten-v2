@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { config } from '../config/index.js';
 import { getDatabase } from '../db/index.js';
 import { getTTSReadiness } from '../services/tts.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -6,16 +7,25 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 const router = Router();
 
 router.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok' });
 });
 
 router.get('/ready', asyncHandler(async (_req, res) => {
-  const db = await getDatabase();
-  await db.get('SELECT 1 AS ready');
-  const tts = await getTTSReadiness();
+  try {
+    const db = await getDatabase();
+    await db.get('SELECT 1 AS ready');
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+    return;
+  }
+  const { provider, available } = await getTTSReadiness();
+  if (config.nodeEnv === 'production') {
+    res.status(available ? 200 : 503).json({ status: available ? 'ready' : 'degraded' });
+    return;
+  }
   res.json({
-    status: tts.available ? 'ready' : 'degraded',
-    services: { api: 'ok', sqlite: 'ok', tts },
+    status: available ? 'ready' : 'degraded',
+    services: { api: 'ok', [config.dbProvider]: 'ok', tts: { provider, available } },
     timestamp: new Date().toISOString(),
   });
 }));

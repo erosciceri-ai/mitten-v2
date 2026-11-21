@@ -193,14 +193,19 @@ def test_missing_board_configuration_fails_before_hardware_access():
 def test_hardware_factory_wires_injected_peripherals(monkeypatch):
     from hardware import create_hardware
     from tests.sensor_fakes import UART
-    from sensors import CalibrationData
-    monkeypatch.setattr('dfplayer.sleep_ms',lambda ms:None)
+    class Player:
+        def initialize(self, safe_sd_pin=None):
+            self.safe_sd_pin = safe_sd_pin
     ports=[]
+    monkeypatch.setattr('audio.AudioPlayer', lambda machine, board: Player())
     class BoardADC(ADC):
         def __init__(self,pin): super().__init__(32768)
         def atten(self,value): assert value == 11
+    class BoardPin:
+        OUT=1
+        def __init__(self,pin,mode=None,value=None): self.pin,self.mode,self.initial_value=pin,mode,value
     class Machine:
-        Pin=staticmethod(lambda pin:pin)
+        Pin=BoardPin
         ADC=BoardADC
         I2C=staticmethod(lambda *args,**kwargs:I2C())
         @staticmethod
@@ -209,12 +214,12 @@ def test_hardware_factory_wires_injected_peripherals(monkeypatch):
     board={'flex_pins':[1,2,3,4,5],'adc_attenuation':11,'i2c_id':0,
            'scl_pin':6,'sda_pin':7,'mpu_address':0x68,'mpu_offsets':[2,-1],
            'protocol_uart':{'id':0,'tx':8,'rx':9},
-           'dfplayer_uart':{'id':1,'tx':10,'rx':11}}
+           'sd_sck':12,'sd_miso':13,'sd_mosi':14,'sd_cs':15,
+           'amp_sd_pin':16,'i2s_lrc':17,'i2s_bclk':18,'i2s_din':19}
     transport,sensors,player=create_hardware(board,Machine)
+    assert player.safe_sd_pin.pin == board['amp_sd_pin']
+    assert player.safe_sd_pin.mode == Machine.Pin.OUT
+    assert player.safe_sd_pin.initial_value == 0
     sensors.calibrate()
     assert sensors.capture_sample() == [2048]*5+[-2,1]
-    assert [p[1]['baudrate'] for p in ports] == [115200,9600]
-    player.play_track(9)
-    assert ports[1][2].writes[-1][3:7] == bytes([0x12,0,0,9])
-    board['dfplayer_uart']['id']=0
-    with pytest.raises(ValueError,match='distinct UARTs'): create_hardware(board,Machine)
+    assert [p[1]['baudrate'] for p in ports] == [115200]

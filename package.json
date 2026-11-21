@@ -14,6 +14,7 @@
     "tts:smoke": "node --import tsx tools/smoke-local-tts.mjs",
     "test": "node --test tools/dev-ports.test.mjs && npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e --workspace=@mitten/web",
+    "build:pages": "node tools/build-cloudflare-pages.mjs",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "simulator": "npm run start --workspace=tools/esp32-simulator"
