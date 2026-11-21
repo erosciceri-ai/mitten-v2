@@ -137,13 +137,13 @@ export function DashboardPage() {
 
   const nextStep = !isConnected
     ? {
-        title: isDemoMode ? 'Iniciá el MITTEN simulado' : isRelayMode ? 'Conectá MITTEN por Wi-Fi' : 'Conectá MITTEN',
+        title: isDemoMode ? 'Iniciá el MITTEN simulado' : isRelayMode ? 'Conectá MITTEN por Wi-Fi' : 'Conectá MITTEN por USB',
         description: isDemoMode
           ? 'La demo usa el mismo protocolo, sin comunicarse con hardware real.'
           : isRelayMode
             ? 'El guante debe estar encendido, vinculado a tu cuenta y con acceso a Internet.'
-            : 'Usá el cable USB y seleccioná su puerto para comenzar.',
-        action: isDemoMode ? 'Iniciar simulador' : isRelayMode ? 'Conectar por Wi-Fi' : 'Conectar MITTEN',
+            : 'Usá el cable USB en Chrome o Edge de escritorio y seleccioná su puerto para comenzar.',
+        action: isDemoMode ? 'Iniciar simulador' : isRelayMode ? 'Conectar por Wi-Fi' : 'Conectar por USB',
         kind: 'connect' as const,
       }
     : gestureCount === 0
@@ -160,7 +160,7 @@ export function DashboardPage() {
   const journey = [
     {
       label: 'Conectar',
-      detail: isConnected ? (isDemoMode ? 'Simulador conectado' : isRelayMode ? 'Conectado por Wi-Fi' : 'Guante conectado') : 'Pendiente',
+      detail: isConnected ? (isDemoMode ? 'Simulador conectado' : isRelayMode ? 'Conectado por Wi-Fi' : 'Conectado por USB') : 'Pendiente',
       done: isConnected,
     },
     {
@@ -196,7 +196,7 @@ export function DashboardPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 id="device-mode-title" className="text-lg font-bold text-text">Tipo de conexión</h2>
-            <p className="mt-1 text-sm text-text-muted">Elegí explícitamente hardware o una demostración local. Nunca se presentan como equivalentes.</p>
+            <p className="mt-1 text-sm text-text-muted">Conectá MITTEN por Wi-Fi desde cualquier dispositivo, usá USB como respaldo local con cable o ensayá el recorrido en Modo demostración.</p>
             {modeLocked ? (
               <p className="mt-1.5 text-xs text-text-muted">Desconectá el guante para cambiar el tipo de conexión.</p>
             ) : null}
@@ -204,12 +204,21 @@ export function DashboardPage() {
           <div className="grid shrink-0 grid-cols-1 gap-1 rounded-xl border border-border bg-mist p-1 sm:inline-flex sm:flex-nowrap" role="group" aria-label="Tipo de conexión">
             <button
               type="button"
+              aria-pressed={deviceMode === 'relay'}
+              disabled={modeLocked}
+              onClick={() => handleModeChange('relay')}
+              className={`min-h-11 rounded-lg px-4 text-sm font-semibold whitespace-nowrap transition-colors ${deviceMode === 'relay' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted hover:text-text'} disabled:opacity-50`}
+            >
+              Guante por Wi-Fi
+            </button>
+            <button
+              type="button"
               aria-pressed={deviceMode === 'hardware'}
               disabled={modeLocked}
               onClick={() => handleModeChange('hardware')}
               className={`min-h-11 rounded-lg px-4 text-sm font-semibold whitespace-nowrap transition-colors ${deviceMode === 'hardware' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted hover:text-text'} disabled:opacity-50`}
             >
-              Guante real
+              Guante por USB
             </button>
             <button
               type="button"
@@ -219,15 +228,6 @@ export function DashboardPage() {
               className={`min-h-11 rounded-lg px-4 text-sm font-semibold whitespace-nowrap transition-colors ${deviceMode === 'demo' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted hover:text-text'} disabled:opacity-50`}
             >
               Modo demostración
-            </button>
-            <button
-              type="button"
-              aria-pressed={deviceMode === 'relay'}
-              disabled={modeLocked}
-              onClick={() => handleModeChange('relay')}
-              className={`min-h-11 rounded-lg px-4 text-sm font-semibold whitespace-nowrap transition-colors ${deviceMode === 'relay' ? 'bg-surface-elevated text-signal shadow-sm' : 'text-text-muted hover:text-text'} disabled:opacity-50`}
-            >
-              Guante por Wi-Fi
             </button>
           </div>
         </div>
@@ -324,7 +324,7 @@ export function DashboardPage() {
             </li>
           ))}
         </ol>
-        <Notice tone="warning" title="Antes de desconectar la computadora">
+        <Notice tone="warning" title="Antes de usar MITTEN de forma autónoma">
           Después de sincronizar el perfil, usá el panel «Audio en el guante» para enviar las pistas WAV a <code className="font-mono">/mitten_audio/audio/NNNN.wav</code> en la microSD.
         </Notice>
       </Panel>

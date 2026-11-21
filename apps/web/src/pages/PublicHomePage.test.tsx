@@ -20,7 +20,13 @@ describe('PublicHomePage', () => {
     expect(screen.getByRole('heading', { name: 'De la mano al parlante, en tres momentos.' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Una arquitectura pequeña, comprensible y mantenible.' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Abrir la aplicación' }).getAttribute('href')).toBe('/login');
-    expect(screen.getByRole('status').textContent).toContain('navegador compatible');
+    expect(screen.getByRole('status').textContent).toContain('Wi-Fi');
+    expect(screen.getByRole('heading', { name: 'Tres formas de conectar el guante' })).toBeTruthy();
+    expect(screen.getByText('Guante por Wi-Fi')).toBeTruthy();
+    expect(screen.getByText('Guante por USB')).toBeTruthy();
+    expect(screen.getByText('Modo demostración')).toBeTruthy();
+    expect(screen.getByText('Voces directas a la microSD')).toBeTruthy();
+    expect(screen.getByText('¿Cómo se cargan las voces en la microSD del guante?')).toBeTruthy();
     expect(screen.getByText('No. MITTEN V2.1 es un prototipo funcional educativo. Su efectividad clínica todavía no fue establecida.')).toBeTruthy();
   });
 

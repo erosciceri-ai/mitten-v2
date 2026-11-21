@@ -5,6 +5,7 @@ import { BrandMark } from '../components/BrandMark';
 import { ContactComposer } from '../components/ContactComposer';
 import { ProjectDemo } from '../components/ProjectDemo';
 import { Button } from '../components/ui/button';
+import { StatusBadge } from '../components/ui/mitten-ui';
 import { useOptionalAuth } from '../context/AuthContext';
 import { isWebSerialSupported } from '../utils/devicePresentation';
 
@@ -25,18 +26,43 @@ const processSteps = [
   },
 ];
 
+const connectionModes = [
+  {
+    name: 'Guante por Wi-Fi',
+    tag: 'Principal',
+    tone: 'primary' as const,
+    text: 'Modo recomendado para el uso diario. Se vincula a tu cuenta con un código de un solo uso y funciona desde celular o computadora en cualquier navegador moderno.',
+  },
+  {
+    name: 'Guante por USB',
+    tag: 'Respaldo local',
+    tone: 'neutral' as const,
+    text: 'Conexión directa por cable mediante Web Serial en Chrome o Edge de escritorio. Útil en aulas, ferias o entornos sin Wi-Fi 2.4 GHz ni acceso a Internet.',
+  },
+  {
+    name: 'Modo demostración',
+    tag: 'Sin hardware',
+    tone: 'warning' as const,
+    text: 'Simulador integrado del ESP32 con el mismo protocolo V2 para probar captura, sincronización, carga de audio y reconocimiento sin placa física.',
+  },
+];
+
 const faqs = [
   {
-    question: '¿MITTEN necesita una computadora para funcionar?',
-    answer: 'La computadora se usa para configurar, capturar y sincronizar. Después, el reconocimiento y la reproducción de audio ocurren localmente en el guante.',
+    question: '¿MITTEN necesita una computadora o Internet para funcionar?',
+    answer: 'La aplicación web —desde el celular por Wi-Fi o desde una computadora— solo se usa para configurar, capturar, enviar audios y sincronizar. Después, el reconocimiento y la reproducción de voz ocurren localmente en el guante sin Internet ni PC.',
   },
   {
     question: '¿Todos deben aprender los mismos gestos?',
     answer: 'No. Cada persona construye su propia biblioteca y decide qué movimientos y frases quiere conservar.',
   },
   {
-    question: '¿Funciona en cualquier navegador?',
-    answer: 'La conexión directa usa Web Serial, una tecnología con disponibilidad limitada. La aplicación debe abrirse en un navegador compatible y desde un sitio seguro HTTPS.',
+    question: '¿Cómo se conecta el guante y en qué navegadores funciona?',
+    answer: 'Por defecto se conecta mediante Guante por Wi-Fi, que usa WebSocket estándar y funciona en cualquier navegador moderno, incluidos celulares. Si no tenés Wi-Fi 2.4 GHz o conexión a Internet, podés usar el respaldo Guante por USB (Web Serial en Chrome o Edge de escritorio por HTTPS) o ensayar en Modo demostración.',
+  },
+  {
+    question: '¿Cómo se cargan las voces en la microSD del guante?',
+    answer: 'Cada gesto genera su frase con síntesis de voz (TTS). Desde el panel «Audio en el guante», tu navegador la convierte automáticamente a WAV PCM 16 kHz mono y la envía al guante sin sacar la microSD; también podés descargar un respaldo ZIP.',
   },
   {
     question: '¿Es un dispositivo médico?',
@@ -178,14 +204,14 @@ export function PublicHomePage() {
           </div>
           <div className="public-container browser-check" role="status">
             <span className={`browser-check__icon ${browserReady ? 'browser-check__icon--ready' : ''}`} aria-hidden="true">
-              {browserReady ? '✓' : '!'}
+              {browserReady ? '✓' : 'i'}
             </span>
             <div>
-              <strong>{browserReady ? 'Este navegador puede conectar MITTEN' : 'La conexión necesita un navegador compatible'}</strong>
+              <strong>{browserReady ? 'Este navegador admite Wi-Fi y respaldo por USB' : 'Listo para conectar por Wi-Fi · USB requiere navegador compatible'}</strong>
               <span>
                 {browserReady
-                  ? 'Web Serial y el contexto seguro están disponibles.'
-                  : 'Usá un navegador con Web Serial y abrí la aplicación mediante HTTPS para conectar el guante por USB, o usá Guante por Wi-Fi.'}
+                  ? 'Podés configurar MITTEN por Wi-Fi desde cualquier dispositivo o conectarlo por cable USB mediante Web Serial.'
+                  : 'Podés usar Guante por Wi-Fi y Modo demostración desde este navegador (incluido celular). El respaldo por cable USB requiere Chrome o Edge en escritorio por HTTPS.'}
               </span>
             </div>
           </div>
@@ -228,6 +254,21 @@ export function PublicHomePage() {
                 </li>
               ))}
             </ol>
+
+            <div className="mt-10 border-t border-border pt-8">
+              <h3 className="text-lg font-bold text-text">Tres formas de conectar el guante</h3>
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {connectionModes.map((mode) => (
+                  <article key={mode.name} className="rounded-2xl border border-border bg-surface p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-base font-bold text-text">{mode.name}</h4>
+                      <StatusBadge tone={mode.tone}>{mode.tag}</StatusBadge>
+                    </div>
+                    <p className="mt-2.5 text-sm leading-6 text-text-muted">{mode.text}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -263,11 +304,11 @@ export function PublicHomePage() {
                 </div>
                 <h3>En la aplicación</h3>
                 <ul>
-                  <li><span>React + TypeScript</span><small>Interfaz y Web Serial</small></li>
-                  <li><span>Node.js + Express</span><small>API y lógica de aplicación</small></li>
-                  <li><span>SQLite</span><small>Usuarios y bibliotecas</small></li>
-                  <li><span>MicroPython</span><small>Firmware modular del ESP32</small></li>
-                  <li><span>Protocolo V2</span><small>NDJSON transaccional</small></li>
+                  <li><span>React + TypeScript</span><small>Interfaz, WebSocket relay y Web Serial</small></li>
+                  <li><span>Node.js + Express</span><small>API REST, relay Wi-Fi y síntesis TTS</small></li>
+                  <li><span>SQLite / PostgreSQL</span><small>Cuentas, guantes vinculados y bibliotecas</small></li>
+                  <li><span>Conversión WAV local</span><small>MP3 a WAV PCM 16 kHz en el navegador</small></li>
+                  <li><span>MicroPython + Protocolo V2</span><small>Firmware modular y NDJSON transaccional</small></li>
                 </ul>
               </article>
             </div>
@@ -287,9 +328,11 @@ export function PublicHomePage() {
             </div>
             <ul className="capability-list">
               <li><strong>Biblioteca personal</strong><span>Creá, editá, buscá y eliminá gestos propios.</span></li>
-              <li><strong>Captura guiada</strong><span>Registrá el movimiento directamente desde el guante.</span></li>
-              <li><strong>Audio asociado</strong><span>Prepará y revisá la frase que reproducirá cada gesto.</span></li>
-              <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo sin perder el anterior ante un fallo.</span></li>
+              <li><strong>Captura guiada</strong><span>Registrá el movimiento directamente desde el guante por Wi-Fi o USB.</span></li>
+              <li><strong>Voces directas a la microSD</strong><span>Generá frases por TTS, convertilas a WAV en tu navegador y subilas al guante sin retirar la tarjeta (con respaldo ZIP).</span></li>
+              <li><strong>Sincronización segura</strong><span>Reemplaza el perfil completo de forma transaccional sin perder el anterior ante un fallo.</span></li>
+              <li><strong>Guantes vinculados por cuenta</strong><span>Vinculá el guante por Wi-Fi con códigos de un solo uso y revocá el acceso cuando quieras desde tu cuenta.</span></li>
+              <li><strong>Simulador integrado</strong><span>Ensayá todo el recorrido en Modo demostración antes de conectar un guante físico.</span></li>
             </ul>
           </div>
         </section>

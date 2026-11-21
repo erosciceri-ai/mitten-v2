@@ -76,6 +76,9 @@ describe('DashboardPage', () => {
     );
 
     await waitFor(() => expect(screen.getByText('No pudimos cargar tu biblioteca')).toBeTruthy());
+    const modeButtons = Array.from(screen.getByRole('group', { name: 'Tipo de conexión' }).querySelectorAll('button')).map((button) => button.textContent?.trim());
+    expect(modeButtons).toEqual(['Guante por Wi-Fi', 'Guante por USB', 'Modo demostración']);
+    expect(screen.queryByRole('button', { name: 'Guante real' })).toBeNull();
     expect((screen.getByRole('button', { name: 'Modo demostración' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getAllByText('Error al consultar')).toHaveLength(2);
   });

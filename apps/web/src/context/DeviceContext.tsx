@@ -82,7 +82,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const auth = useOptionalAuth();
   const [deviceMode, setDeviceModeState] = useState<DeviceMode>(() => {
     const stored = sessionStorage.getItem('mitten_device_mode');
-    return stored === 'demo' || stored === 'relay' ? stored : 'hardware';
+    return stored === 'demo' || stored === 'hardware' ? stored : 'relay';
   });
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);

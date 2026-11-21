@@ -95,6 +95,7 @@ vi.mock('../../serial/DeviceService', () => {
 
 describe('DeviceContext', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockDeviceServiceInstance._resetHandlers();
 
@@ -169,6 +170,18 @@ describe('DeviceContext', () => {
   };
 
   describe('connection', () => {
+    it('defaults to relay (Wi-Fi) mode and restores hardware (USB) when stored', () => {
+      renderProvider();
+      expect(getTestDevice().deviceMode).toBe('relay');
+      expect(getTestDevice().isRelayMode).toBe(true);
+
+      cleanup();
+      sessionStorage.setItem('mitten_device_mode', 'hardware');
+      renderProvider();
+      expect(getTestDevice().deviceMode).toBe('hardware');
+      expect(getTestDevice().isRelayMode).toBe(false);
+    });
+
     it('should initialize with disconnected state', () => {
       renderProvider();
       expect(screen.getByTestId('status').textContent).toBe('disconnected');
