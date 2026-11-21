@@ -39,8 +39,6 @@ Un gesto completo está compuesto por dos partes independientes:
 | `name` | string | 1–60 **puntos de código Unicode**; sin caracteres de control (U+0000–U+001F, U+007F). El nombre visible no es identidad técnica. |
 | `audioTrack` | integer | 1–50 en Protocol Version 2; asignado por el backend mediante first-fit; independiente de `gesture.id`; inmutable mientras exista el gesto; reutilizable después de eliminarlo. Ruta local del firmware SPI/I²S (no parte del mensaje): `/mitten_audio/audio/{audioTrack:04d}.wav` (WAV PCM mono 16 kHz 16 bits). |
 
-2.
-
 Estos campos **nunca** forman parte de `data`. Viajan en el envoltorio del protocolo (`sync.gesture` para sincronización; `capture.completed` devuelve solo `requestId` y `data`; los metadatos completos `id`, `name`, `audioTrack` se asignan en el backend y viajan en `sync.gesture`). Ver `docs/protocol.md`, secciones 11.5 y 12.5.
 
 ### 2.2. Datos físicos (`data`)
@@ -180,8 +178,8 @@ Pueden ajustarse posteriormente mediante pruebas con el hardware real.
 | Capa | Qué valida | Acción si falla |
 |---|---|---|
 | **Protocolo** (`capture.completed`) | `data` es objeto; claves mínimas presentes | Frontend rechaza con `GESTURE_INVALID` local |
-| **Frontend** (antes de POST `/gestos`) | Esquema completo (Zod/Valibot); rangos; consistencia de `name` y `data` | Muestra error al usuario; no envía al backend |
-| **Backend** (POST `/gestos`) | Re-valida esquema completo de `name` y `data`; asigna `id` único; asigna `audioTrack` first-fit dentro de 1–50; genera o prepara el MP3 asociado | HTTP 400 con `GESTURE_INVALID` cuando corresponde |
+| **Frontend** (antes de POST `/api/gestures`) | Esquema completo (Zod/Valibot); rangos; consistencia de `name` y `data` | Muestra error al usuario; no envía al backend |
+| **Backend** (POST `/api/gestures`) | Re-valida esquema completo de `name` y `data`; asigna `id` único; asigna `audioTrack` first-fit dentro de 1–50; genera o prepara el MP3 asociado | HTTP 400 con `GESTURE_INVALID` cuando corresponde |
 | **Firmware** (`sync.gesture`) | Esquema completo; capacidad; IDs duplicados | Responde `GESTURE_INVALID` o `DUPLICATE_GESTURE_ID` |
 | **Simulador** | Mismas reglas que firmware | Fixtures compartidas con `packages/contracts` |
 
@@ -205,7 +203,7 @@ El backend admite SQLite local y PostgreSQL. El esquema de tablas, columnas y re
 
 ### 7.2. Frontend → Backend (HTTP)
 
-POST `/api/gestos`:
+POST `/api/gestures`:
 
 El body debe contener al menos los datos necesarios del gesto:
 

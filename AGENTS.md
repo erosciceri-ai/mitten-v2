@@ -87,6 +87,19 @@ mitten/
 │   ├── protocol.md
 │   ├── gesture-format.md
 │   ├── synchronization.md
+│   ├── audio-transfer.md
+│   ├── audio-storage.md
+│   ├── persistence.md
+│   ├── firmware-audio-migration.md
+│   ├── deployment.md
+│   ├── deployment/
+│   │   └── phase5.md
+│   ├── development.md
+│   ├── software-validation.md
+│   ├── demo-software-mp3.md
+│   ├── google-authentication.md
+│   ├── branding/
+│   │   └── BRAND.md
 │   └── README.md
 │
 ├── AGENTS.md
@@ -150,6 +163,9 @@ Responsable de:
 - Lógica de aplicación relacionada con sincronización.
 - Generación o preparación de archivos MP3 asociados a los gestos.
 - Gestión de metadatos de audio y asignación de `audioTrack`.
+- Almacenamiento de audio local o en S3 compatible (`AudioStorage`, `AUDIO_STORAGE_PROVIDER=local|s3`).
+- Vinculación, listado y revocación de dispositivos (`POST /api/device/pairing`, `GET /api/device`, `DELETE /api/device/:id`).
+- Relay WebSocket bidireccional entre la aplicación web y el ESP32 (`/ws/web`, `/ws/device`).
 
 El frontend solicita y coordina estas operaciones.
 El ESP32 no sintetiza voz. Lee pistas WAV preparadas desde microSD por SPI y entrega PCM por I²S al MAX98357A; el navegador convierte cada MP3 a WAV y lo sube vía `audio.*` (`docs/audio-transfer.md`). El [plan de migración](docs/firmware-audio-migration.md) registra la implementación y la validación física pendiente.
@@ -159,11 +175,10 @@ La dirección técnica confirmada para MITTEN V2 es:
 - **Node.js**
 - **Express**
 - **TypeScript**
-- **SQLite**
+- **SQLite** (`DB_PROVIDER=sqlite` para desarrollo local y pruebas) y **PostgreSQL** (`DB_PROVIDER=postgres` para staging y producción en Neon/Render)
+- **Almacenamiento de audio local o S3 compatible** (`AUDIO_STORAGE_PROVIDER=local|s3`)
 
-SQLite es suficiente para el alcance actual del proyecto.
-
-No introducir PostgreSQL, MongoDB, Redis, microservicios o infraestructura cloud compleja sin una necesidad futura demostrada.
+El frontend se despliega como SPA estática en Cloudflare Pages y la API en Render con PostgreSQL (Neon) y almacenamiento de objetos S3 compatible. No introducir MongoDB, Redis, microservicios o infraestructura adicional fuera de este alcance sin una necesidad futura demostrada.
 
 ---
 
@@ -264,18 +279,26 @@ La siguiente sincronización continúa siendo un reemplazo completo del perfil.
 
 Evita un único archivo grande de MicroPython.
 
-El firmware debe separar progresivamente responsabilidades tales como:
+El firmware debe separar progresivamente responsabilidades siguiendo la estructura real de `firmware/esp32/`:
 
 ```text
 main.py
+hardware.py
+hardware_config.py
 sensors.py
-imu.py
-calibration.py
-gestures.py
 recognition.py
-protocol.py
-storage.py
+audio.py
+audio_store.py
+wifi_manager.py
+relay_transport.py
+diag_wifi_audio.py
 config.py
+isrg_root_x1.der
+capture/
+protocol/
+storage/
+error/
+utils/
 ```
 
 No dividas archivos solo por estética.
@@ -557,11 +580,17 @@ Prefiere un sistema simple y correcto sobre uno impresionante pero innecesariame
 
 | Documento | Autoridad | Qué define |
 |---|---|---|
-| `docs/protocol.md` | **Canónica** | Wire protocol: transporte, handshake, estados, captura, sincronización, errores, ejemplos. |
+| `docs/protocol.md` | **Canónica** | Wire protocol: transporte, handshake, estados, captura, sincronización, `audio.*`, errores, ejemplos. |
 | `docs/gesture-format.md` | **Canónica** | Formato `data`: esquema, unidades, validación, `maxMessageBytes`. |
 | `docs/requirements.md` | Requisitos | Qué debe hacer el sistema, criterios de aceptación. |
 | `docs/architecture.md` | Arquitectura | Componentes, responsabilidades, flujos alto nivel. |
 | `docs/synchronization.md` | Sincronización | Flujo transaccional de sincronización de gestos. |
+| `docs/audio-transfer.md` | Transferencia de audio | Flujo `audio.*`, conversión MP3→WAV en navegador y verificación en microSD. |
+| `docs/persistence.md` | Persistencia backend | Abstracción `DatabaseClient`, soporte dual SQLite/PostgreSQL y migraciones. |
+| `docs/audio-storage.md` | Almacenamiento de audio | Abstracción `AudioStorage` (`local` y `s3`) y configuración de bucket. |
+| `docs/firmware-audio-migration.md` | Audio en firmware | Migración de DFPlayer a microSD SPI + MAX98357A I²S y validación física pendiente. |
+| `docs/deployment.md` | Despliegue | Topología de despliegue (Cloudflare Pages, Render, Neon, S3) y variables de entorno. |
+| `docs/deployment/phase5.md` | Runbook Fase 5 | Guía operativa paso a paso para puesta en marcha de producción y pruebas de humo. |
 | `docs/README.md` | Índice | Jerarquía de autoridad y docs legacy. |
 
 `packages/contracts` es la implementación compartida de contratos, tipos y validaciones usada por web, API y simulador, y referencia ejecutable para firmware.

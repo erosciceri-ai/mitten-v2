@@ -33,7 +33,7 @@ Referencia: último esquemático informado. Antes de programar la configuración
 | Provisión | El navegador convierte los MP3 a WAV y los transfiere al guante mediante `audio.*` (`docs/audio-transfer.md`); la copia manual a `/mitten_audio/audio/NNNN.wav` o el ZIP MP3 de respaldo siguen disponibles. |
 | Asignación | `audioTrack` debe ser entero 1–50 y corresponde al archivo `audio/{audioTrack:04d}.wav`; ausencia o error no altera el identificador del gesto. |
 
-## Resultados de verificación (2026-11-13)
+## Resultados de verificación (2026-11-20 · `499f8fa7`)
 
 ### Pruebas
 
@@ -41,14 +41,15 @@ El firmware se probó con un entorno virtual CPython 3.12.14 aislado que contien
 
 | Suite | Resultado |
 | --- | --- |
-| `python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider` | **324 passed** |
-| `npm test` — root/dev ports | **3 passed** |
-| `@mitten/contracts` | **149 passed** |
-| `@mitten/api` | **55 passed, 11 skipped** |
-| `@mitten/web` | **84 passed** |
-| `@mitten/esp32-simulator` | **49 passed** |
+| `python -B -m pytest firmware/esp32/tests -q -p no:cacheprovider` | **385 passed** |
+| `npm test` — root/build scripts | **3 passed** |
+| `@mitten/contracts` | **156 passed** |
+| `@mitten/api` | **66 passed, 11 skipped** |
+| `@mitten/web` | **132 passed** |
+| `@mitten/simulator` (`tools/esp32-simulator`) | **57 passed** |
+| `npm run test:e2e` (Playwright Chromium) | **4 passed** |
 
-El total del repositorio fue **340 passed, 11 skipped** en las suites JavaScript y TypeScript, además de las 324 del firmware. Para que la suite web cargara, se restauró localmente `@vitejs/plugin-react`, que ya figura como `devDependency` fijada en el lockfile pero faltaba en `node_modules`; no se modificaron manifiestos ni lockfile. En el sandbox de Windows, asyncio y Vitest encontraron restricciones al crear sockets temporales/renombrar temporales; los comandos completos se repitieron fuera del sandbox y pasaron.
+El total del repositorio en `npm test` es **414 passed, 11 skipped** en las suites JavaScript y TypeScript, además de las **4 passed** de Playwright E2E y las **385 passed** del firmware. Para que la suite web cargara en una revisión previa, se restauró localmente `@vitejs/plugin-react`, que ya figura como `devDependency` fijada en el lockfile; no se modificaron manifiestos ni lockfile. En el sandbox de Windows, asyncio y Vitest encontraron restricciones al crear sockets temporales/renombrar temporales; los comandos completos se repitieron fuera del sandbox y pasaron.
 
 Una prueba E2E todavía esperaba bytes de comandos DFPlayer por UART, pese a que el fixture de firmware ya solicita WAV. Se corrigió la expectativa para comprobar que el gesto reconocido solicita exactamente su `audioTrack`; esa prueba y la suite completa de API pasan.
 

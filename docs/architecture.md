@@ -248,7 +248,7 @@ El frontend es responsable de:
 - consumir la API HTTP;
 - mostrar la biblioteca de gestos;
 - permitir crear, editar y eliminar gestos;
-- conectar con MITTEN mediante Web Serial;
+- conectar con MITTEN mediante Web Serial (USB) o `RelayTransport` sobre el relay WebSocket (`/ws/web` ↔ `/ws/device`);
 - realizar el handshake del dispositivo;
 - comprobar compatibilidad de protocolo;
 - iniciar capturas de gestos;
@@ -298,7 +298,8 @@ El backend es responsable de:
 - asignación de `audioTrack` mediante first-fit;
 - generación o preparación de los archivos MP3 asociados a los gestos;
 - mantenimiento de la relación entre gesto, `audioTrack` y archivo de audio;
-- proporcionar al frontend el perfil que debe sincronizarse.
+- proporcionar al frontend el perfil que debe sincronizarse;
+- vinculación y revocación de guantes por cuenta (`/api/device`) y relay WebSocket autenticado (`/ws/web` y `/ws/device`).
 
 La API no debe:
 
@@ -434,11 +435,11 @@ El firmware es responsable de:
 - almacenamiento de la biblioteca local;
 - captura de nuevos gestos;
 - reconocimiento;
-- acceso a la microSD por SPI y salida PCM por I²S (objetivo, pendiente);
+- acceso a la microSD por SPI, recepción de pistas WAV (`firmware/esp32/audio_store.py`) y salida PCM por I²S (`firmware/esp32/audio.py`, implementados en software; pendiente validación física en PCB);
 - reproducir la pista local asociada al `audioTrack` del gesto reconocido;
 - no generar archivos MP3;
 - no asignar `audioTrack`;
-- comunicación Serial;
+- comunicación Serial (USB) y cliente WebSocket saliente opcional (`relay_transport.py`);
 - procesamiento de comandos recibidos;
 - envío de eventos y respuestas;
 - almacenamiento del perfil activo;
@@ -459,7 +460,7 @@ Flex 3 ─┤
 Flex 4 ─┼──► ESP32 ───► reconocimiento
 Flex 5 ─┤                    │
         │                    ▼
-MPU6050 ┘                audio SPI / I²S (objetivo)
+MPU6050 ┘                audio SPI / I²S (audio.py, pendiente validación en PCB)
                              │
                              ▼
                           Parlante
@@ -477,15 +478,14 @@ El ESP32 procesa estas señales para determinar el gesto realizado.
 
 # 15. Comunicación ESP32 ↔ aplicación
 
-La conexión entre el navegador y MITTEN utiliza:
+La conexión entre el navegador y MITTEN utiliza cualquiera de los dos transportes soportados por Protocol Version 2:
 
 ```text
-USB Serial
-115200 baud
-Web Serial API
+Modo USB:   USB Serial · 115200 baud · Web Serial API
+Modo Wi-Fi: RelayTransport · wss:// (/ws/web ↔ /ws/device)
 ```
 
-La aplicación web es responsable de abrir y cerrar la conexión.
+La aplicación web es responsable de abrir y cerrar la sesión de comunicación, y el ESP32 inicia la conexión saliente hacia `/ws/device` cuando opera en modo relay.
 
 Protocol Version 2 utiliza los siguientes límites y timeouts:
 
@@ -657,7 +657,7 @@ Frontend
    │
    │ valida datos
    │
-   │ Web Serial
+   │ Web Serial o Relay WS (/ws/web ↔ /ws/device)
    ▼
 ESP32
    │
@@ -772,7 +772,7 @@ gesto reconocido
 audioTrack
    │
    ▼
-Audio local (objetivo: microSD SPI → PCM por I²S → MAX98357A)
+Audio local (microSD SPI → PCM por I²S → MAX98357A; implementado en audio.py, pendiente validación en PCB)
 ```
 Mientras el dispositivo está conectado mediante una sesión compatible, un reconocimiento exitoso puede notificarse mediante el evento `recognition.detected`.
 
@@ -848,17 +848,17 @@ Los estados oficiales de Protocol Version 2 son:
 | `CALIBRATING` | El dispositivo calibra los sensores necesarios. |
 | `IDLE` | No hay una operación exclusiva; puede aceptar captura o sincronización. |
 | `CAPTURING` | Existe una captura de gesto en curso. |
-| `SYNCING` | Existe una transacción de sincronización en staging. |
+| `SYNCING` | Existe una transacción de sincronización de perfil (`sync.*`) o una transferencia de audio WAV (`audio.*`) en curso. |
 | `ERROR` | Un fallo impide operar con seguridad. En Protocol Version 2 la recuperación requiere reiniciar el ESP32. |
 
-Si el dispositivo informa `state === "SYNCING"`, debe existir una transacción activa y `activeSync` debe ser distinto de `null`.
+Si el dispositivo informa `state === "SYNCING"` durante una sincronización de perfil (`sync.*`), `activeSync` debe ser distinto de `null`; durante una carga de audio WAV del navegador al guante (`audio.*`), el dispositivo también informa `state === "SYNCING"` pero mantiene `activeSync === null` (ver `docs/protocol.md`, secciones 10.2 y 21.3).
 
 Durante `ERROR`, `device.handshake` y `device.status` siguen disponibles.
 Los comandos funcionales se rechazan con `INVALID_STATE`.
 Protocol Version 2 no define `device.reset`.
 Después de reiniciar, el dispositivo comienza nuevamente en `INITIALIZING`.
 
-`DISCONNECTED` no es un estado del firmware. Es un estado local del frontend cuando no existe una sesión Web Serial válida.
+`DISCONNECTED` no es un estado del firmware. Es un estado local del frontend cuando no existe una sesión activa de Web Serial o de `RelayTransport` (`/ws/web` ↔ `/ws/device`).
 
 `RECOGNIZING` **no es un estado oficial**. El reconocimiento normal ocurre localmente mientras el dispositivo está `IDLE` y puede notificarse mediante el evento `recognition.detected` (ver `docs/protocol.md`, secciones 9 y 13).
 
@@ -911,25 +911,15 @@ firmware/esp32
  └── implementación compatible con la especificación del protocolo
 ```
 
-No debe existir:
+No debe existir dependencia de código desde `apps/api` hacia `apps/web`, ni desde `firmware/esp32` hacia módulos internos de `apps/api` o `apps/web`:
 
 ```text
-apps/api → apps/web
+apps/api ↛ apps/web
+firmware ↛ apps/web
+firmware ↛ apps/api (en modo predeterminado TRANSPORT_MODE = "serial")
 ```
 
-ni:
-
-```text
-firmware → apps/api
-```
-
-ni:
-
-```text
-firmware → apps/web
-```
-
-El ESP32 conoce únicamente el protocolo con el que se comunica.
+En el modo predeterminado `TRANSPORT_MODE = "serial"`, el ESP32 no realiza conexiones hacia el backend y se comunica únicamente por USB Serial. En el modo opcional `TRANSPORT_MODE = "relay"`, `relay_transport.py` abre una conexión WebSocket saliente hacia `/ws/device` únicamente como túnel de transporte para tramas de Protocol Version 2.
 
 ---
 
@@ -942,8 +932,8 @@ El ESP32 conoce únicamente el protocolo con el que se comunica.
                 │                                 │
                 ▼                                 ▼
        ┌─────────────────┐               ┌─────────────────┐
-       │     Web App     │──── HTTP ─────►│       API       │
-       │                 │◄───────────────│                 │
+       │     Web App     │── HTTP / WS ─►│       API       │
+       │                 │◄──────────────│                 │
        └────────┬────────┘               └────────┬────────┘
                 │                                 │
                 │                                 ▼
@@ -951,7 +941,7 @@ El ESP32 conoce únicamente el protocolo con el que se comunica.
                 │                         │    Database     │
                 │                         └─────────────────┘
                 │
-                │ Web Serial / USB
+                │ Web Serial (USB) o Relay WS (/ws/web ↔ /ws/device)
                 │
                 ▼
        ┌─────────────────┐
@@ -988,7 +978,7 @@ biblioteca local
    ↓
 reconocimiento
    ↓
-Audio local (objetivo: microSD SPI → PCM por I²S → MAX98357A)
+Audio local (microSD SPI → PCM por I²S → MAX98357A; implementado en audio.py, pendiente validación en PCB)
    ↓
 audio
 ```
@@ -1120,17 +1110,17 @@ Agregar información opcional compatible no necesariamente requiere una nueva ve
 
 # 35. Seguridad
 
-Las credenciales y tokens pertenecen al entorno web/backend.
+Las credenciales de usuario y los tokens de sesión web pertenecen al entorno web/backend.
 
-No deben almacenarse permanentemente en el ESP32 salvo que una futura arquitectura lo requiera explícitamente.
+En el modo predeterminado `TRANSPORT_MODE = "serial"`, el ESP32 no realiza conexiones al backend ni almacena ningún token. En el modo opcional `TRANSPORT_MODE = "relay"`, `relay_transport.py` se conecta de forma saliente a `/ws/device` y almacena en `relay.json` únicamente un JWT revocable y acotado al dispositivo (`aud: "mitten-device"`, `kind: "device"`), obtenido al canjear un código de vinculación de un solo uso.
 
-El ESP32 no necesita conocer:
+El ESP32 nunca almacena ni necesita conocer:
 
-- contraseña del usuario;
-- JWT;
-- credenciales de base de datos.
+- contraseñas del usuario;
+- JWT de sesión web (`aud: "mitten-api"`);
+- credenciales de base de datos o almacenamiento externo.
 
-La autorización de acceso a la biblioteca se realiza antes de que el frontend entregue el perfil al dispositivo.
+La autorización de acceso a la biblioteca se realiza antes de que el frontend entregue el perfil al dispositivo, y cualquier guante vinculado puede revocarse individualmente desde la cuenta (`DELETE /api/device/:id`).
 
 ---
 
@@ -1183,11 +1173,17 @@ A partir de esta arquitectura existen o deberían existir los siguientes documen
 docs/
 ├── requirements.md
 ├── architecture.md
-├── protocol.md          ← EXISTE (canónico)
-├── gesture-format.md    ← EXISTE (canónico)
-├── synchronization.md   ← EXISTE (persistencia atómica ESP32)
-├── calibration.md       ← PENDIENTE (offsets MPU, rangos flex)
-└── development.md       ← PENDIENTE (guía desarrollo, testing)
+├── protocol.md                 ← EXISTE (canónico)
+├── gesture-format.md           ← EXISTE (canónico)
+├── synchronization.md          ← EXISTE (persistencia atómica ESP32)
+├── audio-transfer.md           ← EXISTE (carga WAV navegador → guante vía audio.*)
+├── firmware-audio-migration.md ← EXISTE (audio autónomo microSD SPI + I²S)
+├── persistence.md              ← EXISTE (SQLite / PostgreSQL y migraciones)
+├── audio-storage.md            ← EXISTE (almacenamiento MP3 local / S3)
+├── deployment.md               ← EXISTE (build, nginx y límites operativos)
+├── deployment/phase5.md        ← EXISTE (staging Cloudflare Pages + Render + Neon)
+├── development.md              ← EXISTE (guía de desarrollo y pruebas)
+└── calibration.md              ← PENDIENTE (offsets MPU, rangos flex)
 ```
 
 `protocol.md` define exactamente la comunicación entre frontend y ESP32 (autoridad canónica).
@@ -1212,8 +1208,8 @@ Jerarquía de autoridad:
 
 | Componente | Responsabilidad principal |
 |---|---|
-| `apps/web` | Interfaz, API client y conexión Web Serial |
-| `apps/api` | Usuarios, autenticación, biblioteca de gestos, persistencia, asignación de `audioTrack` y preparación de MP3 |
+| `apps/web` | Interfaz, API client y transporte con el guante (Web Serial USB y `RelayTransport` por `/ws/web`) |
+| `apps/api` | Usuarios, autenticación, biblioteca de gestos, persistencia, asignación de `audioTrack`, preparación de MP3, vinculación/revocación de dispositivos (`/api/device`) y relay WebSocket (`/ws/web`, `/ws/device`) |
 | `firmware/esp32` | Sensores, reconocimiento, almacenamiento local y audio |
 | `packages/contracts` | Implementación compartida de tipos, esquemas, validadores y fixtures alineados con los documentos canónicos |
 | `tools/esp32-simulator` | Simular comportamiento lógico del ESP32 |

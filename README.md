@@ -23,7 +23,7 @@ mitten/
 ├── .github/             # CI y actualizaciones automatizadas
 ├── apps/
 │   ├── web/           # React + Vite + TypeScript
-│   └── api/           # Node.js + Express + TypeScript + SQLite
+│   └── api/           # Node.js + Express + TypeScript + SQLite / PostgreSQL
 ├── firmware/
 │   └── esp32/         # MicroPython
 ├── packages/
@@ -36,8 +36,14 @@ mitten/
 │   ├── protocol.md
 │   ├── gesture-format.md
 │   ├── synchronization.md
+│   ├── audio-transfer.md
+│   ├── audio-storage.md
+│   ├── persistence.md
+│   ├── firmware-audio-migration.md
+│   ├── deployment.md
+│   ├── deployment/
+│   │   └── phase5.md
 │   ├── development.md
-│   ├── legacy/          # Documentación histórica de MITTEN V1
 │   └── README.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md
@@ -147,9 +153,15 @@ contacto abre el cliente de correo del visitante y MITTEN no almacena el mensaje
 
 Consulta `docs/README.md` para la jerarquía documental.
 Documentos principales:
-- `docs/protocol.md`: protocolo serie V2.
+- `docs/protocol.md`: protocolo serie y relay V2.
 - `docs/gesture-format.md`: formato canónico de los datos de gestos.
 - `docs/synchronization.md`: sincronización transaccional y persistencia atómica.
+- `docs/audio-transfer.md`: transferencia de audio (`audio.*`), conversión MP3→WAV y verificación en microSD.
+- `docs/persistence.md`: capa de persistencia backend dual SQLite / PostgreSQL.
+- `docs/audio-storage.md`: almacenamiento de audio local o en S3 compatible (`AudioStorage`).
+- `docs/firmware-audio-migration.md`: arquitectura de audio SPI/I²S en firmware y validación física pendiente.
+- `docs/deployment.md`: topología de despliegue (Cloudflare Pages, Render, Neon, S3) y variables de entorno.
+- `docs/deployment/phase5.md`: runbook operativo de puesta en marcha y smoke tests de Fase 5.
 - `docs/requirements.md`: requisitos funcionales y criterios de aceptación.
 - `docs/architecture.md`: arquitectura general del sistema.
 - `docs/software-validation.md`: alcance y evidencia de la validación sin hardware.

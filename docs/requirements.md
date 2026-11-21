@@ -20,7 +20,7 @@ MITTEN V2 comprende:
 - La reproducción autónoma mediante microSD SPI, ESP32, MAX98357A por I²S y parlante.
 - Una aplicación web para usuarios, gestos, aprendizaje y sincronización.
 - Un backend para autenticación, persistencia, biblioteca de gestos, generación de audio y datos de sincronización.
-- La comunicación USB Serial entre el navegador y el ESP32 mediante Web Serial API.
+- La comunicación entre el navegador y el ESP32 mediante Web Serial API (USB) o el relay Wi-Fi opcional (`wss://` vía `/ws/web` y `/ws/device`).
 - El almacenamiento local en el ESP32 de una copia sincronizada de los gestos.
 - La preparación separada de la microSD conectada al ESP32 por SPI.
 
@@ -120,7 +120,7 @@ MITTEN V2 comprende:
 - **REQ-GES-014:** Cada gesto debe tener un identificador interno independiente del nombre o frase visible; no se utilizará el texto del gesto como identidad técnica principal.
 - **REQ-GES-015:** La identidad técnica del gesto está definida: `id` integer (1–2147483647), asignado por el backend, único dentro del perfil. Permite mantener relaciones entre gesto, datos de reconocimiento, audio, sincronización y pista de audio local.
 - **REQ-GES-016:** Cada gesto sincronizado debe tener asociada una pista de audio local de forma inequívoca.
-- **REQ-GES-017:** Cada gesto debe utilizar un `audioTrack` dentro del rango `1–50`. La pista es independiente de `gesture.id` y se resuelve a un archivo local según una convención pendiente de definir.
+- **REQ-GES-017:** Cada gesto debe utilizar un `audioTrack` dentro del rango `1–50`. La pista es independiente de `gesture.id` y se resuelve al archivo local `/mitten_audio/audio/{audioTrack:04d}.wav` en la microSD.
 - **REQ-GES-018:** El límite máximo inicial es de 50 gestos por usuario/perfil activo, aplicable tanto a la biblioteca sincronizable como a la biblioteca local del ESP32.
 - **REQ-GES-019:** La aplicación debe poder representar la capacidad, por ejemplo: `23 / 50 gestos`.
 - **REQ-GES-020:** El límite de 50 gestos es una decisión inicial del prototipo y debe poder cambiarse en versiones futuras sin rediseñar todo el sistema.
@@ -576,13 +576,11 @@ Quedan explícitamente fuera del alcance actual de MITTEN V2:
 
 Las siguientes decisiones permanecen abiertas y pueden resolverse en fases posteriores sin bloquear la arquitectura actual de MITTEN V2:
 
-1. **Validación física en placa de audio SPI/I²S y Wi-Fi relay:** confirmar en el hardware real las llamadas MicroPython, la lectura/escritura FAT en microSD, TLS contra Render y consumo de RAM.
+1. **Validación física en placa de audio SPI/I²S y Wi-Fi relay (T6):** confirmar en el hardware real la versión instalada de MicroPython (`v1.29.0` frente a `v1.26.1`), las llamadas de periféricos, la lectura/escritura FAT en microSD, TLS contra Render y el consumo de RAM.
 
-2. **Endurecimiento de backend del relay (P1-7 / P1-8):** persistencia y revocación individual de dispositivos vinculados y validación estricta de `TRUSTED_PROXY`/rate limits WebSocket.
+2. **Algoritmo de reconocimiento definitivo:** el algoritmo de MITTEN V1 se utiliza como baseline inicial. Futuras alternativas podrán evaluarse mediante pruebas reproducibles sin cambiar los contratos actuales.
 
-3. **Algoritmo de reconocimiento definitivo:** el algoritmo de MITTEN V1 se utiliza como baseline inicial. Futuras alternativas podrán evaluarse mediante pruebas reproducibles sin cambiar los contratos actuales.
-
-4. **Tuning físico de captura y reconocimiento:** ajustes derivados de pruebas con el hardware real, siempre que cualquier cambio que afecte contratos sea documentado y versionado cuando corresponda.
+3. **Tuning físico de captura y reconocimiento:** ajustes derivados de pruebas con el hardware real, siempre que cualquier cambio que afecte contratos sea documentado y versionado cuando corresponda.
 
 No vuelven a considerarse decisiones pendientes:
 
@@ -590,6 +588,7 @@ No vuelven a considerarse decisiones pendientes:
 - backend con Node.js, Express y TypeScript, con SQLite local o PostgreSQL;
 - frontend con React, Vite y TypeScript;
 - Web Serial como único propietario del puerto serie (modo USB) y Wi-Fi relay saliente `wss://` vía backend (modo Wi-Fi);
+- vinculación persistente y revocación individual de dispositivos (`P1-7`: `003-devices.sql`, `GET /api/device`, `DELETE /api/device/:id`, `PairedDevicesPanel`) y endurecimiento del relay (`P1-8`: verificación CIDR estricta de `TRUSTED_PROXY`, rate limits por IP `429` en upgrades WebSocket y `4029` en vinculación, y tramas JSON de control de error);
 - eliminación de `monitor.py`, del bridge local y de DFPlayer;
 - estructura general del repositorio;
 - Protocol Version 2;

@@ -1,16 +1,15 @@
 import { audioChecksum } from '../services/audioStorage.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { validateBody, validateParams } from '../middleware/validation.js';
-import { createGestureSchema, updateGestureSchema, gestureIdParamSchema, paginationSchema } from '../utils/schemas.js';
+import { createGestureSchema, updateGestureSchema, gestureIdParamSchema } from '../utils/schemas.js';
 import {
   findAllGestures,
   findGestureById,
   createGesture,
   updateGesture,
   deleteGesture,
-  getGestureCount,
   generateGestureAudio,
   getGestureAudioInfo,
   getGestureAudio,

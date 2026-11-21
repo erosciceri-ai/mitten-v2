@@ -2,8 +2,7 @@
 
 **Estado:** implementado en contratos, firmware, simulador y `DeviceService`. La especificación
 normativa está en `docs/protocol.md` §12.12; este documento conserva el diseño y sus alternativas.
-La interfaz web (modo «Guante por Wi-Fi», código de vinculación y panel «Audio en el guante» con progreso)
-está en `DashboardPage`. Pendiente: prueba en hardware real.
+La interfaz web incluye el modo «Guante por Wi-Fi», código de vinculación y panel «Audio en el guante» con progreso en `DashboardPage`, el banner de estado adaptable al modo (`ConnectionBanner`) y la gestión/revocación individual de guantes vinculados en `AccountPage` (`PairedDevicesPanel`, `GET /api/device` y `DELETE /api/device/:id`). Pendiente: prueba en hardware real.
 
 ## Flujo
 

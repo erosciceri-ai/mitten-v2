@@ -21,8 +21,7 @@ Para cada workspace ejecutar además `tsc --noEmit -p <workspace>/tsconfig.json`
 y su script `build`; construir primero `packages/contracts`.
 
 La evidencia debe actualizarse al cerrar cada etapa mediante los comandos anteriores. La última
-validación completa del 8 de octubre de 2026 registró 149 pruebas de contratos, 49 del simulador,
-72 de la web, 39 de la API y 316 del firmware: 625 pruebas aprobadas en total. `npm run build`
+validación completa del 20 de noviembre de 2026 (`499f8fa7`) registró **414 pruebas aprobadas y 11 omitidas** en `npm test` (`@mitten/contracts`: 156, `@mitten/simulator`: 57, `@mitten/web`: 132, `@mitten/api`: 66 aprobadas y 11 omitidas sin PostgreSQL/S3 de prueba, scripts raíz de build: 3), **4 pruebas aprobadas** en Playwright E2E (`npm run test:e2e`) y **385 pruebas aprobadas** del firmware (`pytest`): **803 pruebas aprobadas** en total. `npm run build`
 también finalizó correctamente y la prueba integral quedó incluida en la suite de la API.
 
 ## Configuración pendiente de entorno y placa

@@ -53,6 +53,8 @@ El frontend conserva el Bearer en `localStorage` y reintenta la validación de s
 | Gestos | 180 solicitudes por minuto por cuenta; JSON de 32 KiB en altas y ediciones, más el límite serial existente |
 | TTS | 10 solicitudes por minuto por cuenta y 60 por IP; dos trabajos simultáneos por instancia; JSON de hasta 1 KiB cuando se envía; MP3 nuevo de hasta 1 MiB |
 | Exportaciones | 10 exportaciones de cuenta y 5 ZIP por minuto por cuenta; dos ZIP simultáneos por instancia y hasta 24 MiB de audio de entrada por archivo |
+| Dispositivos (`/api/device`) | `POST /api/device/pairing`: 10 solicitudes por minuto por cuenta; `GET /api/device`: 60 solicitudes por minuto por cuenta; `DELETE /api/device/:id`: 30 solicitudes por minuto por cuenta |
+| Relay WebSocket (`/ws/web`, `/ws/device`) | 60 upgrades por minuto por IP; intentos de vinculación (`pairingCode`): 10 por minuto por IP y 60 por minuto global; `maxPayload = 16 KiB` |
 
 Las cuotas en memoria se reinician con el proceso y cada instancia lleva su propia cuenta. Las redes escolares con NAT comparten cuota por IP. Si se necesitan varias instancias o una cuota persistente, hace falta un limitador compartido o controles del ingreso. El correo como clave de login también permite que terceros agoten temporalmente la cuota de una cuenta. El registro existente devuelve `409` para correos ya registrados y revela su existencia.
 

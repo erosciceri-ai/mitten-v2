@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -11,7 +11,7 @@ const mode = process.argv[4] ?? 'full';
 const output = process.argv[5];
 assert(['full', 'tts', 'transport'].includes(mode));
 if (mode !== 'full') assert(output, 'Supply an output directory for the experiment');
-const phrases = JSON.parse(readFileSync(new URL('./piper-experiment/phrases.json', import.meta.url), 'utf8'));
+const phrases = ['Hola', 'Necesito ayuda para encontrar mi mochila y volver al aula.'];
 const api = `http://127.0.0.1:${port}/api`;
 const headers = { 'Content-Type': 'application/json' };
 

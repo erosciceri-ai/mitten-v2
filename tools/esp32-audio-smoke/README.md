@@ -54,17 +54,19 @@ Usa una tarjeta de prueba FAT32. No formatees una tarjeta con datos sin respalda
 
 Envía el log completo de ambas ejecuciones, revisión de PCB, modelo de módulos y parlante, pinout medido, fuente utilizada y si ambos tonos se oyeron sin cortes. Si falla, incluye el mensaje de etapa y el traceback. No pruebes extracción de tarjeta en caliente.
 
-## Diseño futuro: web → microSD
+## Estado actual de la transferencia web → microSD
+
+> **Implementado en el firmware principal:** la transferencia de archivos WAV PCM (16 kHz, 16 bits, mono) desde el navegador hacia la microSD mediante los comandos `audio.*` (`audio.info`, `audio.list`, `audio.begin`, `audio.chunk`, `audio.commit`, `audio.abort`, `audio.delete`, `audio.format`) ya está implementada en el firmware de producción (`firmware/esp32/audio_store.py`) y en la aplicación web, tanto sobre Web Serial como sobre Wi-Fi relay. Consulta [`docs/audio-transfer.md`](../../docs/audio-transfer.md) y [`docs/protocol.md` §12.12](../../docs/protocol.md) para el contrato vigente.
+
+Esta herramienta independiente (`tools/esp32-audio-smoke/`) permanece acotada exclusivamente al **bring-up eléctrico y validación aislada de microSD SPI + MAX98357A I²S** con un archivo `smoke.wav` copiado de forma manual, sin cargar el protocolo ni el resto del firmware MITTEN. Las notas de diseño siguientes se conservan como contexto histórico de ingeniería:
 
 | Ruta | Ventaja | Límite |
 | --- | --- | --- |
-| Exportar WAV y copiar la tarjeta | Menor complejidad; buena referencia inicial | Obliga a abrir la carcasa o exponer la tarjeta. |
-| Carga por USB/serial desde herramienta local | Mantiene la tarjeta dentro y permite validar el receptor sin tocar la web | Requiere modo de mantenimiento, una herramienta local y exclusividad del puerto. Útil como paso intermedio. |
-| Web Serial en modo de mantenimiento | Reutiliza el enlace web y evita retirar la tarjeta | Requiere diseñar una transferencia separada y versionada; no es el sync de gestos V2. El USB de datos no demuestra que el circuito permita carga y mantenimiento por el mismo conector. |
+| Exportar WAV y copiar la tarjeta | Menor complejidad; buena referencia inicial para bring-up eléctrico | Obliga a abrir la carcasa o exponer la tarjeta. |
+| Carga por USB/serial desde herramienta local | Mantiene la tarjeta dentro y permite validar el receptor sin tocar la web | Requiere modo de mantenimiento, una herramienta local y exclusividad del puerto. |
+| Transferencia desde la aplicación web (`audio.*`) | Reutiliza el enlace activo (Web Serial o Wi-Fi relay) y evita retirar la tarjeta | Flujo separado del sync de gestos (`sync.*`); convierte MP3→WAV en el navegador y valida SHA-256 por pista. |
 
-**Recomendación:** validar primero PCM con copia manual. Para el producto, preferir Web Serial con modo explícito de mantenimiento y WAV PCM generado fuera del ESP32 si el tamaño y tiempo de transferencia resultan aceptables. PCM16 mono a 16 kHz ocupa 32 kB/s; a 115200 baud con 8N1 el máximo teórico es 11,52 kB/s antes del framing: un minuto de audio tarda al menos unos 167 s por ese enlace. Medir lotes reales antes de fijar velocidad o formato. MP3 reduce transferencia y espacio, pero traslada la decodificación y su coste al ESP32.
-
-El diseño debería transferir bloques acotados con offset y confirmación, verificar tamaño y SHA-256 en un archivo temporal, y publicar una revisión de pista solo después de verificarla. Un manifiesto debe vincular `audioTrack` con identidad y revisión del gesto y hash; así un cambio de audio o una pista reutilizada no se confunden con el archivo anterior. Ante desconexión o corte, conservar la pista válida, descartar o reanudar el temporal validado y probar la recuperación real en FAT antes de prometer atomicidad. No usar el límite de mensajes V2 para enviar archivos completos. Ninguna de estas funciones de transferencia está implementada aquí.
+El flujo de producción implementado en `firmware/esp32/audio_store.py` transfiere bloques acotados con offset y confirmación (`audio.chunk`), verifica tamaño, cabecera WAV y SHA-256 sobre un archivo temporal (`.tmp`) y publica atómicamente cada pista en `/mitten_audio/audio/NNNN.wav` actualizando `/mitten_audio/manifest.json`. Esta herramienta de smoke test no incluye ni ejecuta `audio_store.py`.
 
 ## Pruebas en PC
 

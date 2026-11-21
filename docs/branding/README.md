@@ -1,19 +1,17 @@
-# Integración MITTEN V1.2 → Codex
+# Identidad visual MITTEN V1.2
 
-Este paquete está preparado para descomprimirse **en la raíz del repositorio `v2/`**.
+Este directorio contiene la especificación de marca e insumos visuales de MITTEN V2 (revisión de marca V1.2, integrada en el repositorio).
 
-## Contenido
-- `docs/branding/BRAND.md`: reglas vigentes para Codex.
-- `docs/branding/tokens.reference.css`: tokens de referencia. No se inyectan en la app hasta revisarlos.
-- `docs/branding/referencias/`: manual y textos complementarios, imagen aprobada.
-- `apps/web/public/brand/`: 9 variantes del logotipo aprobado V1.2 en SVG y PNG.
+## Estado actual y jerarquía
 
-## Instalación manual (PowerShell)
-```powershell
-cd 'C:\Users\Diez 20-11-24\Documents\MITTENV2\v2'
-Expand-Archive -LiteralPath "$env:USERPROFILE\Downloads\MITTEN_Kit_para_Codex_V1_2.zip" -DestinationPath . -Force
-```
-Si lo descargaste en otro lugar, ajustá `-LiteralPath`. El comando solo copia los archivos del paquete a rutas nuevas; revisá las rutas antes de extraer si ya existen. **No se modifica código productivo automáticamente.**
+| Recurso | Rol |
+|---|---|
+| `docs/branding/BRAND.md` | **Especificación canónica de marca V1.2**: identidad, paleta de color, tipografía, reglas de uso del logotipo y tono visual. |
+| `apps/web/public/brand/` | **Activos maestros aprobados V1.2**: 9 variantes oficiales del logotipo en SVG y PNG utilizadas directamente por la aplicación web. |
+| `apps/web/DESIGN_SYSTEM.md` | **Implementación activa en frontend**: guía del sistema de diseño aplicado a componentes, accesibilidad, diseño adaptable y movimiento. |
+| `apps/web/src/styles/brand-tokens.css` | **Tokens CSS en producción**: variables de color, tipografía, superficies y espaciado activas en `apps/web`. |
+| `docs/branding/referencias/lamina_aprobada.jpg` | **Lámina visual aprobada V1.2**: referencia gráfica base de los activos vectoriales maestros. |
 
-## Siguiente paso
-Abrí Codex Desktop sobre `v2` y pedile que lea `docs/branding/BRAND.md`, examine el estado actual de `apps/web` e implemente la identidad de forma incremental. Para prioridad de marca, V1.2 reemplaza los SVG antiguos del manual V1.0.
+## Regla de precedencia
+
+Ante cualquier discrepancia visual o de identidad, prevalecen `docs/branding/BRAND.md` y los activos maestros de `apps/web/public/brand/`, seguidos por la implementación definida en `apps/web/DESIGN_SYSTEM.md` y `apps/web/src/styles/brand-tokens.css`.
