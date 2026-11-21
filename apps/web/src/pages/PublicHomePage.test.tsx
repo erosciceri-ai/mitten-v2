@@ -38,4 +38,14 @@ describe('PublicHomePage', () => {
     expect(screen.getByText('Frase reconocida')).toBeTruthy();
     expect(screen.getByText('“Necesito ayuda”')).toBeTruthy();
   });
+
+  it('toggles mobile project navigation and avoids prohibited ARIA on SVG <g>', () => {
+    const { container } = render(<MemoryRouter><PublicHomePage /></MemoryRouter>);
+
+    expect(container.querySelector('.hero-system__brand')?.getAttribute('aria-label')).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Abrir menú' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('navigation', { name: 'Menú móvil del proyecto' })).toBeTruthy();
+  });
 });

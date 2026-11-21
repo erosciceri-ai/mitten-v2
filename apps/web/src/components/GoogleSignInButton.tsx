@@ -30,12 +30,16 @@ interface GoogleSignInButtonProps {
 export function GoogleSignInButton({ onCredential, onError, text = 'continue_with' }: GoogleSignInButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!clientId) return;
+    let settled = false;
 
     const render = () => {
       if (!window.google || !containerRef.current) return;
+      settled = true;
+      setLoadFailed(false);
       containerRef.current.replaceChildren();
       window.google.accounts.id.initialize({
         client_id: clientId,
@@ -75,10 +79,23 @@ export function GoogleSignInButton({ onCredential, onError, text = 'continue_wit
       script.defer = true;
       document.head.appendChild(script);
     }
+
+    const handleError = () => {
+      settled = true;
+      setLoadFailed(true);
+      onError?.('No se pudo cargar el inicio de sesión con Google');
+    };
+
+    const timeout = window.setTimeout(() => {
+      if (!settled && !window.google) {
+        setLoadFailed(true);
+      }
+    }, 10_000);
+
     script.addEventListener('load', render);
-    const handleError = () => onError?.('No se pudo cargar el inicio de sesión con Google');
     script.addEventListener('error', handleError);
     return () => {
+      window.clearTimeout(timeout);
       script?.removeEventListener('load', render);
       script?.removeEventListener('error', handleError);
       window.google?.accounts.id.cancel();
@@ -90,7 +107,14 @@ export function GoogleSignInButton({ onCredential, onError, text = 'continue_wit
   return (
     <div className="google-sign-in">
       <div ref={containerRef} className="google-sign-in__button" />
-      {!isReady && <span className="google-sign-in__loading" role="status">Preparando Google…</span>}
+      {!isReady && !loadFailed ? (
+        <span className="google-sign-in__loading" role="status">Preparando Google…</span>
+      ) : null}
+      {loadFailed ? (
+        <p className="text-center text-xs text-text-muted" role="status">
+          El acceso con Google no está disponible en este momento. Usá tu correo y contraseña.
+        </p>
+      ) : null}
     </div>
   );
 }

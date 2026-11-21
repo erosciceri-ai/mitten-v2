@@ -1,7 +1,12 @@
+import { Menu, X } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BrandMark } from '../components/BrandMark';
 import { ContactComposer } from '../components/ContactComposer';
 import { ProjectDemo } from '../components/ProjectDemo';
+import { Button } from '../components/ui/button';
+import { useOptionalAuth } from '../context/AuthContext';
+import { isWebSerialSupported } from '../utils/devicePresentation';
 
 const contactEmail = import.meta.env.VITE_CONTACT_EMAIL?.trim();
 
@@ -39,6 +44,13 @@ const faqs = [
   },
 ];
 
+const sectionLinks = [
+  { href: '#funcionamiento', label: 'Cómo funciona' },
+  { href: '#tecnologia', label: 'Tecnología' },
+  { href: '#demostracion', label: 'Demostración' },
+  { href: '#contacto', label: 'Contacto' },
+] as const;
+
 function HeroSystemDiagram() {
   return (
     <div className="hero-system" aria-label="Recorrido de una señal: mano, sensores, ESP32 y audio">
@@ -48,7 +60,7 @@ function HeroSystemDiagram() {
         <path className="hero-system__orbit" d="M71 320C154 369 277 377 376 318C446 276 475 193 437 120" />
         <circle className="hero-system__signal" cx="71" cy="320" r="7" />
 
-        <g className="hero-system__brand" aria-label="Isotipo oficial MITTEN">
+        <g className="hero-system__brand">
           <image href="/brand/06_isotipo_gradiente.svg" x="82" y="126" width="190" height="173" />
         </g>
 
@@ -81,9 +93,12 @@ function HeroSystemDiagram() {
 }
 
 export function PublicHomePage() {
-  const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
-  const hasSecureContext = typeof window !== 'undefined' && window.isSecureContext;
-  const browserReady = hasWebSerial && hasSecureContext;
+  const auth = useOptionalAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const browserReady = isWebSerialSupported();
+  const isAuthenticated = Boolean(auth?.isAuthenticated);
+  const appPath = isAuthenticated ? '/app' : '/login';
+  const appActionLabel = isAuthenticated ? 'Ir al panel' : 'Abrir la aplicación';
 
   return (
     <div className="public-site">
@@ -93,13 +108,48 @@ export function PublicHomePage() {
         <div className="public-container public-header__inner">
           <BrandMark />
           <nav className="public-nav" aria-label="Navegación del proyecto">
-            <a href="#funcionamiento">Cómo funciona</a>
-            <a href="#tecnologia">Tecnología</a>
-            <a href="#demostracion">Demostración</a>
-            <a href="#contacto">Contacto</a>
+            {sectionLinks.map((item) => (
+              <a key={item.href} href={item.href}>{item.label}</a>
+            ))}
           </nav>
-          <Link className="button button--compact button--outline" to="/login">Abrir la aplicación</Link>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={appPath}>{appActionLabel}</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="min-[901px]:hidden"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="public-mobile-nav"
+              aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+            >
+              {mobileMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+            </Button>
+          </div>
         </div>
+        {mobileMenuOpen ? (
+          <nav
+            id="public-mobile-nav"
+            aria-label="Menú móvil del proyecto"
+            className="border-t border-border bg-surface px-4 py-3 min-[901px]:hidden"
+          >
+            <div className="flex flex-col gap-1">
+              {sectionLinks.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-text hover:bg-mist"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          </nav>
+        ) : null}
       </header>
 
       <main id="contenido">
@@ -109,8 +159,12 @@ export function PublicHomePage() {
               <h1>Cada gesto tiene algo que decir.</h1>
               <p className="hero-lead">MITTEN es un guante inteligente de comunicación que reconoce gestos configurados y reproduce sus mensajes de voz sin depender de una computadora durante el uso cotidiano.</p>
               <div className="hero-actions">
-                <a className="button button--primary" href="#funcionamiento">Descubrir MITTEN</a>
-                <Link className="button button--quiet" to="/login">Configurar mi guante</Link>
+                <Button asChild size="lg">
+                  <a href="#funcionamiento">Descubrir MITTEN</a>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link to={appPath}>{isAuthenticated ? 'Ir al panel' : 'Configurar mi guante'}</Link>
+                </Button>
               </div>
               <p className="hero-note">Prototipo funcional educativo · MITTEN V2.1</p>
             </div>
@@ -131,7 +185,7 @@ export function PublicHomePage() {
               <span>
                 {browserReady
                   ? 'Web Serial y el contexto seguro están disponibles.'
-                  : 'Usá un navegador con Web Serial y abrí la aplicación mediante HTTPS para conectar el guante.'}
+                  : 'Usá un navegador con Web Serial y abrí la aplicación mediante HTTPS para conectar el guante por USB, o usá Guante por Wi-Fi.'}
               </span>
             </div>
           </div>
@@ -227,7 +281,9 @@ export function PublicHomePage() {
             <div className="section-heading">
               <h2 id="capability-title">Preparar el guante sin ocultar lo importante.</h2>
               <p>La interfaz acompaña la conexión, el aprendizaje y la sincronización, mostrando siempre el estado real de MITTEN.</p>
-              <Link className="text-link" to="/login">Entrar al panel de configuración</Link>
+              <Link className="text-link" to={appPath}>
+                {isAuthenticated ? 'Ir al panel de configuración' : 'Entrar al panel de configuración'}
+              </Link>
             </div>
             <ul className="capability-list">
               <li><strong>Biblioteca personal</strong><span>Creá, editá, buscá y eliminá gestos propios.</span></li>
@@ -278,7 +334,7 @@ export function PublicHomePage() {
           <p>MITTEN V2.1 · Prototipo funcional educativo.</p>
           <div className="public-footer__links">
             <Link to="/privacidad">Privacidad</Link>
-            <Link to="/login">Acceder a la aplicación</Link>
+            <Link to={appPath}>{isAuthenticated ? 'Ir al panel' : 'Acceder a la aplicación'}</Link>
           </div>
         </div>
       </footer>

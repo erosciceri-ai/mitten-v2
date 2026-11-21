@@ -1,4 +1,5 @@
 import { lazy, Suspense, type CSSProperties, useEffect, useState } from 'react';
+import { Button } from './ui/button';
 
 const SignalWaves = lazy(() => import('./react-bits/Waves/Waves'));
 
@@ -49,14 +50,14 @@ export function ProjectDemo() {
             Esta secuencia explica el recorrido de los datos. No simula la precisión del reconocimiento
             ni sustituye una prueba con el guante físico.
           </p>
-          <button
-            className="button button--primary"
+          <Button
             type="button"
+            size="lg"
             disabled={running}
             onClick={() => setStage('sensing')}
           >
             {stage === 'speaking' ? 'Repetir demostración' : running ? 'Procesando…' : 'Simular un gesto'}
-          </button>
+          </Button>
         </div>
 
         <div className={`signal-console signal-console--${stage}`}>

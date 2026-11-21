@@ -1,37 +1,49 @@
 import { useCallback, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContainer';
 import type { FormErrors } from '../types';
 import { BrandMark } from '../components/BrandMark';
 import { GoogleSignInButton, isGoogleSignInConfigured } from '../components/GoogleSignInButton';
 import { Button } from '../components/ui/button';
+import { FormField } from '../components/ui/field';
+
+function getSafeReturnPath(state: unknown): string {
+  const candidate = (state as { returnTo?: string } | null)?.returnTo;
+  if (typeof candidate === 'string' && candidate.startsWith('/') && !candidate.startsWith('//')) {
+    return candidate;
+  }
+  return '/app';
+}
 
 export function LoginPage() {
   const { login, loginWithGoogle, isLoading } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const destination = getSafeReturnPath(location.state);
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     setIsSubmitting(true);
     try {
       await loginWithGoogle(credential);
       showToast({ type: 'success', message: 'Bienvenido a MITTEN V2.1' });
-      navigate('/app');
+      navigate(destination, { replace: true });
     } finally {
       setIsSubmitting(false);
     }
-  }, [loginWithGoogle, navigate, showToast]);
+  }, [destination, loginWithGoogle, navigate, showToast]);
 
   const validate = () => {
     const newErrors: FormErrors = {};
-    if (!email) newErrors.email = 'Email es requerido';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Email inválido';
-    if (!password) newErrors.password = 'Contraseña es requerida';
+    if (!email.trim()) newErrors.email = 'El correo electrónico es requerido';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) newErrors.email = 'Ingresá un correo electrónico válido';
+    if (!password) newErrors.password = 'La contraseña es requerida';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -42,9 +54,9 @@ export function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      await login({ email, password });
-      showToast({ type: 'success', message: 'Bienvenido a MITTEN V2' });
-      navigate('/app');
+      await login({ email: email.trim(), password });
+      showToast({ type: 'success', message: 'Bienvenido a MITTEN V2.1' });
+      navigate(destination, { replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al iniciar sesión';
       if (message.includes('Validation')) {
@@ -58,7 +70,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="auth-shell min-h-screen flex items-center justify-center px-4 py-10">
+    <main id="main-content" className="auth-shell min-h-screen flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="auth-panel bg-surface rounded-xl border border-border p-7 sm:p-8">
           <div className="text-center mb-8">
@@ -78,19 +90,17 @@ export function LoginPage() {
             </>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
             {errors.form && (
               <div className="p-3 rounded-md bg-error-light border border-error text-error text-sm" role="alert">
                 {errors.form}
               </div>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text mb-1">
-                Email
-              </label>
+            <FormField id="login-email" label="Email" error={errors.email}>
               <input
-                id="email"
+                id="login-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -101,15 +111,12 @@ export function LoginPage() {
                 aria-invalid={Boolean(errors.email)}
                 aria-describedby={errors.email ? 'login-email-error' : undefined}
               />
-              {errors.email && <p id="login-email-error" className="mt-1 text-sm text-error" role="alert">{errors.email}</p>}
-            </div>
+            </FormField>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-text mb-1">
-                Contraseña
-              </label>
+            <FormField id="login-password" label="Contraseña" error={errors.password}>
               <input
-                id="password"
+                id="login-password"
+                name="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -120,8 +127,7 @@ export function LoginPage() {
                 aria-invalid={Boolean(errors.password)}
                 aria-describedby={errors.password ? 'login-password-error' : undefined}
               />
-              {errors.password && <p id="login-password-error" className="mt-1 text-sm text-error" role="alert">{errors.password}</p>}
-            </div>
+            </FormField>
 
             <Button
               type="submit"
@@ -136,19 +142,19 @@ export function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-text-muted">
               ¿No tenés cuenta?{' '}
-              <Link to="/register" className="text-primary hover:underline font-medium">
+              <Link to="/register" className="inline-flex min-h-11 items-center font-medium text-primary-text hover:underline">
                 Registrate
               </Link>
             </p>
           </div>
         </div>
 
-        <div className="mt-6 text-center text-sm text-text-muted">
-          <Link to="/" className="hover:underline">Conocer el proyecto</Link>
-          <span aria-hidden="true"> · </span>
-          <Link to="/privacidad" className="hover:underline">Privacidad</Link>
+        <div className="mt-6 flex items-center justify-center gap-3 text-sm text-text-muted">
+          <Link to="/" className="inline-flex min-h-11 items-center px-2 text-primary-text hover:underline">Conocer el proyecto</Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/privacidad" className="inline-flex min-h-11 items-center px-2 text-primary-text hover:underline">Privacidad</Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
