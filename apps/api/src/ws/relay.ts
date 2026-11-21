@@ -107,6 +107,7 @@ export function attachRelay(
       if (!pair?.device || pair.deviceId !== deviceId) return false;
       counters.devicesRevokedOnline += 1;
       log('ws.device.revoked_online', { userId, deviceId });
+      control(pair.device, 'error', { code: 'REVOKED' });
       pair.device.close(4003, 'revoked');
       return true;
     },
@@ -211,6 +212,7 @@ export function attachRelay(
           counters.rateLimited += 1;
           counters.pairingRejected += 1;
           log('ws.pair.rate_limited', { clientIp });
+          control(ws, 'error', { code: 'RATE_LIMITED' });
           return void ws.close(4029, 'too many attempts');
         }
         const pairedUserId = await consumePairingCode(message.code);

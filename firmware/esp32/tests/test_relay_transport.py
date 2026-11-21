@@ -30,6 +30,8 @@ class FakeRelay:
         self.script = script          # async def script(relay): maneja una conexión
         self.connections = 0
         self.received = []
+        self._writers = []
+        self._handlers = set()
 
     async def start(self):
         self.server = await asyncio.start_server(self._on, "127.0.0.1", 0)
@@ -37,29 +39,43 @@ class FakeRelay:
         return "ws://127.0.0.1:%d/ws/device" % self.port
 
     async def stop(self):
+        for writer in list(self._writers):
+            writer.close()
+        for task in list(self._handlers):
+            task.cancel()
+        if self._handlers:
+            await asyncio.gather(*list(self._handlers), return_exceptions=True)
         self.server.close()
         await self.server.wait_closed()
 
     async def _on(self, reader, writer):
+        task = asyncio.current_task()
+        if task is not None:
+            self._handlers.add(task)
+        self._writers.append(writer)
         self.connections += 1
         self.reader, self.writer = reader, writer
         headers = {}
-        await reader.readline()
-        while True:
-            line = await reader.readline()
-            if line in (b"\r\n", b""):
-                break
-            key, _, value = line.decode().partition(":")
-            headers[key.strip().lower()] = value.strip()
-        accept = base64.b64encode(hashlib.sha1((headers["sec-websocket-key"]).encode() + GUID).digest())
-        writer.write(b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
-                     b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n")
-        await writer.drain()
         try:
+            await reader.readline()
+            while True:
+                line = await reader.readline()
+                if line in (b"\r\n", b""):
+                    break
+                key, _, value = line.decode().partition(":")
+                headers[key.strip().lower()] = value.strip()
+            accept = base64.b64encode(hashlib.sha1((headers["sec-websocket-key"]).encode() + GUID).digest())
+            writer.write(b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                         b"Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + b"\r\n\r\n")
+            await writer.drain()
             await self.script(self)
-        except (asyncio.IncompleteReadError, ConnectionError):
+        except (asyncio.IncompleteReadError, ConnectionError, asyncio.CancelledError):
             pass
         finally:
+            if writer in self._writers:
+                self._writers.remove(writer)
+            if task is not None:
+                self._handlers.discard(task)
             writer.close()
 
     async def recv(self):
@@ -111,6 +127,8 @@ class RelayTransportTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         for task in self.tasks:
             task.cancel()
+        if self.tasks:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def store(self, data):
         with open("relay.json", "w") as handle:
@@ -206,6 +224,43 @@ class RelayTransportTests(unittest.IsolatedAsyncioTestCase):
         relay, transport = await self.start(script, {"pairCode": "000000"})
         await until(lambda: transport.state == rt.UNPAIRED)
         self.assertIn("inválido", transport.last_error)
+
+    async def test_unauthorized_control_error_clears_token_without_close_4003(self):
+        async def script(relay):
+            await relay.recv_json()
+            await relay.send_control("error", code="UNAUTHORIZED")
+            await asyncio.sleep(1)
+        _, transport = await self.start(script, {"deviceToken": "VIEJO"})
+        await until(lambda: transport.state == rt.UNPAIRED)
+        self.assertFalse(os.path.exists("relay.json"))
+        self.assertIn("vincular", transport.last_error)
+
+    async def test_revoked_control_error_while_online_clears_token_without_leaking_inbox(self):
+        online_seen = asyncio.Event()
+
+        async def script(relay):
+            await relay.recv_json()
+            await relay.send_control("ready")
+            await asyncio.wait_for(online_seen.wait(), 5)
+            await relay.send_control("error", code="REVOKED")
+            await asyncio.sleep(1)
+
+        _, transport = await self.start(script, {"deviceToken": "VIEJO"})
+        await until(lambda: transport.state == rt.ONLINE)
+        online_seen.set()
+        await until(lambda: transport.state == rt.UNPAIRED)
+        self.assertFalse(os.path.exists("relay.json"))
+        self.assertIn("vincular", transport.last_error)
+        self.assertIsNone(transport.read())
+
+    async def test_rate_limited_control_error_sets_error_and_keeps_pair_code(self):
+        async def script(relay):
+            await relay.recv_json()
+            await relay.send_control("error", code="RATE_LIMITED")
+            await asyncio.sleep(1)
+        _, transport = await self.start(script, {"pairCode": "123456"})
+        await until(lambda: transport.last_error and "Demasiados intentos" in transport.last_error)
+        self.assertEqual(jload("relay.json"), {"pairCode": "123456"})
 
     # ---- robustez -----------------------------------------------------------
     async def test_write_when_offline_never_raises_and_is_dropped(self):

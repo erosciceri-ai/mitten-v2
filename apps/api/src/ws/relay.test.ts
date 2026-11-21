@@ -208,6 +208,7 @@ it('persiste códigos de vinculación hasheados y lista o revoca guantes por cue
     headers: { Authorization: `Bearer ${owner.token}` },
   });
   expect(revoked.status).toBe(204);
+  expect(JSON.parse(await device.next())).toMatchObject({ type: 'relay', event: 'error', code: 'REVOKED' });
   expect(await device.closed).toBe(4003);
   expect(JSON.parse(await web.next())).toMatchObject({ event: 'device_offline' });
 
@@ -258,6 +259,7 @@ it('aisla límites de pairing por IP y limita upgrades repetidos con métricas',
 
     const throttled = await connectTo(isolatedPort, '/ws/device', { 'X-Forwarded-For': '198.51.100.10' });
     throttled.ws.send(JSON.stringify({ type: 'pair', code: accountA.code }));
+    expect(JSON.parse(await throttled.next())).toMatchObject({ type: 'relay', event: 'error', code: 'RATE_LIMITED' });
     expect(await throttled.closed).toBe(4029);
 
     const otherIp = await connectTo(isolatedPort, '/ws/device', { 'X-Forwarded-For': '198.51.100.20' });

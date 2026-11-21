@@ -305,17 +305,27 @@ class RelayTransport:
                 opcode, data = await asyncio.wait_for(read_message(reader, writer), READ_TIMEOUT_S)
                 if opcode != 1:
                     continue
+                message = self._control(data)
+                if message:
+                    event = message.get("event")
+                    if event == "error":
+                        code = message.get("code")
+                        if code in ("UNAUTHORIZED", "REVOKED"):
+                            raise RelayClosed(4003)
+                        if code == "RATE_LIMITED":
+                            raise RelayClosed(4029)
+                    elif not online:
+                        if event == "paired" and isinstance(message.get("deviceToken"), str):
+                            self._store = {"deviceToken": message["deviceToken"]}
+                            self._persist()
+                        elif event == "ready":
+                            online = True
+                            self._was_online = True
+                            self.last_error = None
+                            self.state = ONLINE
+                            sender = asyncio.create_task(self._sender(writer))
+                    continue
                 if not online:
-                    message = self._control(data)
-                    if message.get("event") == "paired" and isinstance(message.get("deviceToken"), str):
-                        self._store = {"deviceToken": message["deviceToken"]}
-                        self._persist()
-                    elif message.get("event") == "ready":
-                        online = True
-                        self._was_online = True
-                        self.last_error = None
-                        self.state = ONLINE
-                        sender = asyncio.create_task(self._sender(writer))
                     continue
                 if len(self._inbox) < INBOX_MAX:
                     self._inbox.append(data + b"\n")
@@ -331,6 +341,8 @@ class RelayTransport:
 
     @staticmethod
     def _control(data):
+        if not data.startswith(b"{") or b'"relay"' not in data:
+            return {}
         try:
             message = json.loads(data.decode())
         except Exception:
