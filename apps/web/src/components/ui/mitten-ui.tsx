@@ -2,11 +2,12 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { AlertCircle, CheckCircle2, Info, Radio, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'error';
+export type Tone = 'neutral' | 'primary' | 'syncing' | 'success' | 'warning' | 'error';
 
 const toneClasses: Record<Tone, string> = {
   neutral: 'border-border bg-mist text-text',
   primary: 'border-signal/25 bg-primary-light text-[#b9f8fb]',
+  syncing: 'border-syncing/35 bg-syncing-light text-[#78eaf0]',
   success: 'border-success/25 bg-success-light text-success',
   warning: 'border-warning/30 bg-warning-light text-warning',
   error: 'border-error/25 bg-error-light text-error',
@@ -40,30 +41,44 @@ export function StatusBadge({ tone = 'neutral', children, className }: {
   children: ReactNode;
   className?: string;
 }) {
-  return <span className={cn('inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold', toneClasses[tone], className)}>{children}</span>;
+  return (
+    <span className={cn('inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold', toneClasses[tone], className)}>
+      {children}
+    </span>
+  );
 }
 
 const noticeIcons = {
   neutral: Info,
   primary: Radio,
+  syncing: Radio,
   success: CheckCircle2,
   warning: TriangleAlert,
   error: AlertCircle,
 };
 
-export function Notice({ tone = 'neutral', title, children, actions, className, live = false }: {
+export function Notice({ tone = 'neutral', title, children, actions, className, live = false, headingAs = 'p' }: {
   tone?: Tone;
   title: string;
   children?: ReactNode;
   actions?: ReactNode;
   className?: string;
   live?: boolean;
+  headingAs?: 'h2' | 'h3' | 'p';
 }) {
   const Icon = noticeIcons[tone];
+  const Heading = headingAs;
   return (
-    <section className={cn('app-notice border', toneClasses[tone], className)} role={tone === 'error' ? 'alert' : live ? 'status' : undefined} aria-live={live ? 'polite' : undefined}>
+    <section
+      className={cn('app-notice border', toneClasses[tone], className)}
+      role={tone === 'error' ? 'alert' : live ? 'status' : undefined}
+      aria-live={live ? 'polite' : undefined}
+    >
       <Icon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-      <div className="min-w-0 flex-1"><h2>{title}</h2>{children ? <div className="app-notice__body">{children}</div> : null}</div>
+      <div className="min-w-0 flex-1">
+        <Heading className="app-notice__title">{title}</Heading>
+        {children ? <div className="app-notice__body">{children}</div> : null}
+      </div>
       {actions ? <div className="app-notice__actions">{actions}</div> : null}
     </section>
   );
@@ -83,7 +98,9 @@ export function EmptyState({ icon, title, description, action }: { icon?: ReactN
   return (
     <div className="app-empty-state">
       {icon ? <div className="app-empty-state__icon" aria-hidden="true">{icon}</div> : null}
-      <h2>{title}</h2><p>{description}</p>{action ? <div className="mt-5">{action}</div> : null}
+      <h2>{title}</h2>
+      <p>{description}</p>
+      {action ? <div className="mt-5">{action}</div> : null}
     </div>
   );
 }
