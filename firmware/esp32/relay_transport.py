@@ -292,6 +292,7 @@ class RelayTransport:
     async def _session(self):
         """Una conexión completa; termina siempre por excepción (cierre, error o timeout)."""
         reader, writer = await ws_open(self.url, self.ca_path)
+        gc.collect()
         self._writer = writer
         sender = None
         online = False
@@ -353,6 +354,8 @@ class RelayTransport:
         while True:
             if self._outbox:
                 line = self._outbox.pop(0)
+                if hasattr(gc, "mem_free") and gc.mem_free() < 16384:
+                    gc.collect()
                 writer.write(encode_frame(1, line))
                 await writer.drain()
             else:

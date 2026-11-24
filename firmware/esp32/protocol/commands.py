@@ -2,14 +2,6 @@
 
 import binascii
 
-from audio_store import (
-    AudioStoreError,
-    CHUNK_MAX_BYTES,
-    MAX_TRACK_BYTES,
-    MIN_TRACK_BYTES,
-    TRACKS,
-    UPLOAD_TIMEOUT_MS,
-)
 from config import (
     BOOTSTRAP_MAX_MESSAGE_BYTES,
     ERR_AUDIO_NO_UPLOAD,
@@ -43,17 +35,22 @@ from protocol.envelopes import (
     is_valid_request_id,
     validate_request_envelope,
 )
-from statemachine.machine import FirmwareStateMachine
-from sync.transaction import SyncTransactionManager
-from capture import CaptureManager, CaptureConfig
 from recognition import GestureRecognizer
+from statemachine.machine import FirmwareStateMachine
+from storage.files import file_exists
 from utils.time import ticks_ms, ticks_diff
-from validation.gesture import validate_gesture_data
 
+
+TRACKS = 50
+CHUNK_MAX_BYTES = 3072
+MIN_TRACK_BYTES = 45
+MAX_TRACK_BYTES = 524288
+UPLOAD_TIMEOUT_MS = 30000
 
 _AUDIO_COMMANDS = ("audio.begin", "audio.chunk", "audio.commit", "audio.abort", "audio.status")
 _FUNCTIONAL_COMMANDS = ("capture.start", "sync.begin", "sync.gesture", "sync.commit", "sync.abort") + _AUDIO_COMMANDS
 _AUDIO_CHUNK_BASE64_MAX = ((CHUNK_MAX_BYTES + 2) // 3) * 4
+_PROFILE_FILES = ("gestures.json", "gestures.json.bak", "gestures.json.tmp", "gestures.staging")
 
 
 class FirmwareDispatcher:
@@ -77,14 +74,11 @@ class FirmwareDispatcher:
         # IDs exist only while a request/async operation is active.
         self._active_request_ids = set()
 
-        # Sync transaction manager
-        self.sync_manager = SyncTransactionManager(
-            state_machine=self.state,
-            emit_callback=self._emit
-        )
+        # Lazy-loaded services to preserve RAM while idle over Wi-Fi/TLS.
+        self._sync_manager = None
+        self._capture_manager = None
+        self._loaded_profile = None
 
-        # Shared runtime services
-        self.capture_manager = CaptureManager(sensor_manager)
         self.recognizer = GestureRecognizer()
         self.audio_player = audio_player
         self.audio_store = audio_store
@@ -94,14 +88,53 @@ class FirmwareDispatcher:
             self.audio_store.recover()
         self._audio_active = False
 
-        # Load active profile on startup
-        self._load_recognition_profile()
-        if self.sync_manager.profile_manager.current:
+        # Load active profile on startup only when persisted profile files exist.
+        self._load_startup_profile()
+
+    def _load_startup_profile(self):
+        if not any(file_exists(path) for path in _PROFILE_FILES):
+            self.recognizer.load_profile([])
+            self._last_recognized_id = None
+            return
+        from profile.loader import load_active_profile
+        profile = load_active_profile()
+        self._loaded_profile = profile
+        self.recognizer.load_profile(profile["gestures"] if profile else [])
+        self._last_recognized_id = None
+        if profile:
             self.active_profile = {
-                "profileId": self.sync_manager.profile_manager.profile_id,
-                "profileRevision": self.sync_manager.profile_manager.profile_revision,
-                "gestureCount": self.sync_manager.profile_manager.gesture_count
+                "profileId": profile.get("profileId"),
+                "profileRevision": profile.get("profileRevision"),
+                "gestureCount": profile.get("gestureCount", 0),
             }
+
+    @property
+    def sync_manager(self):
+        if self._sync_manager is None:
+            from sync.transaction import SyncTransactionManager
+            manager = SyncTransactionManager(
+                state_machine=self.state,
+                emit_callback=self._emit,
+            )
+            if self._loaded_profile is not None and manager.profile_manager.current is None:
+                manager.profile_manager.set_profile(self._loaded_profile)
+            self._sync_manager = manager
+        return self._sync_manager
+
+    @sync_manager.setter
+    def sync_manager(self, value):
+        self._sync_manager = value
+
+    @property
+    def capture_manager(self):
+        if self._capture_manager is None:
+            from capture import CaptureManager
+            self._capture_manager = CaptureManager(self.sensor_manager)
+        return self._capture_manager
+
+    @capture_manager.setter
+    def capture_manager(self, value):
+        self._capture_manager = value
 
     @property
     def active_request_count(self):
@@ -263,18 +296,21 @@ class FirmwareDispatcher:
         )
 
     def _handle_status(self, request_id):
-        # Update active_profile and active_sync from sync manager
-        if self.sync_manager.profile_manager.current:
-            self.active_profile = {
-                "profileId": self.sync_manager.profile_manager.profile_id,
-                "profileRevision": self.sync_manager.profile_manager.profile_revision,
-                "gestureCount": self.sync_manager.profile_manager.gesture_count
-            }
-        else:
-            self.active_profile = None
+        # Update active_profile and active_sync from sync manager when loaded
+        if self._sync_manager is not None:
+            if self._sync_manager.profile_manager.current:
+                self.active_profile = {
+                    "profileId": self._sync_manager.profile_manager.profile_id,
+                    "profileRevision": self._sync_manager.profile_manager.profile_revision,
+                    "gestureCount": self._sync_manager.profile_manager.gesture_count
+                }
+            else:
+                self.active_profile = None
 
-        if self.state.current == STATE_SYNCING:
-            self.active_sync = self.sync_manager.get_status().get("activeSync")
+            if self.state.current == STATE_SYNCING:
+                self.active_sync = self._sync_manager.get_status().get("activeSync")
+            else:
+                self.active_sync = None
         else:
             self.active_sync = None
 
@@ -450,6 +486,7 @@ class FirmwareDispatcher:
             return build_error_response(request_id, ERR_INVALID_PAYLOAD, "Invalid %s payload" % command, {"errors": errors})
 
         cause = "audio.failed"
+        from audio_store import AudioStoreError
         try:
             track = payload.get("audioTrack")
             if command == "audio.begin":
@@ -493,6 +530,7 @@ class FirmwareDispatcher:
             return self._functional_command_error(request_id, "capture.start")
 
         # V2 capture parameters are device configuration, not private wire commands.
+        from capture import CaptureConfig
         config = CaptureConfig()
         result = self.capture_manager.start(config)
         if not result.get("accepted"):
@@ -513,8 +551,8 @@ class FirmwareDispatcher:
         if self.audio_store is not None:
             self.audio_store.tick()
             self._audio_settle("audio.failed")
-        if self.state.current == STATE_SYNCING:
-            self.sync_manager.check_timeout(now)
+        if self._sync_manager is not None and self.state.current == STATE_SYNCING:
+            self._sync_manager.check_timeout(now)
         if self.state.current == STATE_CAPTURING and self.capture_request_id:
             self._update_capture(now)
         elif self.state.current == STATE_IDLE and self.sensor_manager is not None:
@@ -558,6 +596,7 @@ class FirmwareDispatcher:
             if result is None:
                 return
             if "data" in result:
+                from validation.gesture import validate_gesture_data
                 valid, errors = validate_gesture_data(result["data"])
                 if not valid:
                     raise ValueError("; ".join(errors))

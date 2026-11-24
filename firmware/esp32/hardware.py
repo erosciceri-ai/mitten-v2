@@ -2,6 +2,26 @@
 from sensors import FlexSensorArray, MPU6050, SensorManager, CalibrationData
 
 
+class _IdleTransport:
+    """Fallback no-op UART transport when protocol runs over Wi-Fi relay."""
+
+    def read(self):
+        return None
+
+    def write(self, data):
+        return len(data)
+
+
+class _DummyMPU:
+    """Bench-testing MPU6050 placeholder used only when board['allow_dummy_mpu'] is True."""
+
+    def __init__(self):
+        self.is_initialized = True
+
+    def read_acceleration(self):
+        return (0.0, 0.0, 1.0)
+
+
 def create_hardware(board, machine=None):
     # Validate all required choices before touching a peripheral.
     keys = ('flex_pins', 'adc_attenuation', 'i2c_id', 'scl_pin', 'sda_pin',
@@ -31,15 +51,37 @@ def create_hardware(board, machine=None):
         adc.atten(board['adc_attenuation'])
     i2c = machine.I2C(board['i2c_id'], scl=machine.Pin(board['scl_pin']),
                       sda=machine.Pin(board['sda_pin']), freq=100000)
-    mpu = MPU6050(board['mpu_address']); mpu.initialize(i2c)
+    mpu = MPU6050(board['mpu_address'])
+    try:
+        mpu.initialize(i2c)
+    except Exception:
+        if board.get('allow_dummy_mpu'):
+            mpu = _DummyMPU()
+        else:
+            raise
     calibration = CalibrationData()
     calibration.mpu_x_offset, calibration.mpu_y_offset = board['mpu_offsets']
     calibration.is_valid = True
     sensors = SensorManager(FlexSensorArray(adcs), mpu, calibration)
-    from main import UartStreamTransport
-    transport = UartStreamTransport(machine.UART(protocol['id'], baudrate=115200,
-        tx=machine.Pin(protocol['tx']), rx=machine.Pin(protocol['rx'])))
-    from audio import AudioPlayer
-    player = AudioPlayer(machine, board)
-    player.initialize(safe_amp_pin)
+    import sys
+    _main = sys.modules.get('main_app') or sys.modules.get('main') or __import__('main')
+    UartStreamTransport = _main.UartStreamTransport
+    TRANSPORT_MODE = getattr(_main, 'TRANSPORT_MODE', 'relay')
+    if board.get('skip_uart') or (TRANSPORT_MODE == 'relay' and protocol['id'] == 0 and machine.__name__ == 'machine'):
+        transport = _IdleTransport()
+    else:
+        try:
+            transport = UartStreamTransport(machine.UART(protocol['id'], baudrate=115200,
+                tx=machine.Pin(protocol['tx']), rx=machine.Pin(protocol['rx'])))
+        except ValueError:
+            if TRANSPORT_MODE == 'relay':
+                transport = _IdleTransport()
+            else:
+                raise
+    if board.get('skip_sd'):
+        player = None
+    else:
+        from audio import AudioPlayer
+        player = AudioPlayer(machine, board)
+        player.initialize(safe_amp_pin)
     return transport, sensors, player
