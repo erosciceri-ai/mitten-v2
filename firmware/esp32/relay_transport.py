@@ -139,6 +139,24 @@ def _tls_context(ca_path):
 async def _open(host, port, context):
     if context is None:
         return await asyncio.open_connection(host, port)
+    if hasattr(gc, "mem_free"):
+        # Complete TCP + TLS handshake before registering SSLSocket in uasyncio's
+        # IOQueue; avoids EIO in wait_io_event on MicroPython ESP32 when other tasks run.
+        import socket
+        ai = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]
+        sock = socket.socket(ai[0], ai[1], ai[2])
+        try:
+            sock.settimeout(CONNECT_TIMEOUT_S)
+            sock.connect(ai[-1])
+            sock = context.wrap_socket(sock, server_hostname=host)
+            sock.setblocking(False)
+        except BaseException:
+            try:
+                sock.close()
+            except Exception:
+                pass
+            raise
+        return asyncio.StreamReader(sock), asyncio.StreamWriter(sock, {})
     try:
         return await asyncio.open_connection(host, port, ssl=context, server_hostname=host)
     except TypeError:
@@ -174,6 +192,7 @@ async def ws_open(url, ca_path=CA_PATH):
     except BaseException:
         try:
             writer.close()
+            await writer.wait_closed()
         except Exception:
             pass
         raise
@@ -337,8 +356,10 @@ class RelayTransport:
             self._outbox = []
             try:
                 writer.close()
+                await writer.wait_closed()
             except Exception:
                 pass
+            gc.collect()
 
     @staticmethod
     def _control(data):

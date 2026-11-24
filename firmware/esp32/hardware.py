@@ -64,7 +64,12 @@ def create_hardware(board, machine=None):
     calibration.is_valid = True
     sensors = SensorManager(FlexSensorArray(adcs), mpu, calibration)
     import sys
-    _main = sys.modules.get('main_app') or sys.modules.get('main') or __import__('main')
+    _main = sys.modules.get('main_app') or sys.modules.get('main')
+    if _main is None:
+        try:
+            import main_app as _main
+        except ImportError:
+            import main as _main
     UartStreamTransport = _main.UartStreamTransport
     TRANSPORT_MODE = getattr(_main, 'TRANSPORT_MODE', 'relay')
     if board.get('skip_uart') or (TRANSPORT_MODE == 'relay' and protocol['id'] == 0 and machine.__name__ == 'machine'):
